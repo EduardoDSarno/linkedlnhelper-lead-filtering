@@ -1,4 +1,10 @@
-import { loadProfilesFromCsv } from './data/csvdata.js';
+import { mkdir, writeFile } from 'node:fs/promises';
+
+import {
+  getLinkedlnProfileDataFromExternalProvidor,
+  loadProfilesFromCsv,
+} from './data/csvdata.js';
+import { collectBrightDataProfiles } from './data/bright_data_api.js';
 import type { ImportedCsvData } from './data/csvdata.js';
 import type { ImportedProfile } from './profile.js';
 
@@ -7,14 +13,21 @@ import type { ImportedProfile } from './profile.js';
  *
  * Example:
  * npm start -- "test_data/profiles.csv"
+ * npm run collect -- "test_data/profiles.csv"
  */
 export async function main(): Promise<void> {
-  // process.argv[0] is Node, argv[1] is this script, and argv[2] is the CSV path.
-  const csvPath = process.argv[2];
+  // process.argv[0] is Node and argv[1] is this script. Everything after that
+  // is supplied by the user on the command line.
+  const commandLineArguments = process.argv.slice(2);
+  const shouldCollectWithBrightData = commandLineArguments.includes('--collect');
+  const csvPath = commandLineArguments.find(
+    (argument) => argument !== '--collect',
+  );
 
   // Stop early with a useful message when the caller did not supply a file.
   if (!csvPath) {
     console.error('Usage: npm start -- <path-to-csv>');
+    console.error('   or: npm run collect -- <path-to-csv>');
     process.exitCode = 1;
     return;
   }
@@ -43,6 +56,35 @@ export async function main(): Promise<void> {
       profileUrl: profile.profileUrl,
     })),
   );
+
+  // Importing and printing a CSV does not call Bright Data. Collection only
+  // starts when the command includes the explicit --collect flag.
+  if (!shouldCollectWithBrightData) {
+    return;
+  }
+
+  const profileLinks = getLinkedlnProfileDataFromExternalProvidor(
+    importedData.records,
+  );
+
+  console.log(`Collecting Bright Data for ${profileLinks.length} profiles...`);
+
+  // This single function hides the internal snapshot workflow: it starts the
+  // job, waits until it is ready, downloads it, and returns the actual profiles.
+  const brightDataProfiles = await collectBrightDataProfiles(profileLinks);
+
+  // Keep the first real response unchanged. We will inspect this sample before
+  // deciding which Bright Data fields belong in our final profile interfaces.
+  await mkdir('output', { recursive: true });
+  const outputPath = 'output/bright-data-profiles.json';
+  await writeFile(
+    outputPath,
+    JSON.stringify(brightDataProfiles, null, 2),
+    'utf-8',
+  );
+
+  console.log(`Collected ${brightDataProfiles.length} Bright Data profiles.`);
+  console.log(`Raw profile data saved to ${outputPath}`);
 }
 
 // main() returns a Promise, so handle any file-reading or parsing failure here.
