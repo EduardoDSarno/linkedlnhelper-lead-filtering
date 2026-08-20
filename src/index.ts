@@ -1,3 +1,6 @@
+// Load local environment variables, such as BRIGHTDATA_API_KEY, before main runs.
+import 'dotenv/config';
+
 import { mkdir, writeFile } from 'node:fs/promises';
 
 import {
@@ -45,21 +48,21 @@ export async function main(): Promise<void> {
     duplicatedProfiles: importedData.duplicated_profiles,
   });
 
-  console.log('Profiles:');
-  console.table(
-    // Print only the useful overview fields instead of each profile's large raw row.
-    profiles.map((profile) => ({
-      publicId: profile.public_id,
-      fullName: profile.fullName,
-      headline: profile.headline ?? '',
-      location: profile.location ?? '',
-      profileUrl: profile.profileUrl,
-    })),
-  );
-
   // Importing and printing a CSV does not call Bright Data. Collection only
   // starts when the command includes the explicit --collect flag.
   if (!shouldCollectWithBrightData) {
+    console.log('Profiles:');
+    console.table(
+      // Print only the useful overview fields instead of each profile's large raw row.
+      profiles.map((profile) => ({
+        publicId: profile.public_id,
+        fullName: profile.fullName,
+        headline: profile.headline ?? '',
+        location: profile.location ?? '',
+        profileUrl: profile.profileUrl,
+      })),
+    );
+
     return;
   }
 
@@ -89,6 +92,6 @@ export async function main(): Promise<void> {
 
 // main() returns a Promise, so handle any file-reading or parsing failure here.
 main().catch((error: unknown) => {
-  console.error('Failed to import profiles:', error);
+  console.error('Application failed:', error);
   process.exitCode = 1;
 });
