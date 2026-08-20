@@ -1,10 +1,11 @@
 import { readFile } from 'node:fs/promises';
 import { parse } from 'csv-parse/sync';
 
+import { deduplicateBy } from '../helpers/deduplicate.js';
 import { toImportedProfile } from '../profile.js';
 import type { ImportedProfile } from '../profile.js';
 
-const TEXT_ENCODING = 'utf-8';
+export const TEXT_ENCODING = 'utf-8';
 
 /** The complete result of importing and deduplicating one CSV file. */
 export interface ImportedCsvData {
@@ -38,39 +39,27 @@ export async function loadProfilesFromCsv(path: string): Promise<ImportedCsvData
     bom: true,
   });
 
-  let rowsCount = 0;
-  let duplicateCount = 0;
+  // Convert every row, then exclude profiles that cannot be keyed by public ID.
+  const profiles = rows
+    .map(toImportedProfile)
+    .filter((profile) => profile.public_id.length > 0);
 
-  // Set.has() lets us detect a repeated ID without scanning all earlier profiles.
-  const uniqueIds = new Set<string>();
+  // The shared helper keeps the first profile for each public ID.
+  const {
+    uniqueItems: uniqueProfiles,
+    duplicateCount,
+  } = deduplicateBy(profiles, (profile) => profile.public_id);
 
   // This object becomes ImportedCsvData.records, with one profile per ID.
   const records: Record<string, ImportedProfile> = {};
 
-  for (const row of rows) {
-    rowsCount++;
-
-    const profile = toImportedProfile(row);
-    const id = profile.public_id;
-
-    // A profile without an ID cannot be safely deduplicated or keyed.
-    if (!id) {
-      continue;
-    }
-
-    if (uniqueIds.has(id)) {
-      duplicateCount++;
-      continue;
-    }
-
-    // Only the first row for each ID reaches the final records object.
-    uniqueIds.add(id);
-    records[id] = profile;
+  for (const profile of uniqueProfiles) {
+    records[profile.public_id] = profile;
   }
 
   return {
-    total_rows: rowsCount,
-    total_profiles: uniqueIds.size,
+    total_rows: rows.length,
+    total_profiles: uniqueProfiles.length,
     duplicated_profiles: duplicateCount,
     records,
   };
