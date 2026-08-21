@@ -1,0 +1,141 @@
+import {
+  APPARENT_AGE_BRACKETS,
+  APPARENT_AGE_CONFIDENCE_VALUES,
+} from './profile_image_types.js';
+import type {
+  ApparentAgeEstimate,
+  ProfileImageAssessment,
+} from './profile_image_types.js';
+
+const FACE_VISIBILITY_VALUES = [
+  'clear',
+  'partial',
+  'unclear',
+  'not_applicable',
+] as const;
+const IMAGE_QUALITY_VALUES = ['good', 'usable', 'poor'] as const;
+const PHOTO_TYPE_VALUES = [
+  'professional_portrait',
+  'selfie',
+  'mirror_selfie',
+  'group_photo',
+  'other',
+] as const;
+const FRAMING_VALUES = [
+  'headshot',
+  'upper_body',
+  'full_body',
+  'unclear',
+] as const;
+const BACKGROUND_VALUES = [
+  'plain',
+  'workplace',
+  'outdoor',
+  'domestic',
+  'other',
+  'unclear',
+] as const;
+const ATTIRE_VALUES = [
+  'formal',
+  'business_casual',
+  'casual',
+  'unclear',
+] as const;
+const CERTAINTY_VALUES = ['certain', 'uncertain', 'unassessable'] as const;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isOneOf<const T extends readonly string[]>(
+  value: unknown,
+  accepted: T,
+): value is T[number] {
+  return typeof value === 'string' && accepted.includes(value);
+}
+
+function validateApparentAge(value: unknown): ApparentAgeEstimate {
+  if (
+    !isRecord(value) ||
+    !isOneOf(value['bracket'], APPARENT_AGE_BRACKETS) ||
+    !isOneOf(value['confidence'], APPARENT_AGE_CONFIDENCE_VALUES)
+  ) {
+    throw new Error('Gemini returned an invalid apparent age estimate.');
+  }
+
+  // An "unknown" bracket cannot carry a real confidence, and a confident
+  // reading cannot be unassessable. Normalize rather than reject, because the
+  // rest of the assessment is still usable when only this pair disagrees.
+  if (
+    value['bracket'] === 'unknown' ||
+    value['confidence'] === 'unassessable'
+  ) {
+    return { bracket: 'unknown', confidence: 'unassessable' };
+  }
+
+  return {
+    bracket: value['bracket'],
+    confidence: value['confidence'],
+  };
+}
+
+function validateAssessment(value: unknown): ProfileImageAssessment {
+  if (!isRecord(value)) {
+    throw new Error('Gemini returned a non-object image assessment.');
+  }
+
+  if (
+    typeof value['hasFace'] !== 'boolean' ||
+    typeof value['faceCount'] !== 'number' ||
+    !Number.isInteger(value['faceCount']) ||
+    value['faceCount'] < 0 ||
+    value['faceCount'] > 20 ||
+    !isOneOf(value['faceVisibility'], FACE_VISIBILITY_VALUES) ||
+    !isOneOf(value['imageQuality'], IMAGE_QUALITY_VALUES) ||
+    typeof value['isBlurry'] !== 'boolean' ||
+    typeof value['isPoorlyLit'] !== 'boolean' ||
+    !isOneOf(value['photoType'], PHOTO_TYPE_VALUES) ||
+    !isOneOf(value['framing'], FRAMING_VALUES) ||
+    !isOneOf(value['background'], BACKGROUND_VALUES) ||
+    !isOneOf(value['attire'], ATTIRE_VALUES) ||
+    !isOneOf(value['certainty'], CERTAINTY_VALUES) ||
+    typeof value['reviewRequired'] !== 'boolean' ||
+    !Array.isArray(value['observations']) ||
+    value['observations'].length > 5 ||
+    !value['observations'].every(
+      (observation) => typeof observation === 'string',
+    )
+  ) {
+    throw new Error('Gemini returned an invalid image assessment shape.');
+  }
+
+  return {
+    hasFace: value['hasFace'],
+    faceCount: value['faceCount'],
+    faceVisibility: value['faceVisibility'],
+    imageQuality: value['imageQuality'],
+    isBlurry: value['isBlurry'],
+    isPoorlyLit: value['isPoorlyLit'],
+    photoType: value['photoType'],
+    framing: value['framing'],
+    background: value['background'],
+    attire: value['attire'],
+    apparentAge: validateApparentAge(value['apparentAge']),
+    certainty: value['certainty'],
+    reviewRequired: value['reviewRequired'],
+    observations: value['observations'],
+  };
+}
+
+export function parseProfileImageAssessment(
+  responseText: string,
+): ProfileImageAssessment {
+  try {
+    return validateAssessment(JSON.parse(responseText));
+  } catch (error: unknown) {
+    if (error instanceof SyntaxError) {
+      throw new Error('Gemini returned malformed JSON for the image assessment.');
+    }
+    throw error;
+  }
+}

@@ -9,7 +9,7 @@ export const TEXT_ENCODING = 'utf-8';
 
 /** The complete result of importing and deduplicating one CSV file. */
 export interface ImportedCsvData {
-  // Number of data rows read before validation or deduplication.
+  // Total number of data rows read before validation or deduplication.
   total_rows: number;
 
   // Number of unique profiles that have a public_id.
