@@ -2,8 +2,8 @@ import { readFile } from 'node:fs/promises';
 import { parse } from 'csv-parse/sync';
 
 import { deduplicateBy } from '../helpers/deduplicate.js';
-import { toImportedProfile } from '../profile.js';
-import type { ImportedProfile } from '../profile.js';
+import { toImportedCsvProfile } from '../profile/index.js';
+import type { ImportedCsvProfile } from '../profile/index.js';
 
 export const TEXT_ENCODING = 'utf-8';
 
@@ -19,7 +19,7 @@ export interface ImportedCsvData {
   duplicated_profiles: number;
 
   // Keying by public ID makes looking up one profile inexpensive.
-  records: Record<string, ImportedProfile>;
+  records: Record<string, ImportedCsvProfile>;
 }
 
 /** Reads a Linked Helper CSV and converts it into normalized profile records. */
@@ -41,20 +41,20 @@ export async function loadProfilesFromCsv(path: string): Promise<ImportedCsvData
 
   // Convert every row, then exclude profiles that cannot be keyed by public ID.
   const profiles = rows
-    .map(toImportedProfile)
-    .filter((profile) => profile.public_id.length > 0);
+    .map(toImportedCsvProfile)
+    .filter((profile) => profile.summary.publicId.length > 0);
 
   // The shared helper keeps the first profile for each public ID.
   const {
     uniqueItems: uniqueProfiles,
     duplicateCount,
-  } = deduplicateBy(profiles, (profile) => profile.public_id);
+  } = deduplicateBy(profiles, (profile) => profile.summary.publicId);
 
   // This object becomes ImportedCsvData.records, with one profile per ID.
-  const records: Record<string, ImportedProfile> = {};
+  const records: Record<string, ImportedCsvProfile> = {};
 
   for (const profile of uniqueProfiles) {
-    records[profile.public_id] = profile;
+    records[profile.summary.publicId] = profile;
   }
 
   return {
@@ -69,13 +69,13 @@ export async function loadProfilesFromCsv(path: string): Promise<ImportedCsvData
  * Extracts the LinkedIn URLs that an external enrichment provider needs.
  * The raw CSV fields and other profile details are deliberately excluded.
  */
-export function getLinkedlnProfileDataFromExternalProvidor(profiles: Record<string, ImportedProfile>): Array<string>
+export function getLinkedlnProfileDataFromExternalProvidor(profiles: Record<string, ImportedCsvProfile>): Array<string>
 {
   let profile_url_list = new Array<string>;
 
   for (const profile of Object.values(profiles))
   {
-      profile_url_list.push(profile.profileUrl);
+      profile_url_list.push(profile.summary.profileUrl);
   }
 
   return profile_url_list;
