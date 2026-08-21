@@ -120,6 +120,7 @@ export interface GeminiTokenUsage {
   totalTokens?: number;
 }
 
+/* Comelete Profile Image Result **/
 export interface ProfileImageExtractionResult {
   assessment: ProfileImageAssessment;
   model: string;

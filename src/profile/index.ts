@@ -17,3 +17,6 @@ export type {
   ProfileExperience,
   ProfileLocation,
 } from './apify_profile.js';
+
+export { attachProfileImageAnalysis } from './full_profile.js';
+export type { FullProfile } from './full_profile.js';

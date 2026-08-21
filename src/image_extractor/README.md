@@ -137,6 +137,29 @@ const result = await extractProfilePhoto(profile);
 
 It throws a clear error when the profile has no photo URL.
 
+### Build a full profile
+
+`FullProfile` extends the normalized Apify `Profile` with an optional
+`imageAnalysis`. The pure `attachProfileImageAnalysis` helper combines a
+profile and a successful extraction without mutating the original profile:
+
+```ts
+import {
+  attachProfileImageAnalysis,
+  type FullProfile,
+} from '../profile/index.js';
+import { extractProfilePhoto } from './index.js';
+
+const imageAnalysis = await extractProfilePhoto(profile);
+const fullProfile: FullProfile = attachProfileImageAnalysis(
+  profile,
+  imageAnalysis,
+);
+```
+
+The image field is optional because a normalized profile can exist before its
+photo is processed, without a photo, or after an extraction failure.
+
 ### Extract multiple images
 
 `extractProfileImages` processes jobs concurrently while preserving input
