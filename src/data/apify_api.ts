@@ -1,6 +1,7 @@
 import { ApifyClient } from 'apify-client';
 
 import { deduplicateBy } from '../helpers/deduplicate.js';
+import type { Logger } from '../logging/index.js';
 
 // This Actor accepts existing LinkedIn profile URLs and returns detailed profiles.
 const LINKEDIN_PROFILE_SCRAPER_ACTOR =
@@ -49,6 +50,7 @@ function isApifyErrorRecord(profile: RawApifyProfile): boolean {
  */
 export async function collectApifyProfiles(
   profileLinks: readonly string[],
+  logger?: Logger,
 ): Promise<RawApifyProfile[]> {
   // Clean and deduplicate again at the provider boundary. This protects us if
   // this reusable function is called later with URLs from somewhere other than
@@ -75,7 +77,15 @@ export async function collectApifyProfiles(
   for (let start = 0; start < uniqueProfileLinks.length; start += PROFILES_PER_RUN) {
     const batch = uniqueProfileLinks.slice(start, start + PROFILES_PER_RUN);
     const runNumber = start / PROFILES_PER_RUN + 1;
-    console.log(`Starting Apify batch ${runNumber} of ${totalRuns}...`);
+    logger?.info(
+      {
+        runNumber,
+        totalRuns,
+        batchSize: batch.length,
+        collectedProfiles: profiles.length,
+      },
+      'Starting Apify batch.',
+    );
 
     // `queries` is the Actor's documented input for profile URLs or public IDs.
     const run = await client.actor(LINKEDIN_PROFILE_SCRAPER_ACTOR).call({
@@ -96,6 +106,16 @@ export async function collectApifyProfiles(
     }
 
     profiles.push(...items);
+
+    logger?.info(
+      {
+        runNumber,
+        totalRuns,
+        receivedProfiles: items.length,
+        collectedProfiles: profiles.length,
+      },
+      'Completed Apify batch.',
+    );
   }
 
   return profiles;

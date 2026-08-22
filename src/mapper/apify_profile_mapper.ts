@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
 import type { RawApifyProfile } from '../data/apify_api.js';
+import { deduplicateBy } from '../helpers/deduplicate.js';
 import type {
   Profile,
   ProfileDate,
@@ -155,6 +156,41 @@ function mapExperience(value: unknown): ProfileExperience | undefined {
   };
 }
 
+/**
+ * Normalizes formatting that does not change the meaning of a job field.
+ * Differences in actual content are deliberately preserved.
+ */
+function normalizeExperienceIdentityText(
+  value: string | undefined,
+): string | null {
+  return value?.trim().replace(/\s+/g, ' ').toLocaleLowerCase() ?? null;
+}
+
+/**
+ * Builds an exact identity for one normalized employment entry.
+ *
+ * Two entries are duplicates only when title, company, and every available
+ * start/end-date component match. Consequently, simultaneous current roles at
+ * different companies or with different titles/dates remain separate jobs.
+ */
+function experienceIdentity(experience: ProfileExperience): string {
+  const dateIdentity = (date: ProfileDate | undefined) =>
+    date
+      ? {
+          year: date.year ?? null,
+          month: date.month ?? null,
+          text: normalizeExperienceIdentityText(date.text),
+        }
+      : null;
+
+  return JSON.stringify({
+    position: normalizeExperienceIdentityText(experience.position),
+    companyName: normalizeExperienceIdentityText(experience.companyName),
+    startDate: dateIdentity(experience.startDate),
+    endDate: dateIdentity(experience.endDate),
+  });
+}
+
 function mapEducation(value: unknown): ProfileEducation | undefined {
   const rawEducation = asRecord(value);
   if (!rawEducation) return undefined;
@@ -202,11 +238,15 @@ export function mapApifyProfile(
   const openToWork =
     typeof raw['openToWork'] === 'boolean' ? raw['openToWork'] : undefined;
 
-  const experience = asArray(raw['experience'])
+  const mappedExperience = asArray(raw['experience'])
     .map(mapExperience)
     .filter(
       (item): item is ProfileExperience => item !== undefined,
     );
+  const { uniqueItems: experience } = deduplicateBy(
+    mappedExperience,
+    experienceIdentity,
+  );
   const education = asArray(raw['education'])
     .map(mapEducation)
     .filter((item): item is ProfileEducation => item !== undefined);

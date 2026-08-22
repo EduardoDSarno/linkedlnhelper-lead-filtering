@@ -1,104 +1,129 @@
-// Load local environment variables, such as APIFY_API_KEY, before main runs.
+// Load local environment variables before constructing provider clients.
 import 'dotenv/config';
 
+import { randomUUID } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 
-import {
-  getLinkedlnProfileDataFromExternalProvidor,
-  loadProfilesFromCsv,
-} from './data/csvdata.js';
-import { collectApifyProfiles } from './data/apify_api.js';
+import { loadProfilesFromCsv } from './data/csvdata.js';
 import type { ImportedCsvData } from './data/csvdata.js';
-import type { ImportedCsvProfile } from './profile/index.js';
+import { createFileLogger } from './logging/index.js';
+import type { Logger } from './logging/index.js';
+import { runFullProfilePipeline } from './pipeline/index.js';
 
-// A small fixed batch lets us inspect Apify's data without spending credits on
-// the entire CSV before we know whether its employment history is complete.
-const APIFY_TEST_PROFILE_LIMIT = 20;
+const LOG_PATH = 'output/pipeline.log';
+const IMPORTED_CSV_OUTPUT_PATH = 'output/imported-csv-profiles.json';
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function shouldCollectProfiles(arguments_: readonly string[]): boolean {
+  return (
+    arguments_.includes('--collect') ||
+    arguments_.includes('--collect-apify')
+  );
+}
+
+function csvPathFromArguments(arguments_: readonly string[]): string | undefined {
+  return arguments_.find(
+    (argument) =>
+      argument !== '--collect' && argument !== '--collect-apify',
+  );
+}
+
+async function saveImportedCsvData(importedData: ImportedCsvData): Promise<void> {
+  await mkdir('output', { recursive: true });
+  await writeFile(
+    IMPORTED_CSV_OUTPUT_PATH,
+    JSON.stringify(Object.values(importedData.records), null, 2),
+    'utf8',
+  );
+}
 
 /**
- * Command-line entry point for the importer.
+ * Command-line entry point.
  *
- * Example:
- * npm start -- "test_data/profiles.csv"
- * npm run collect -- "test_data/profiles.csv"
- * npm run collect:apify -- "test_data/profiles.csv"
+ * Import only:
+ *   npm start -- "test_data/profiles.csv"
+ *
+ * Complete Apify + image-analysis pipeline:
+ *   npm run collect -- "test_data/profiles.csv"
+ *   npm run collect:apify -- "test_data/profiles.csv"
  */
-export async function main(): Promise<void> {
-  // process.argv[0] is Node and argv[1] is this script. Everything after that
-  // is supplied by the user on the command line.
+export async function main(logger: Logger): Promise<void> {
   const commandLineArguments = process.argv.slice(2);
-  const shouldCollectWithApify =
-    commandLineArguments.includes('--collect') ||
-    commandLineArguments.includes('--collect-apify');
-  const csvPath = commandLineArguments.find(
-    (argument) => argument !== '--collect' && argument !== '--collect-apify',
-  );
+  const csvPath = csvPathFromArguments(commandLineArguments);
 
-  // Stop early with a useful message when the caller did not supply a file.
   if (!csvPath) {
-    console.error('Usage: npm start -- <path-to-csv>');
-    console.error('   or: npm run collect -- <path-to-csv>');
-    console.error('   or: npm run collect:apify -- <path-to-csv>');
+    logger.error(
+      {
+        usage: 'npm run collect -- <path-to-csv>',
+      },
+      'CSV path is required.',
+    );
     process.exitCode = 1;
     return;
   }
 
-  const importedData: ImportedCsvData = await loadProfilesFromCsv(csvPath);
+  logger.info({ csvPath }, 'Loading Linked Helper CSV.');
+  const importedData = await loadProfilesFromCsv(csvPath);
 
-  // records is keyed by public ID. Object.values gives us a simple list to print.
-  const profiles: ImportedCsvProfile[] = Object.values(importedData.records);
+  logger.info(
+    {
+      totalRows: importedData.total_rows,
+      totalProfiles: importedData.total_profiles,
+      duplicatedProfiles: importedData.duplicated_profiles,
+    },
+    'Imported Linked Helper CSV.',
+  );
 
-  // The summary helps us verify row counts and deduplication at a glance.
-  console.log('Import summary:');
-  console.table({
-    totalRows: importedData.total_rows,
-    totalProfiles: importedData.total_profiles,
-    duplicatedProfiles: importedData.duplicated_profiles,
-  });
-
-  // Importing and printing a CSV does not call an external provider. Collection
-  // only starts when the command includes one of the explicit collection flags.
-  if (!shouldCollectWithApify) {
-    console.log('Profiles:');
-    console.table(
-      // Print only the useful overview fields instead of each profile's large raw row.
-      profiles.map((profile) => ({
-        publicId: profile.summary.publicId,
-        fullName: profile.summary.fullName,
-        headline: profile.summary.headline ?? '',
-        location: profile.summary.location ?? '',
-        profileUrl: profile.summary.profileUrl,
-      })),
+  if (!shouldCollectProfiles(commandLineArguments)) {
+    await saveImportedCsvData(importedData);
+    logger.info(
+      {
+        outputPath: IMPORTED_CSV_OUTPUT_PATH,
+        profilesWritten: importedData.total_profiles,
+      },
+      'Completed CSV-only import.',
     );
-
     return;
   }
 
-  const profileLinks = getLinkedlnProfileDataFromExternalProvidor(
-    importedData.records,
-  );
-
-  // Use exactly the first 20 unique CSV profiles (or every profile when the
-  // file contains fewer than 20) for this provider evaluation.
-  const testProfileLinks = profileLinks.slice(0, APIFY_TEST_PROFILE_LIMIT);
-  console.log(
-    `Collecting Apify data for ${testProfileLinks.length} profiles...`,
-  );
-
-  const apifyProfiles = await collectApifyProfiles(testProfileLinks);
-
-  // Preserve the provider response unchanged. The raw file is our evidence
-  // when deciding which fields belong in the final normalized profile model.
-  await mkdir('output', { recursive: true });
-  const outputPath = 'output/apify-profiles.json';
-  await writeFile(outputPath, JSON.stringify(apifyProfiles, null, 2), 'utf-8');
-
-  console.log(`Collected ${apifyProfiles.length} Apify profile records.`);
-  console.log(`Raw profile data saved to ${outputPath}`);
+  await runFullProfilePipeline(importedData, logger);
 }
 
-// main() returns a Promise, so handle any file-reading or parsing failure here.
-main().catch((error: unknown) => {
-  console.error('Application failed:', error);
-  process.exitCode = 1;
-});
+async function runApplication(): Promise<void> {
+  const runId = randomUUID();
+  const loggerHandle = await createFileLogger(LOG_PATH, runId);
+  const { logger } = loggerHandle;
+
+  try {
+    logger.info(
+      {
+        processId: process.pid,
+        logPath: LOG_PATH,
+      },
+      'Application started.',
+    );
+    await main(logger);
+  } catch (error: unknown) {
+    logger.error(
+      {
+        err: error,
+        error: errorMessage(error),
+      },
+      'Application failed.',
+    );
+    process.exitCode = 1;
+  } finally {
+    logger.info(
+      {
+        exitCode: process.exitCode ?? 0,
+      },
+      'Application stopped.',
+    );
+    await loggerHandle.close();
+  }
+}
+
+void runApplication();

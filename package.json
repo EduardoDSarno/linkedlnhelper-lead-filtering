@@ -23,7 +23,8 @@
     "@google/genai": "^2.18.0",
     "apify-client": "^2.25.0",
     "csv-parse": "^7.0.2",
-    "dotenv": "^17.4.2"
+    "dotenv": "^17.4.2",
+    "pino": "^10.3.1"
   },
   "engines": {
     "node": ">=22"
