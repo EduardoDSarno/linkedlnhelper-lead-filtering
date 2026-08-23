@@ -8,16 +8,16 @@ import {
   resolveApifyCollectorConfig,
 } from '../config.js';
 
-test('uses the paid-plan operating defaults', () => {
+test('uses the Phase 1 production operating defaults', () => {
   assert.deepEqual(APIFY_COLLECTOR_DEFAULTS, {
     profilesPerActorRun: 50,
-    actorRunConcurrency: 15,
+    actorRunConcurrency: 6,
     maxAttempts: 3,
     retryBaseDelayMs: 1_000,
   });
   assert.deepEqual(resolveApifyCollectorConfig({}, {}), {
     profilesPerActorRun: 50,
-    actorRunConcurrency: 15,
+    actorRunConcurrency: 6,
     maxAttempts: 3,
     retryBaseDelayMs: 1_000,
   });

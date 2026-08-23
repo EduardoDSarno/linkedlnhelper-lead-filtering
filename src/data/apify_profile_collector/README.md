@@ -43,7 +43,7 @@ The current paid-plan operating configuration is intentionally bounded:
 
 - profiles per Actor run: 50 by default, with a temporary application ceiling
   of 250 while larger batches are benchmarked;
-- Actor-run concurrency: 15 by default, capped at the Starter-plan limit of 32;
+- Actor-run concurrency: 6 by default, capped at the Starter-plan limit of 32;
 - attempts: 3 by default, 5 maximum;
 - initial retry delay: 1,000 ms, followed by exponential backoff and jitter.
 
@@ -60,6 +60,9 @@ APIFY_RETRY_BASE_DELAY_MS
 
 The caller may also pass `ApifyCollectorOptions`. Values above the safety caps
 are clamped rather than accepted.
+
+See [PHASE_1_CONFIGURATION.md](./PHASE_1_CONFIGURATION.md) for the benchmark
+evidence and change policy behind the production baseline.
 
 ## Returned data
 
@@ -87,3 +90,4 @@ normalization and image-analysis stages.
 - `config.test.ts`: deterministic configuration and validation tests.
 - `apify_profile_collector.test.ts`: deterministic tests using an injected
   executor; they do not call Apify.
+- `PHASE_1_CONFIGURATION.md`: locked production baseline and benchmark evidence.

@@ -97,6 +97,8 @@ does not make any provider request free.
 Collector overrides are validated by the production collector configuration.
 Values above its safety ceilings are clamped. When overrides are omitted, the
 source of truth is `src/data/apify_profile_collector/config.ts`.
+The tested production baseline and its benchmark evidence are documented in
+`src/data/apify_profile_collector/PHASE_1_CONFIGURATION.md`.
 
 ## Selection behavior
 

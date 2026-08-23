@@ -3,7 +3,7 @@ import type { ApifyCollectorOptions } from './types.js';
 /** Defaults used when neither caller options nor environment values exist. */
 export const APIFY_COLLECTOR_DEFAULTS = {
   profilesPerActorRun: 50,
-  actorRunConcurrency: 15,
+  actorRunConcurrency: 6,
   maxAttempts: 3,
   retryBaseDelayMs: 1_000,
 } as const;

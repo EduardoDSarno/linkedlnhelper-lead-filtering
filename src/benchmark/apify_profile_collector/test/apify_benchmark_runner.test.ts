@@ -221,5 +221,24 @@ test('validation detects lost and duplicated provider results', () => {
   assert.equal(validation.passed, false);
   assert.equal(validation.noDuplicateProfiles, false);
   assert.equal(validation.noMissingInputs, false);
-  assert.deepEqual(validation.missingProfileLinks, [requestedLinks[1]]);
+  assert.deepEqual(validation.missingProfileLinks, [
+    'https://www.linkedin.com/in/bravo',
+  ]);
+});
+
+test('validation matches encoded inputs with decoded provider profile URLs', () => {
+  const encodedUrl =
+    'https://www.linkedin.com/in/jo%C3%A3o-leite-20415836';
+  const decodedUrl = 'https://www.linkedin.com/in/joão-leite-20415836';
+  const validation = validateApifyBenchmarkCollection([encodedUrl], {
+    profiles: [{ linkedinUrl: decodedUrl }],
+    failures: [],
+    stats: collectionStats(1, 1, 0),
+  });
+
+  assert.equal(validation.passed, true);
+  assert.equal(validation.noMissingInputs, true);
+  assert.equal(validation.noUnexpectedResults, true);
+  assert.deepEqual(validation.missingProfileLinks, []);
+  assert.deepEqual(validation.unexpectedProfileLinks, []);
 });
