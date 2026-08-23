@@ -1,5 +1,3 @@
-import type { MAX_BATCH_CONCURRENCY, MAX_BATCH_SIZE } from './constants.js';
-
 /** A provider record is intentionally permissive and remains untouched. */
 export type RawApifyProfile = Record<string, unknown>;
 
@@ -63,10 +61,10 @@ export interface ApifyCollectionResult {
 }
 
 export interface ApifyCollectorOptions {
-  /** Profiles placed in one Actor run. Production is capped at {@link MAX_BATCH_SIZE}. */
+  /** Profiles placed in one Actor run, subject to the configured safety limit. */
   batchSize?: number;
 
-  /** Actor runs allowed at once. Production is capped at {@link MAX_BATCH_CONCURRENCY}. */
+  /** Actor runs allowed in flight, subject to the plan's configured limit. */
   concurrency?: number;
 
   /** Total attempts per profile, including its initial request. */

@@ -7,8 +7,8 @@ records untouched and reports unsuccessful URLs separately.
 ## Processing flow
 
 1. Trim and deduplicate the input LinkedIn URLs.
-2. Split the pending URLs into batches of at most 10 profiles.
-3. Run up to 10 Apify Actor batches concurrently.
+2. Split pending URLs using the configured profiles-per-Actor-run limit.
+3. Run Actor batches using the configured concurrency limit.
 4. Wait for every batch in the current round to settle.
 5. Keep successful records immediately.
 6. Record permanent failures, such as a `404`, without retrying them.
@@ -33,25 +33,29 @@ retry Actor run. Successfully collected profiles are never requested again.
 | Missing/malformed provider result | `invalid_response` | Yes |
 | Network/unknown run error | `network` | Yes |
 
-Transient errors use three total attempts by default: the initial request and
-up to two retries. A retry-exhausted profile is returned in `failures`; it does
-not discard or block unrelated successful profiles.
+Transient errors use the configured attempt budget. A retry-exhausted profile
+is returned in `failures`; it does not discard or block unrelated successful
+profiles.
 
 ## Limits and configuration
 
-Production values are intentionally bounded:
+The current paid-plan operating configuration is intentionally bounded:
 
-- batch size: 10 profiles maximum;
-- Actor-run concurrency: 10 maximum;
+- profiles per Actor run: 50 by default, with a temporary application ceiling
+  of 250 while larger batches are benchmarked;
+- Actor-run concurrency: 15 by default, capped at the Starter-plan limit of 32;
 - attempts: 3 by default, 5 maximum;
 - initial retry delay: 1,000 ms, followed by exponential backoff and jitter.
 
-The following environment variables can reduce or tune those defaults:
+The source of truth for defaults and safety ceilings is `config.ts`. Function
+options take precedence over environment values, which take precedence over
+those defaults. The supported environment variables are:
 
 ```text
-APIFY_BATCH_CONCURRENCY=10
-APIFY_MAX_ATTEMPTS=3
-APIFY_RETRY_BASE_DELAY_MS=1000
+APIFY_BATCH_SIZE
+APIFY_BATCH_CONCURRENCY
+APIFY_MAX_ATTEMPTS
+APIFY_RETRY_BASE_DELAY_MS
 ```
 
 The caller may also pass `ApifyCollectorOptions`. Values above the safety caps
@@ -74,7 +78,12 @@ normalization and image-analysis stages.
 
 - `apify_profile_collector.ts`: scheduling, classification, retry logic, and
   the production Apify executor.
+- `config.ts`: defaults, safety limits, environment parsing, and API-key access.
+- `constants.ts`: provider identifiers and HTTP status constants.
+- `error_handling.ts`: provider error classification and failure construction.
+- `helper.ts`: provider-value checks and LinkedIn URL normalization.
 - `types.ts`: public inputs, outputs, failure categories, and executor types.
 - `index.ts`: the module's public exports.
+- `config.test.ts`: deterministic configuration and validation tests.
 - `apify_profile_collector.test.ts`: deterministic tests using an injected
   executor; they do not call Apify.

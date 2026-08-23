@@ -2,6 +2,11 @@ export {
   collectApifyProfiles,
   collectApifyProfilesWithExecutor,
 } from './apify_profile_collector.js';
+export {
+  APIFY_COLLECTOR_DEFAULTS,
+  APIFY_COLLECTOR_LIMITS,
+  resolveApifyCollectorConfig,
+} from './config.js';
 
 export type {
   ApifyBatchContext,
@@ -14,3 +19,4 @@ export type {
   ApifyProfileFailure,
   RawApifyProfile,
 } from './types.js';
+export type { ResolvedApifyCollectorConfig } from './config.js';

@@ -8,6 +8,7 @@ import type {
   RawApifyProfile,
 } from './index.js';
 
+/** Builds a minimal valid provider record for collector tests. */
 function successfulRecord(linkedinUrl: string): RawApifyProfile {
   return {
     linkedinUrl,

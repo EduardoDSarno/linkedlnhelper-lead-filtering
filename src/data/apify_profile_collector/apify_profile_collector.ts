@@ -4,16 +4,13 @@ import { ApifyClient } from 'apify-client';
 
 import { deduplicateBy } from '../../helpers/deduplicate.js';
 import {
-  DEFAULT_BATCH_CONCURRENCY,
-  DEFAULT_BATCH_SIZE,
-  DEFAULT_MAX_ATTEMPTS,
-  DEFAULT_RETRY_BASE_DELAY_MS,
+  APIFY_RETRY_JITTER_MS,
+  requireApifyApiKey,
+  resolveApifyCollectorConfig,
+} from './config.js';
+import {
   LINKEDIN_PROFILE_SCRAPER_ACTOR,
-  MAX_ATTEMPTS,
-  MAX_BATCH_CONCURRENCY,
-  MAX_BATCH_SIZE,
   PROFILE_DETAILS_MODE,
-  RETRY_JITTER_MS,
 } from './constants.js';
 import {
   classifyProviderRecord,
@@ -22,10 +19,8 @@ import {
 } from './error_handling.js';
 import type { FailureDescriptor } from './error_handling.js';
 import {
-  boundedInteger,
   isRecord,
   isStringValue,
-  nonNegativeNumber,
   normalizeLinkedinUrl,
 } from './helper.js';
 import type { Logger } from '../../logging/index.js';
@@ -41,39 +36,11 @@ import type {
   RawApifyProfile,
 } from './types.js';
 
-/** This functions gets a ApifyCollectorOptions type, that could
- * have wrong types and passes through our helper function to make 
- * sure the valeus are acceptable within our constraints.
- */
-function resolveOptions(options: ApifyCollectorOptions): Required<ApifyCollectorOptions> {
-  return {
-    batchSize: boundedInteger(
-      options.batchSize,
-      DEFAULT_BATCH_SIZE,
-      MAX_BATCH_SIZE,
-    ),
-    concurrency: boundedInteger(
-      options.concurrency ?? process.env['APIFY_BATCH_CONCURRENCY'],
-      DEFAULT_BATCH_CONCURRENCY,
-      MAX_BATCH_CONCURRENCY,
-    ),
-    maxAttempts: boundedInteger(
-      options.maxAttempts ?? process.env['APIFY_MAX_ATTEMPTS'],
-      DEFAULT_MAX_ATTEMPTS,
-      MAX_ATTEMPTS,
-    ),
-    retryBaseDelayMs: nonNegativeNumber(
-      options.retryBaseDelayMs ?? process.env['APIFY_RETRY_BASE_DELAY_MS'],
-      DEFAULT_RETRY_BASE_DELAY_MS,
-    ),
-  };
-}
-
 /**
  * Splits the pending profiles into batches of at most `batchSize`, which is the
  * unit one Actor run accepts. The final batch is short whenever the count does
  * not divide evenly. Relies on `batchSize` being a positive integer, which
- * `boundedInteger` already guarantees: a zero would never advance the loop.
+ * the configuration resolver guarantees: a zero would never advance the loop.
  */
 function chunkProfiles(
   profiles: readonly PendingProfile[],
@@ -288,7 +255,7 @@ async function executeRound(
 
 /**
  * Exponential backoff with jitter for the wait between retry rounds: the delay
- * doubles each round, plus a random offset of up to RETRY_JITTER_MS. The jitter
+ * doubles each round, plus a bounded random offset. The jitter
  * matters because all the failures of a round retry together — without it they
  * would hit the provider in a synchronized burst. A base delay of zero disables
  * waiting entirely, which is what keeps tests fast.
@@ -297,7 +264,7 @@ function retryDelayMs(baseDelayMs: number, completedRound: number): number {
   if (baseDelayMs === 0) return 0;
 
   const exponentialDelay = baseDelayMs * 2 ** (completedRound - 1);
-  return exponentialDelay + Math.floor(Math.random() * RETRY_JITTER_MS);
+  return exponentialDelay + Math.floor(Math.random() * APIFY_RETRY_JITTER_MS);
 }
 
 /**
@@ -313,7 +280,7 @@ export async function collectApifyProfilesWithExecutor(
   logger?: Logger,
   options: ApifyCollectorOptions = {},
 ): Promise<ApifyCollectionResult> {
-  const resolvedOptions = resolveOptions(options);
+  const config = resolveApifyCollectorConfig(options);
   const cleanedProfiles = profileLinks
     .map((linkedinUrl, inputIndex) => ({
       linkedinUrl: linkedinUrl.trim(),
@@ -341,14 +308,14 @@ export async function collectApifyProfilesWithExecutor(
 
   while (
     pending.length > 0 &&
-    roundsCompleted < resolvedOptions.maxAttempts
+    roundsCompleted < config.maxAttempts
   ) {
     const round = roundsCompleted + 1;
     const outcomes = await executeRound(
       pending,
       round,
-      resolvedOptions.batchSize,
-      resolvedOptions.concurrency,
+      config.profilesPerActorRun,
+      config.actorRunConcurrency,
       executeBatch,
       logger,
     );
@@ -371,7 +338,7 @@ export async function collectApifyProfilesWithExecutor(
 
       if (
         descriptor.retryable &&
-        attempts < resolvedOptions.maxAttempts
+        attempts < config.maxAttempts
       ) {
         retryCandidates.push({ ...profile, attempts });
         retriedProfiles.add(profile.inputIndex);
@@ -379,7 +346,7 @@ export async function collectApifyProfilesWithExecutor(
       }
 
       const retryExhausted =
-        descriptor.retryable && attempts >= resolvedOptions.maxAttempts;
+        descriptor.retryable && attempts >= config.maxAttempts;
       const failure = finalFailure(
         profile,
         descriptor,
@@ -450,7 +417,7 @@ export async function collectApifyProfilesWithExecutor(
 
     if (pending.length > 0) {
       const waitMs = retryDelayMs(
-        resolvedOptions.retryBaseDelayMs,
+        config.retryBaseDelayMs,
         roundsCompleted,
       );
       logger?.info(
@@ -494,18 +461,11 @@ export async function collectApifyProfilesWithExecutor(
       roundsCompleted,
       retryRounds: Math.max(0, roundsCompleted - 1),
       actorRuns,
-      batchSize: resolvedOptions.batchSize,
-      batchConcurrency: resolvedOptions.concurrency,
+      batchSize: config.profilesPerActorRun,
+      batchConcurrency: config.actorRunConcurrency,
       unexpectedProviderRecords,
     },
   };
-}
-
-/** Returns the configured API key or stops before starting any Actor runs. */
-function getApifyApiKey(): string {
-  const apiKey = process.env['APIFY_API_KEY'];
-  if (!apiKey) throw new Error('APIFY_API_KEY is not configured.');
-  return apiKey;
 }
 
 /**
@@ -529,7 +489,7 @@ export async function collectApifyProfiles(
   logger?: Logger,
   options: ApifyCollectorOptions = {},
 ): Promise<ApifyCollectionResult> {
-  const client = new ApifyClient({ token: getApifyApiKey() });
+  const client = new ApifyClient({ token: requireApifyApiKey() });
 
   const executeBatch: ApifyBatchExecutor = async (queries) => {
     const run = await client.actor(LINKEDIN_PROFILE_SCRAPER_ACTOR).call({

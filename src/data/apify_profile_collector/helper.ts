@@ -42,30 +42,3 @@ export function isHttpNumberValue(value: unknown): number | undefined {
 export function normalizeLinkedinUrl(value: string): string {
   return value.trim().replace(/\/+$/, '').toLowerCase();
 }
-
-/**
- * Coerces untrusted config (option or env string) into a positive integer no
- * larger than `maximum`. Anything unusable — NaN, Infinity, zero, negative —
- * falls back to `fallback`. Env vars are always strings and TypeScript cannot
- * check them, so this is what keeps provider limits from being exceeded.
- */
-export function boundedInteger(
-  value: unknown,
-  fallback: number,
-  maximum: number,
-): number {
-  const numericValue = Number(value); // converts anything to a number
-  if (!Number.isFinite(numericValue) || numericValue <= 0) return fallback;
-  return Math.min(maximum, Math.floor(numericValue));
-}
-
-/**
- * Same idea as `boundedInteger`, but for values where zero is legitimate and
- * no ceiling or rounding applies, such as a retry delay in milliseconds.
- */
-export function nonNegativeNumber(value: unknown, fallback: number): number {
-  const numericValue = Number(value);
-  return Number.isFinite(numericValue) && numericValue >= 0
-    ? numericValue
-    : fallback;
-}
