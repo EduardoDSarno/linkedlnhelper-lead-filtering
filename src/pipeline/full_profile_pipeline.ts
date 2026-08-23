@@ -1,6 +1,3 @@
-import { mkdir, rename, writeFile } from 'node:fs/promises';
-import { dirname } from 'node:path';
-
 import { collectApifyProfiles } from '../data/apify_profile_collector/index.js';
 import type {
   ApifyCollectionStats,
@@ -10,6 +7,7 @@ import { getLinkedlnProfileDataFromExternalProvidor } from '../data/csvdata.js';
 import type { ImportedCsvData } from '../data/csvdata.js';
 import { extractProfileImages } from '../image_extractor/index.js';
 import type { ProfileImageJobResult } from '../image_extractor/index.js';
+import { writeJsonAtomically } from '../helpers/write_json_atomically.js';
 import type { Logger } from '../logging/index.js';
 import { mapApifyProfile } from '../mapper/index.js';
 import { attachProfileImageAnalysis } from '../profile/index.js';
@@ -70,16 +68,6 @@ function imageConcurrencyFromEnvironment(): number {
   }
 
   return Math.min(MAX_IMAGE_CONCURRENCY, Math.floor(configured));
-}
-
-async function writeJsonAtomically(path: string, value: unknown): Promise<void> {
-  // Write to a temporary file first, then replace the destination in one move.
-  // Readers therefore never observe a partially written JSON document.
-  await mkdir(dirname(path), { recursive: true });
-
-  const temporaryPath = `${path}.tmp`;
-  await writeFile(temporaryPath, JSON.stringify(value, null, 2), 'utf8');
-  await rename(temporaryPath, path);
 }
 
 async function normalizeProfiles(

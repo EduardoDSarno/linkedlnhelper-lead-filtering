@@ -2,11 +2,11 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
 
-import { collectApifyProfilesWithExecutor } from './index.js';
+import { collectApifyProfilesWithExecutor } from '../index.js';
 import type {
   ApifyBatchExecutor,
   RawApifyProfile,
-} from './index.js';
+} from '../index.js';
 
 /** Builds a minimal valid provider record for collector tests. */
 function successfulRecord(linkedinUrl: string): RawApifyProfile {

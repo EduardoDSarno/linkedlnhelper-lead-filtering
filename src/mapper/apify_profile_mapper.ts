@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 
 import type { RawApifyProfile } from '../data/apify_profile_collector/index.js';
 import { deduplicateBy } from '../helpers/deduplicate.js';
+import { isRecord, isStringValue } from '../helpers/type_guards.js';
 import type {
   Profile,
   ProfileDate,
@@ -39,28 +40,15 @@ const MONTHS: Readonly<Record<string, number>> = {
   december: 12,
 };
 
-function asRecord(value: unknown): UnknownRecord | undefined {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-    ? (value as UnknownRecord)
-    : undefined;
-}
-
 function asArray(value: unknown): unknown[] {
   return Array.isArray(value) ? value : [];
-}
-
-function asTrimmedString(value: unknown): string | undefined {
-  if (typeof value !== 'string') return undefined;
-
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : undefined;
 }
 
 function recordString(
   record: UnknownRecord,
   key: string,
 ): string | undefined {
-  return asTrimmedString(record[key]);
+  return isStringValue(record[key]);
 }
 
 function mapYear(value: unknown): number | undefined {
@@ -68,7 +56,7 @@ function mapYear(value: unknown): number | undefined {
     return value;
   }
 
-  const text = asTrimmedString(value);
+  const text = isStringValue(value);
   return text && /^\d{4}$/.test(text)
     ? Number.parseInt(text, 10)
     : undefined;
@@ -84,12 +72,12 @@ function mapMonth(value: unknown): number | undefined {
     return value;
   }
 
-  const text = asTrimmedString(value)?.toLowerCase();
+  const text = isStringValue(value)?.toLowerCase();
   return text ? MONTHS[text] : undefined;
 }
 
 function mapDate(value: unknown): ProfileDate | undefined {
-  const rawDate = asRecord(value);
+  const rawDate = isRecord(value);
   if (!rawDate) return undefined;
 
   const year = mapYear(rawDate['year']);
@@ -108,10 +96,10 @@ function mapDate(value: unknown): ProfileDate | undefined {
 }
 
 function mapLocation(value: unknown): ProfileLocation | undefined {
-  const rawLocation = asRecord(value);
+  const rawLocation = isRecord(value);
   if (!rawLocation) return undefined;
 
-  const parsed = asRecord(rawLocation['parsed']);
+  const parsed = isRecord(rawLocation['parsed']);
   const text =
     recordString(rawLocation, 'linkedinText') ??
     (parsed ? recordString(parsed, 'text') : undefined);
@@ -135,7 +123,7 @@ function mapLocation(value: unknown): ProfileLocation | undefined {
 }
 
 function mapExperience(value: unknown): ProfileExperience | undefined {
-  const rawExperience = asRecord(value);
+  const rawExperience = isRecord(value);
   if (!rawExperience) return undefined;
 
   const position = recordString(rawExperience, 'position');
@@ -192,7 +180,7 @@ function experienceIdentity(experience: ProfileExperience): string {
 }
 
 function mapEducation(value: unknown): ProfileEducation | undefined {
-  const rawEducation = asRecord(value);
+  const rawEducation = isRecord(value);
   if (!rawEducation) return undefined;
 
   const schoolName = recordString(rawEducation, 'schoolName');
@@ -252,7 +240,7 @@ export function mapApifyProfile(
     .filter((item): item is ProfileEducation => item !== undefined);
 
   return {
-    id: asTrimmedString(existingProfileId) ?? randomUUID(),
+    id: isStringValue(existingProfileId) ?? randomUUID(),
     linkedinUrl,
     ...(firstName ? { firstName } : {}),
     ...(lastName ? { lastName } : {}),

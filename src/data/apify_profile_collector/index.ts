@@ -7,6 +7,7 @@ export {
   APIFY_COLLECTOR_LIMITS,
   resolveApifyCollectorConfig,
 } from './config.js';
+export { normalizeLinkedinUrl } from './helper.js';
 
 export type {
   ApifyBatchContext,

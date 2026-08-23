@@ -15,7 +15,11 @@ import type {
   PendingProfile,
   RawApifyProfile,
 } from './types.js';
-import { isHttpNumberValue, isRecord, isStringValue } from './helper.js';
+import {
+  isHttpNumberValue,
+  isRecord,
+  isStringValue,
+} from '../../helpers/type_guards.js';
 
 /**
  * A failure classified but not yet tied to a profile or a retry count. The

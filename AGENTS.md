@@ -22,11 +22,7 @@
   every function and method, including internal helper functions.
 - Start with a concise explanation of the function's responsibility and why it
   exists; do not merely restate its name or implementation line by line.
-- Document parameters with `@param` when their meaning, accepted format, or
-  constraints are not already obvious from their names and types.
-- Document return behavior with `@returns` when the result needs explanation,
-  especially for optional values, result objects, and transformed data.
-- Use `@throws` for errors callers are expected to handle and mention important
-  side effects such as API calls, file writes, logging, retries, or mutation.
 - Keep documentation synchronized with the implementation and follow the
   repository rule against duplicating configurable numeric values in comments.
+- Just add The '@' parameters when nescessary Because most of the time they are explicit
+  in the function

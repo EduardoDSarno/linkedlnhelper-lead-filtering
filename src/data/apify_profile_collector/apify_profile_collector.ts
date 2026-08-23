@@ -18,11 +18,8 @@ import {
   finalFailure,
 } from './error_handling.js';
 import type { FailureDescriptor } from './error_handling.js';
-import {
-  isRecord,
-  isStringValue,
-  normalizeLinkedinUrl,
-} from './helper.js';
+import { normalizeLinkedinUrl } from './helper.js';
+import { isRecord, isStringValue } from '../../helpers/type_guards.js';
 import type { Logger } from '../../logging/index.js';
 import type {
   ApifyBatchContext,

@@ -7,7 +7,8 @@
     "start": "tsx src/index.ts",
     "collect": "tsx src/index.ts --collect",
     "collect:apify": "tsx src/index.ts --collect-apify",
-    "test": "node --import tsx --test src/data/apify_profile_collector/apify_profile_collector.test.ts",
+    "benchmark:apify": "tsx src/benchmark/apify_profile_collector/index.ts",
+    "test": "node --import tsx --test 'src/**/test/*.test.ts'",
     "typecheck": "tsc --noEmit"
   },
   "keywords": [],

@@ -6,7 +6,7 @@ import {
   APIFY_COLLECTOR_LIMITS,
   requireApifyApiKey,
   resolveApifyCollectorConfig,
-} from './config.js';
+} from '../config.js';
 
 test('uses the paid-plan operating defaults', () => {
   assert.deepEqual(APIFY_COLLECTOR_DEFAULTS, {
