@@ -1,7 +1,11 @@
 import { mkdir, rename, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 
-import { collectApifyProfiles } from '../data/apify_api.js';
+import { collectApifyProfiles } from '../data/apify_profile_collector/index.js';
+import type {
+  ApifyCollectionStats,
+  ApifyProfileFailure,
+} from '../data/apify_profile_collector/index.js';
 import { getLinkedlnProfileDataFromExternalProvidor } from '../data/csvdata.js';
 import type { ImportedCsvData } from '../data/csvdata.js';
 import { extractProfileImages } from '../image_extractor/index.js';
@@ -14,6 +18,7 @@ import type { FullProfile, Profile } from '../profile/index.js';
 export const MAX_PIPELINE_PROFILES = 1_000;
 
 const RAW_APIFY_OUTPUT_PATH = 'output/apify-profiles.json';
+const APIFY_FAILURES_OUTPUT_PATH = 'output/apify-profile-failures.json';
 const FULL_PROFILES_OUTPUT_PATH = 'output/full-profiles.json';
 const PIPELINE_SUMMARY_OUTPUT_PATH = 'output/pipeline-summary.json';
 const DEFAULT_IMAGE_CONCURRENCY = 25;
@@ -35,6 +40,8 @@ export interface FullProfilePipelineSummary {
   durationMs: number;
   requestedProfiles: number;
   collectedProfiles: number;
+  providerCollection: ApifyCollectionStats;
+  providerFailures: ApifyProfileFailure[];
   normalizedProfiles: number;
   profilesWithoutPhoto: number;
   successfulImageAnalyses: number;
@@ -44,6 +51,7 @@ export interface FullProfilePipelineSummary {
   imageAnalysisFailures: ImageAnalysisFailure[];
   outputs: {
     rawApifyProfiles: string;
+    apifyProfileFailures: string;
     fullProfiles: string;
     summary: string;
   };
@@ -154,19 +162,29 @@ export async function runFullProfilePipeline(
     'Starting full-profile pipeline.',
   );
 
-  // Step 3: collect complete Apify records. The provider client handles its
-  // own safe batching, while this pipeline receives one combined result list.
-  const rawProfiles = await collectApifyProfiles(profileLinks, logger);
+  // Step 3: collect complete Apify records. The collector runs bounded batches
+  // concurrently. Once a round settles, it pools only transiently failed URLs
+  // into the next retry round; successes and permanent failures are not rerun.
+  const collection = await collectApifyProfiles(profileLinks, logger);
+  const rawProfiles = collection.profiles;
 
-  // Step 4: persist the untouched provider response before normalization.
-  // This guarantees that fields excluded from our minimal model are not lost.
-  await writeJsonAtomically(RAW_APIFY_OUTPUT_PATH, rawProfiles);
+  // Step 4: persist successful raw responses and final provider failures as
+  // separate artifacts. This keeps raw provider data intact and makes missing
+  // or retry-exhausted profiles visible without blocking successful profiles.
+  await Promise.all([
+    writeJsonAtomically(RAW_APIFY_OUTPUT_PATH, rawProfiles),
+    writeJsonAtomically(APIFY_FAILURES_OUTPUT_PATH, collection.failures),
+  ]);
   logger.info(
     {
       collectedProfiles: rawProfiles.length,
+      failedProfiles: collection.failures.length,
+      retryRounds: collection.stats.retryRounds,
+      actorRuns: collection.stats.actorRuns,
       outputPath: RAW_APIFY_OUTPUT_PATH,
+      failuresOutputPath: APIFY_FAILURES_OUTPUT_PATH,
     },
-    'Saved untouched Apify profiles.',
+    'Saved Apify collection results.',
   );
 
   // A count mismatch is not automatically fatal, but it is important evidence
@@ -176,6 +194,7 @@ export async function runFullProfilePipeline(
       {
         requestedProfiles: profileLinks.length,
         collectedProfiles: rawProfiles.length,
+        providerFailures: collection.failures.length,
       },
       'Apify result count differs from requested profile count.',
     );
@@ -263,6 +282,8 @@ export async function runFullProfilePipeline(
     durationMs: completedAt.getTime() - startedAt.getTime(),
     requestedProfiles: profileLinks.length,
     collectedProfiles: rawProfiles.length,
+    providerCollection: collection.stats,
+    providerFailures: collection.failures,
     normalizedProfiles: normalized.profiles.length,
     profilesWithoutPhoto,
     successfulImageAnalyses,
@@ -272,6 +293,7 @@ export async function runFullProfilePipeline(
     imageAnalysisFailures,
     outputs: {
       rawApifyProfiles: RAW_APIFY_OUTPUT_PATH,
+      apifyProfileFailures: APIFY_FAILURES_OUTPUT_PATH,
       fullProfiles: FULL_PROFILES_OUTPUT_PATH,
       summary: PIPELINE_SUMMARY_OUTPUT_PATH,
     },
