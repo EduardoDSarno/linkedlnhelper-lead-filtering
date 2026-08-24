@@ -21,17 +21,20 @@ Each successful extraction describes:
 - background and attire categories;
 - whether the result is uncertain or requires manual review;
 - short, neutral observations;
-- Gemini model, media resolution, and token usage.
-- Age bracket (with confidende level)
+- Gemini model, media resolution, and token usage;
+- an apparent-age bracket with a confidence level.
 
-The extractor intentionally does not infer age, ethnicity, health, body size,
-attractiveness, wealth, personality, professional competence, employability,
-or candidate fit.
+The apparent-age field is a coarse visual estimate, not the person's actual
+age. The extractor does not infer ethnicity, health, body size, attractiveness,
+wealth, personality, professional competence, employability, or candidate fit.
+Apparent age must remain a manual-review aid and must not become an automated
+candidate acceptance or rejection rule.
 
 ## Module structure
 
 ```text
 image_extractor/
+├── config.ts                        Defaults, limits, and retry policy
 ├── index.ts                         Public exports
 ├── profile_image_extractor.ts       Single-image and batch orchestration
 ├── profile_image_loader.ts          URL, file, and byte loading
@@ -186,7 +189,9 @@ const results = await extractProfileImages(
 ```
 
 One failed job does not cancel the remaining jobs. Every returned item is a
-discriminated union:
+discriminated union, and both branches can carry token usage: Gemini bills for
+the tokens it read even when it declines to answer, so a rejected job reports
+what that attempt cost.
 
 ```ts
 type ProfileImageJobResult =
@@ -199,12 +204,32 @@ type ProfileImageJobResult =
       id: string;
       status: 'rejected';
       error: string;
+      usage?: GeminiTokenUsage;
     };
 ```
+
+### Testing without Gemini
+
+Three boundaries can be replaced so a test never reaches Gemini or a public
+image URL. Each defaults to the real implementation when omitted, so production
+callers are unaffected.
+
+| Boundary | How to replace it |
+| --- | --- |
+| One image download | `ProfileImageLoadingOptions.fetchImage` |
+| One Gemini call | `GeminiProfileImageRequest.generateContent` |
+| One image job in a batch | `extractProfileImagesWithExecutor(jobs, executor, options)` |
+
+Supplying `generateContent` means the shared client is never constructed, so no
+`GEMINI_API_KEY` is required.
 
 ## Extraction options
 
 All options are optional:
+
+`config.ts` is the executable source of truth for these values. The table below
+is a maintained documentation snapshot and must be updated whenever the named
+defaults or limits change.
 
 | Option | Default | Purpose |
 | --- | ---: | --- |
@@ -261,6 +286,17 @@ interface ProfileImageExtractionResult {
       | 'other'
       | 'unclear';
     attire: 'formal' | 'business_casual' | 'casual' | 'unclear';
+    apparentAge: {
+      bracket:
+        | 'under_25'
+        | '25_34'
+        | '35_44'
+        | '45_54'
+        | '55_64'
+        | '65_plus'
+        | 'unknown';
+      confidence: 'high' | 'medium' | 'low' | 'unassessable';
+    };
     certainty: 'certain' | 'uncertain' | 'unassessable';
     reviewRequired: boolean;
     observations: string[];

@@ -61,7 +61,7 @@ APIFY_RETRY_BASE_DELAY_MS
 The caller may also pass `ApifyCollectorOptions`. Values above the safety caps
 are clamped rather than accepted.
 
-See [PHASE_1_CONFIGURATION.md](./PHASE_1_CONFIGURATION.md) for the benchmark
+See [APIFY_COLLECTOR_CONFIG.md](./APIFY_COLLECTOR_CONFIG.md) for the benchmark
 evidence and change policy behind the production baseline.
 
 ## Returned data
@@ -84,10 +84,10 @@ normalization and image-analysis stages.
 - `config.ts`: defaults, safety limits, environment parsing, and API-key access.
 - `constants.ts`: provider identifiers and HTTP status constants.
 - `error_handling.ts`: provider error classification and failure construction.
-- `helper.ts`: provider-value checks and LinkedIn URL normalization.
+- `../../linkedin/`: shared LinkedIn URL comparison and strict profile keys.
 - `types.ts`: public inputs, outputs, failure categories, and executor types.
 - `index.ts`: the module's public exports.
 - `config.test.ts`: deterministic configuration and validation tests.
 - `apify_profile_collector.test.ts`: deterministic tests using an injected
   executor; they do not call Apify.
-- `PHASE_1_CONFIGURATION.md`: locked production baseline and benchmark evidence.
+- `APIFY_COLLECTOR_CONFIG.md`: locked production baseline and benchmark evidence.

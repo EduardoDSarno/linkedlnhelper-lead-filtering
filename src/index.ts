@@ -13,10 +13,12 @@ import { runFullProfilePipeline } from './pipeline/index.js';
 const LOG_PATH = 'output/pipeline.log';
 const IMPORTED_CSV_OUTPUT_PATH = 'output/imported-csv-profiles.json';
 
+/** Converts an unknown application failure into a log-safe message. */
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+/** Determines whether the selected CLI mode should contact profile providers. */
 function shouldCollectProfiles(arguments_: readonly string[]): boolean {
   return (
     arguments_.includes('--collect') ||
@@ -24,6 +26,7 @@ function shouldCollectProfiles(arguments_: readonly string[]): boolean {
   );
 }
 
+/** Finds the CSV path while excluding the supported mode flags. */
 function csvPathFromArguments(arguments_: readonly string[]): string | undefined {
   return arguments_.find(
     (argument) =>
@@ -31,6 +34,7 @@ function csvPathFromArguments(arguments_: readonly string[]): string | undefined
   );
 }
 
+/** Writes the normalized CSV-only import for the non-provider CLI mode. */
 async function saveImportedCsvData(importedData: ImportedCsvData): Promise<void> {
   await mkdir('output', { recursive: true });
   await writeFile(
@@ -92,6 +96,7 @@ export async function main(logger: Logger): Promise<void> {
   await runFullProfilePipeline(importedData, logger);
 }
 
+/** Creates the run logger and guarantees its transport is closed on shutdown. */
 async function runApplication(): Promise<void> {
   const runId = randomUUID();
   const loggerHandle = await createFileLogger(LOG_PATH, runId);
