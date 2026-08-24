@@ -8,8 +8,9 @@
     "collect": "tsx src/index.ts --collect",
     "collect:apify": "tsx src/index.ts --collect-apify",
     "benchmark:apify": "tsx src/benchmark/apify_profile_collector/index.ts",
-    "test": "node --import tsx --test 'src/**/test/*.test.ts'",
-    "typecheck": "tsc --noEmit"
+    "test": "npm run typecheck && npm run test:unit",
+    "typecheck": "tsc --noEmit --noUnusedLocals --noUnusedParameters",
+    "test:unit": "node --import tsx --test 'src/**/test/*.test.ts' 'scripts/**/test/*.test.ts'"
   },
   "keywords": [],
   "author": "",

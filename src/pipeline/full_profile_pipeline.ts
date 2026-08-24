@@ -1,12 +1,19 @@
 import { collectApifyProfiles } from '../data/apify_profile_collector/index.js';
 import type {
+  ApifyCollectionResult,
   ApifyCollectionStats,
   ApifyProfileFailure,
 } from '../data/apify_profile_collector/index.js';
 import { getLinkedlnProfileDataFromExternalProvidor } from '../data/csvdata.js';
 import type { ImportedCsvData } from '../data/csvdata.js';
 import { extractProfileImages } from '../image_extractor/index.js';
-import type { ProfileImageJobResult } from '../image_extractor/index.js';
+import type {
+  GeminiTokenUsage,
+  ProfileImageBatchOptions,
+  ProfileImageJob,
+  ProfileImageJobResult,
+} from '../image_extractor/index.js';
+import { resolveProfileImageBatchConcurrency } from '../image_extractor/index.js';
 import { writeJsonAtomically } from '../helpers/write_json_atomically.js';
 import type { Logger } from '../logging/index.js';
 import { mapApifyProfile } from '../mapper/index.js';
@@ -19,8 +26,7 @@ const RAW_APIFY_OUTPUT_PATH = 'output/apify-profiles.json';
 const APIFY_FAILURES_OUTPUT_PATH = 'output/apify-profile-failures.json';
 const FULL_PROFILES_OUTPUT_PATH = 'output/full-profiles.json';
 const PIPELINE_SUMMARY_OUTPUT_PATH = 'output/pipeline-summary.json';
-const DEFAULT_IMAGE_CONCURRENCY = 25;
-const MAX_IMAGE_CONCURRENCY = 50;
+const IMAGE_CONCURRENCY_ENVIRONMENT_KEY = 'IMAGE_ANALYSIS_CONCURRENCY';
 
 interface ProfileMappingFailure {
   providerRecordIndex: number;
@@ -30,7 +36,62 @@ interface ProfileMappingFailure {
 interface ImageAnalysisFailure {
   profileId: string;
   error: string;
+
+  /** Tokens Gemini billed before rejecting this image, when it reported any. */
+  usage?: GeminiTokenUsage;
 }
+
+/** Where one run writes its artifacts. */
+export interface FullProfilePipelineOutputPaths {
+  rawApifyProfiles: string;
+  apifyProfileFailures: string;
+  fullProfiles: string;
+  summary: string;
+}
+
+/**
+ * The outside world this pipeline touches.
+ *
+ * Only genuine boundaries appear here: the paid provider, the paid image
+ * analyzer, the filesystem, and the clock. The mapper is deliberately absent
+ * because it is pure and has nothing to isolate — running the real one is what
+ * lets an integration test catch drift between mapping and the pipeline.
+ */
+export interface FullProfilePipelineDependencies {
+  collectProfiles: (
+    profileLinks: readonly string[],
+    logger: Logger,
+  ) => Promise<ApifyCollectionResult>;
+
+  extractImages: (
+    jobs: readonly ProfileImageJob[],
+    options: ProfileImageBatchOptions,
+  ) => Promise<ProfileImageJobResult[]>;
+
+  writeJson: (path: string, value: unknown) => Promise<void>;
+
+  now: () => Date;
+}
+
+/** Runtime settings a caller may override, such as a test writing elsewhere. */
+export interface FullProfilePipelineOptions {
+  imageConcurrency?: number;
+  outputPaths?: FullProfilePipelineOutputPaths;
+}
+
+const DEFAULT_OUTPUT_PATHS: FullProfilePipelineOutputPaths = {
+  rawApifyProfiles: RAW_APIFY_OUTPUT_PATH,
+  apifyProfileFailures: APIFY_FAILURES_OUTPUT_PATH,
+  fullProfiles: FULL_PROFILES_OUTPUT_PATH,
+  summary: PIPELINE_SUMMARY_OUTPUT_PATH,
+};
+
+const DEFAULT_DEPENDENCIES: FullProfilePipelineDependencies = {
+  collectProfiles: collectApifyProfiles,
+  extractImages: extractProfileImages,
+  writeJson: writeJsonAtomically,
+  now: () => new Date(),
+};
 
 export interface FullProfilePipelineSummary {
   startedAt: string;
@@ -47,6 +108,14 @@ export interface FullProfilePipelineSummary {
   fullProfilesWritten: number;
   mappingFailures: ProfileMappingFailure[];
   imageAnalysisFailures: ImageAnalysisFailure[];
+
+  /**
+   * Tokens Gemini billed across this run, successes and failures together.
+   *
+   * Failed images are included deliberately: a blocked or truncated response
+   * is charged for, so leaving it out would understate what the run cost.
+   */
+  imageTokenUsage: Required<GeminiTokenUsage>;
   outputs: {
     rawApifyProfiles: string;
     apifyProfileFailures: string;
@@ -55,21 +124,51 @@ export interface FullProfilePipelineSummary {
   };
 }
 
+/** Converts an unknown failure into a stable message suitable for artifacts. */
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-function imageConcurrencyFromEnvironment(): number {
-  // Keep image requests bounded even if an invalid or excessive environment
-  // value is supplied. This protects both Gemini quotas and local resources.
-  const configured = Number(process.env['IMAGE_ANALYSIS_CONCURRENCY']);
-  if (!Number.isFinite(configured) || configured <= 0) {
-    return DEFAULT_IMAGE_CONCURRENCY;
+/**
+ * Adds up the tokens every image job reported, billed or wasted.
+ *
+ * Both branches of {@link ProfileImageJobResult} can carry usage: a fulfilled
+ * job through its result, a rejected one when Gemini answered and then
+ * declined. Missing counts are treated as zero rather than skipped, so the
+ * total is always a complete set of numbers.
+ */
+function totalImageTokenUsage(
+  results: readonly ProfileImageJobResult[],
+): Required<GeminiTokenUsage> {
+  const total: Required<GeminiTokenUsage> = {
+    promptTokens: 0,
+    outputTokens: 0,
+    thinkingTokens: 0,
+    totalTokens: 0,
+  };
+
+  for (const result of results) {
+    const usage =
+      result.status === 'fulfilled' ? result.result.usage : result.usage;
+    if (!usage) continue;
+
+    total.promptTokens += usage.promptTokens ?? 0;
+    total.outputTokens += usage.outputTokens ?? 0;
+    total.thinkingTokens += usage.thinkingTokens ?? 0;
+    total.totalTokens += usage.totalTokens ?? 0;
   }
 
-  return Math.min(MAX_IMAGE_CONCURRENCY, Math.floor(configured));
+  return total;
 }
 
+/** Resolves the environment override through the image module's shared limits. */
+function imageConcurrencyFromEnvironment(): number {
+  return resolveProfileImageBatchConcurrency(
+    process.env[IMAGE_CONCURRENCY_ENVIRONMENT_KEY],
+  );
+}
+
+/** Maps provider records independently so one malformed profile cannot cancel a run. */
 async function normalizeProfiles(
   rawProfiles: readonly Record<string, unknown>[],
   logger: Logger,
@@ -98,6 +197,7 @@ async function normalizeProfiles(
   return { profiles, failures };
 }
 
+/** Joins successful image assessments to profiles by application-owned ID. */
 function attachSuccessfulImageAnalyses(
   profiles: readonly Profile[],
   imageResults: readonly ProfileImageJobResult[],
@@ -120,13 +220,40 @@ function attachSuccessfulImageAnalyses(
   });
 }
 
+/**
+ * Runs the production pipeline against the real provider, analyzer, filesystem,
+ * clock, and output paths.
+ */
 export async function runFullProfilePipeline(
   importedData: ImportedCsvData,
   logger: Logger,
 ): Promise<FullProfilePipelineSummary> {
+  return runFullProfilePipelineWithDependencies(
+    importedData,
+    logger,
+    DEFAULT_DEPENDENCIES,
+  );
+}
+
+/**
+ * Runs the pipeline against injected boundaries.
+ *
+ * This is the same code production runs; only the provider, image analyzer,
+ * filesystem, clock, and output paths are supplied by the caller. A test can
+ * therefore exercise the complete run — collection, mapping, image analysis,
+ * joining, and artifacts — without a paid request or a real output directory.
+ */
+export async function runFullProfilePipelineWithDependencies(
+  importedData: ImportedCsvData,
+  logger: Logger,
+  dependencies: FullProfilePipelineDependencies = DEFAULT_DEPENDENCIES,
+  options: FullProfilePipelineOptions = {},
+): Promise<FullProfilePipelineSummary> {
+  const outputPaths = options.outputPaths ?? DEFAULT_OUTPUT_PATHS;
+
   // Step 1: record the start time and extract the deduplicated LinkedIn URLs
   // that the external profile provider needs from the imported CSV data.
-  const startedAt = new Date();
+  const startedAt = dependencies.now();
   const profileLinks = getLinkedlnProfileDataFromExternalProvidor(
     importedData.records,
   );
@@ -153,15 +280,18 @@ export async function runFullProfilePipeline(
   // Step 3: collect complete Apify records. The collector runs bounded batches
   // concurrently. Once a round settles, it pools only transiently failed URLs
   // into the next retry round; successes and permanent failures are not rerun.
-  const collection = await collectApifyProfiles(profileLinks, logger);
+  const collection = await dependencies.collectProfiles(profileLinks, logger);
   const rawProfiles = collection.profiles;
 
   // Step 4: persist successful raw responses and final provider failures as
   // separate artifacts. This keeps raw provider data intact and makes missing
   // or retry-exhausted profiles visible without blocking successful profiles.
   await Promise.all([
-    writeJsonAtomically(RAW_APIFY_OUTPUT_PATH, rawProfiles),
-    writeJsonAtomically(APIFY_FAILURES_OUTPUT_PATH, collection.failures),
+    dependencies.writeJson(outputPaths.rawApifyProfiles, rawProfiles),
+    dependencies.writeJson(
+      outputPaths.apifyProfileFailures,
+      collection.failures,
+    ),
   ]);
   logger.info(
     {
@@ -169,8 +299,8 @@ export async function runFullProfilePipeline(
       failedProfiles: collection.failures.length,
       retryRounds: collection.stats.retryRounds,
       actorRuns: collection.stats.actorRuns,
-      outputPath: RAW_APIFY_OUTPUT_PATH,
-      failuresOutputPath: APIFY_FAILURES_OUTPUT_PATH,
+      outputPath: outputPaths.rawApifyProfiles,
+      failuresOutputPath: outputPaths.apifyProfileFailures,
     },
     'Saved Apify collection results.',
   );
@@ -207,7 +337,9 @@ export async function runFullProfilePipeline(
   );
   const profilesWithoutPhoto =
     normalized.profiles.length - profilesWithPhoto.length;
-  const imageConcurrency = imageConcurrencyFromEnvironment();
+  const imageConcurrency = resolveProfileImageBatchConcurrency(
+    options.imageConcurrency ?? imageConcurrencyFromEnvironment(),
+  );
 
   logger.info(
     {
@@ -220,7 +352,7 @@ export async function runFullProfilePipeline(
 
   // Step 7: analyze profile photos concurrently using the configured limit.
   // The batch extractor returns one fulfilled or rejected result per photo.
-  const imageResults = await extractProfileImages(
+  const imageResults = await dependencies.extractImages(
     profilesWithPhoto.map((profile) => ({
       id: profile.id,
       source: { kind: 'url', url: profile.photo },
@@ -237,6 +369,7 @@ export async function runFullProfilePipeline(
     .map((result) => ({
       profileId: result.id,
       error: result.error,
+      ...(result.usage ? { usage: result.usage } : {}),
     }));
 
   for (const failure of imageAnalysisFailures) {
@@ -260,10 +393,10 @@ export async function runFullProfilePipeline(
     normalized.profiles,
     imageResults,
   );
-  await writeJsonAtomically(FULL_PROFILES_OUTPUT_PATH, fullProfiles);
+  await dependencies.writeJson(outputPaths.fullProfiles, fullProfiles);
 
   // Step 9: build operational totals and failure details for this exact run.
-  const completedAt = new Date();
+  const completedAt = dependencies.now();
   const summary: FullProfilePipelineSummary = {
     startedAt: startedAt.toISOString(),
     completedAt: completedAt.toISOString(),
@@ -279,23 +412,19 @@ export async function runFullProfilePipeline(
     fullProfilesWritten: fullProfiles.length,
     mappingFailures: normalized.failures,
     imageAnalysisFailures,
-    outputs: {
-      rawApifyProfiles: RAW_APIFY_OUTPUT_PATH,
-      apifyProfileFailures: APIFY_FAILURES_OUTPUT_PATH,
-      fullProfiles: FULL_PROFILES_OUTPUT_PATH,
-      summary: PIPELINE_SUMMARY_OUTPUT_PATH,
-    },
+    imageTokenUsage: totalImageTokenUsage(imageResults),
+    outputs: { ...outputPaths },
   };
 
   // Step 10: persist the summary last. Its presence signals that the run made
   // it through provider collection, normalization, image analysis, and output.
-  await writeJsonAtomically(PIPELINE_SUMMARY_OUTPUT_PATH, summary);
+  await dependencies.writeJson(outputPaths.summary, summary);
   logger.info(
     {
       durationMs: summary.durationMs,
       fullProfilesWritten: summary.fullProfilesWritten,
-      fullProfilesOutputPath: FULL_PROFILES_OUTPUT_PATH,
-      summaryOutputPath: PIPELINE_SUMMARY_OUTPUT_PATH,
+      fullProfilesOutputPath: outputPaths.fullProfiles,
+      summaryOutputPath: outputPaths.summary,
     },
     'Completed full-profile pipeline.',
   );
