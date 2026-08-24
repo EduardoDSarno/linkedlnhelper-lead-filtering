@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 
 import type { RawApifyProfile } from '../data/apify_profile_collector/index.js';
 import { deduplicateBy } from '../helpers/deduplicate.js';
-import { isRecord, isStringValue } from '../helpers/type_guards.js';
+import { asRecord, asString } from '../helpers/type_guards.js';
 import type {
   Profile,
   ProfileDate,
@@ -40,28 +40,32 @@ const MONTHS: Readonly<Record<string, number>> = {
   december: 12,
 };
 
+/** Treats non-array provider values as an empty collection. */
 function asArray(value: unknown): unknown[] {
   return Array.isArray(value) ? value : [];
 }
 
+/** Reads and trims one optional string field from a provider record. */
 function recordString(
   record: UnknownRecord,
   key: string,
 ): string | undefined {
-  return isStringValue(record[key]);
+  return asString(record[key]);
 }
 
+/** Maps a positive numeric or four-digit text year without inventing precision. */
 function mapYear(value: unknown): number | undefined {
   if (typeof value === 'number' && Number.isInteger(value) && value > 0) {
     return value;
   }
 
-  const text = isStringValue(value);
+  const text = asString(value);
   return text && /^\d{4}$/.test(text)
     ? Number.parseInt(text, 10)
     : undefined;
 }
 
+/** Maps a numeric or English provider month into the normalized month number. */
 function mapMonth(value: unknown): number | undefined {
   if (
     typeof value === 'number' &&
@@ -72,12 +76,13 @@ function mapMonth(value: unknown): number | undefined {
     return value;
   }
 
-  const text = isStringValue(value)?.toLowerCase();
+  const text = asString(value)?.toLowerCase();
   return text ? MONTHS[text] : undefined;
 }
 
+/** Preserves every usable component of one incomplete provider date. */
 function mapDate(value: unknown): ProfileDate | undefined {
-  const rawDate = isRecord(value);
+  const rawDate = asRecord(value);
   if (!rawDate) return undefined;
 
   const year = mapYear(rawDate['year']);
@@ -95,11 +100,12 @@ function mapDate(value: unknown): ProfileDate | undefined {
   };
 }
 
+/** Keeps the original location text alongside useful provider-parsed components. */
 function mapLocation(value: unknown): ProfileLocation | undefined {
-  const rawLocation = isRecord(value);
+  const rawLocation = asRecord(value);
   if (!rawLocation) return undefined;
 
-  const parsed = isRecord(rawLocation['parsed']);
+  const parsed = asRecord(rawLocation['parsed']);
   const text =
     recordString(rawLocation, 'linkedinText') ??
     (parsed ? recordString(parsed, 'text') : undefined);
@@ -122,8 +128,9 @@ function mapLocation(value: unknown): ProfileLocation | undefined {
   };
 }
 
+/** Maps one employment record when its review-critical fields are present. */
 function mapExperience(value: unknown): ProfileExperience | undefined {
-  const rawExperience = isRecord(value);
+  const rawExperience = asRecord(value);
   if (!rawExperience) return undefined;
 
   const position = recordString(rawExperience, 'position');
@@ -147,11 +154,31 @@ function mapExperience(value: unknown): ProfileExperience | undefined {
 /**
  * Normalizes formatting that does not change the meaning of a job field.
  * Differences in actual content are deliberately preserved.
+ *
+ * Uses `toLowerCase` rather than `toLocaleLowerCase`: this builds a comparison
+ * key, and a key must fold the same way on every machine. Under a Turkish
+ * locale `toLocaleLowerCase` maps "I" to a dotless "ı", so "IBM" and "ibm"
+ * would stop matching and duplicate jobs would survive there but not here.
  */
 function normalizeExperienceIdentityText(
   value: string | undefined,
 ): string | null {
-  return value?.trim().replace(/\s+/g, ' ').toLocaleLowerCase() ?? null;
+  return value?.trim().replace(/\s+/g, ' ').toLowerCase() ?? null;
+}
+
+/** Builds the date portion of an employment deduplication identity. */
+function experienceDateIdentity(date: ProfileDate | undefined): {
+  year: number | null;
+  month: number | null;
+  text: string | null;
+} | null {
+  return date
+    ? {
+        year: date.year ?? null,
+        month: date.month ?? null,
+        text: normalizeExperienceIdentityText(date.text),
+      }
+    : null;
 }
 
 /**
@@ -162,25 +189,17 @@ function normalizeExperienceIdentityText(
  * different companies or with different titles/dates remain separate jobs.
  */
 function experienceIdentity(experience: ProfileExperience): string {
-  const dateIdentity = (date: ProfileDate | undefined) =>
-    date
-      ? {
-          year: date.year ?? null,
-          month: date.month ?? null,
-          text: normalizeExperienceIdentityText(date.text),
-        }
-      : null;
-
   return JSON.stringify({
     position: normalizeExperienceIdentityText(experience.position),
     companyName: normalizeExperienceIdentityText(experience.companyName),
-    startDate: dateIdentity(experience.startDate),
-    endDate: dateIdentity(experience.endDate),
+    startDate: experienceDateIdentity(experience.startDate),
+    endDate: experienceDateIdentity(experience.endDate),
   });
 }
 
+/** Maps one education record when a school identity is available. */
 function mapEducation(value: unknown): ProfileEducation | undefined {
-  const rawEducation = isRecord(value);
+  const rawEducation = asRecord(value);
   if (!rawEducation) return undefined;
 
   const schoolName = recordString(rawEducation, 'schoolName');
@@ -240,7 +259,7 @@ export function mapApifyProfile(
     .filter((item): item is ProfileEducation => item !== undefined);
 
   return {
-    id: isStringValue(existingProfileId) ?? randomUUID(),
+    id: asString(existingProfileId) ?? randomUUID(),
     linkedinUrl,
     ...(firstName ? { firstName } : {}),
     ...(lastName ? { lastName } : {}),

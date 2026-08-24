@@ -178,6 +178,87 @@ test('correlates out-of-order records by LinkedIn URL', async () => {
   );
 });
 
+test('never assigns an explicitly unrelated provider record by position', async () => {
+  const requestedUrl = 'https://linkedin.com/in/requested-profile';
+  const unrelatedUrl = 'https://linkedin.com/in/unrelated-profile';
+
+  const result = await collectApifyProfilesWithExecutor(
+    [requestedUrl],
+    async () => ({
+      records: [successfulRecord(unrelatedUrl)],
+    }),
+    undefined,
+    {
+      maxAttempts: 1,
+      retryBaseDelayMs: 0,
+    },
+  );
+
+  assert.equal(result.profiles.length, 0);
+  assert.equal(result.stats.unexpectedProviderRecords, 1);
+  assert.deepEqual(result.failures, [
+    {
+      linkedinUrl: requestedUrl,
+      inputIndex: 0,
+      category: 'invalid_response',
+      error: 'Provider returned no record for the requested profile.',
+      attempts: 1,
+      retryable: true,
+      retryExhausted: true,
+    },
+  ]);
+});
+
+test('does not use a duplicate identified record to fill a missing profile', async () => {
+  const firstUrl = 'https://linkedin.com/in/first-profile';
+  const missingUrl = 'https://linkedin.com/in/missing-profile';
+
+  const result = await collectApifyProfilesWithExecutor(
+    [firstUrl, missingUrl],
+    async () => ({
+      records: [successfulRecord(firstUrl), successfulRecord(firstUrl)],
+    }),
+    undefined,
+    {
+      maxAttempts: 1,
+      retryBaseDelayMs: 0,
+    },
+  );
+
+  assert.deepEqual(
+    result.profiles.map((profile) => profile['linkedinUrl']),
+    [firstUrl],
+  );
+  assert.equal(result.stats.unexpectedProviderRecords, 1);
+  assert.equal(result.failures[0]?.linkedinUrl, missingUrl);
+});
+
+test('retains positional compatibility for records without any identity', async () => {
+  const requestedUrl = 'https://linkedin.com/in/legacy-profile';
+
+  const result = await collectApifyProfilesWithExecutor(
+    [requestedUrl],
+    async () => ({
+      records: [
+        {
+          error: 'Profile not found',
+          status: 404,
+        },
+      ],
+    }),
+    undefined,
+    {
+      maxAttempts: 1,
+      retryBaseDelayMs: 0,
+    },
+  );
+
+  assert.equal(result.profiles.length, 0);
+  assert.equal(result.stats.unexpectedProviderRecords, 0);
+  assert.equal(result.failures[0]?.linkedinUrl, requestedUrl);
+  assert.equal(result.failures[0]?.category, 'not_found');
+});
+
 test('reports a transient failure after its retry budget is exhausted', async () => {
   const link = 'https://linkedin.com/in/unavailable';
   let calls = 0;

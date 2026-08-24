@@ -18,8 +18,8 @@ import {
   finalFailure,
 } from './error_handling.js';
 import type { FailureDescriptor } from './error_handling.js';
-import { normalizeLinkedinUrl } from './helper.js';
-import { isRecord, isStringValue } from '../../helpers/type_guards.js';
+import { normalizeLinkedinUrl } from '../../linkedin/index.js';
+import { asRecord, asString } from '../../helpers/type_guards.js';
 import type { Logger } from '../../logging/index.js';
 import type {
   ApifyBatchContext,
@@ -61,20 +61,20 @@ function chunkProfiles(
  */
 function providerQuery(record: RawApifyProfile): string | undefined {
   const originalQuery = record['originalQuery'];
-  if (typeof originalQuery === 'string') return isStringValue(originalQuery);
+  if (typeof originalQuery === 'string') return asString(originalQuery);
 
-  const originalQueryRecord = isRecord(originalQuery);
-  const queryRecord = isRecord(record['query']);
+  const originalQueryRecord = asRecord(originalQuery);
+  const queryRecord = asRecord(record['query']);
 
   return (
     (originalQueryRecord
-      ? isStringValue(originalQueryRecord['query']) ??
-        isStringValue(originalQueryRecord['url'])
+      ? asString(originalQueryRecord['query']) ??
+        asString(originalQueryRecord['url'])
       : undefined) ??
     (queryRecord
-      ? isStringValue(queryRecord['query']) ?? isStringValue(queryRecord['url'])
+      ? asString(queryRecord['query']) ?? asString(queryRecord['url'])
       : undefined) ??
-    isStringValue(record['linkedinUrl'])
+    asString(record['linkedinUrl'])
   );
 }
 
@@ -117,9 +117,12 @@ function matchProviderRecords(
   }
 
   // Second pass: use order only for provider records that contain no usable
-  // query/URL identity. This retains compatibility with older Actor outputs.
+  // query/URL identity. A record that explicitly identifies an unrequested
+  // profile must remain unexpected; assigning it positionally would silently
+  // attach the wrong person to the requested URL.
   for (const [recordIndex, record] of records.entries()) {
     if (assignedRecordIndexes.has(recordIndex)) continue;
+    if (providerQuery(record) !== undefined) continue;
 
     const positionalProfile = profiles[recordIndex];
     const profile =
@@ -172,6 +175,7 @@ async function executeRound(
   const outcomes = new Array<BatchOutcome>(batches.length);
   let nextBatchIndex = 0;
 
+  /** Claims and executes Actor batches until the current round is exhausted. */
   async function worker(): Promise<void> {
     while (nextBatchIndex < batches.length) {
       const batchIndex = nextBatchIndex;
@@ -320,6 +324,7 @@ export async function collectApifyProfilesWithExecutor(
     actorRuns += outcomes.length;
     const retryCandidates: PendingProfile[] = [];
 
+    /** Records one failure or schedules the profile for its next safe attempt. */
     function processFailure(
       profile: PendingProfile,
       descriptor: FailureDescriptor,
@@ -488,6 +493,7 @@ export async function collectApifyProfiles(
 ): Promise<ApifyCollectionResult> {
   const client = new ApifyClient({ token: requireApifyApiKey() });
 
+  /** Executes one configured HarvestAPI Actor batch and reads its dataset. */
   const executeBatch: ApifyBatchExecutor = async (queries) => {
     const run = await client.actor(LINKEDIN_PROFILE_SCRAPER_ACTOR).call({
       profileScraperMode: PROFILE_DETAILS_MODE,

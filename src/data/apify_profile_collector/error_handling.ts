@@ -16,9 +16,9 @@ import type {
   RawApifyProfile,
 } from './types.js';
 import {
-  isHttpNumberValue,
-  isRecord,
-  isStringValue,
+  asHttpStatus,
+  asRecord,
+  asString,
 } from '../../helpers/type_guards.js';
 
 /**
@@ -38,14 +38,14 @@ export interface FailureDescriptor {
  * Reads an HTTP status out of a provider record, when the Actor put one there.
  */
 export function providerStatus(record: RawApifyProfile): number | undefined {
-  return isHttpNumberValue(record['status']);
+  return asHttpStatus(record['status']);
 }
 
 /**
  * Reads an error message out of a provider record, when the Actor put one there.
  */
 export function providerError(record: RawApifyProfile): string | undefined {
-  return isStringValue(record['error']);
+  return asString(record['error']);
 }
 
 /**
@@ -53,14 +53,14 @@ export function providerError(record: RawApifyProfile): string | undefined {
  * about where it puts one, so the three known shapes are tried in order.
  */
 export function statusFromThrownError(error: unknown): number | undefined {
-  const errorRecord = isRecord(error);
+  const errorRecord = asRecord(error);
   if (!errorRecord) return undefined;
 
-  const response = isRecord(errorRecord['response']);
+  const response = asRecord(errorRecord['response']);
   return (
-    isHttpNumberValue(errorRecord['statusCode']) ??
-    isHttpNumberValue(errorRecord['status']) ??
-    (response ? isHttpNumberValue(response['status']) : undefined)
+    asHttpStatus(errorRecord['statusCode']) ??
+    asHttpStatus(errorRecord['status']) ??
+    (response ? asHttpStatus(response['status']) : undefined)
   );
 }
 
@@ -175,7 +175,7 @@ export function classifyProviderRecord(
     );
   }
 
-  if (!isStringValue(record['linkedinUrl'])) {
+  if (!asString(record['linkedinUrl'])) {
     return {
       category: 'invalid_response',
       error: 'Provider profile record is missing linkedinUrl.',

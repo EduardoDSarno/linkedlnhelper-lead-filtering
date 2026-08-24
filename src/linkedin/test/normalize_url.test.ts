@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { normalizeLinkedinUrl } from '../index.js';
+import { linkedinProfileKey, normalizeLinkedinUrl } from '../index.js';
 
 const INTERNATIONAL_PROFILE_SLUGS = [
   'md-ßâžžâđ-b173a1427',
@@ -100,4 +100,27 @@ test('keeps malformed URL escapes deterministic and non-throwing', () => {
 
   assert.doesNotThrow(() => normalizeLinkedinUrl(malformedUrl));
   assert.equal(normalizeLinkedinUrl(malformedUrl), normalizeLinkedinUrl(malformedUrl));
+  assert.equal(linkedinProfileKey(malformedUrl), undefined);
+});
+
+test('returns a strict decoded slug key for persistence identity', () => {
+  assert.equal(
+    linkedinProfileKey(
+      'https://br.linkedin.com/in/JO%C3%83O-Leite-123/?trk=search',
+    ),
+    'joão-leite-123',
+  );
+});
+
+test('rejects values that are not valid LinkedIn profile URLs', () => {
+  const invalidValues = [
+    'not-a-url',
+    'https://example.invalid/in/person',
+    'https://linkedin.com/company/example',
+    'https://linkedin.com/in/',
+  ];
+
+  for (const value of invalidValues) {
+    assert.equal(linkedinProfileKey(value), undefined, value);
+  }
 });

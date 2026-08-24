@@ -1,15 +1,13 @@
 import { join } from 'node:path';
 
 import { collectApifyProfiles } from '../../data/apify_profile_collector/index.js';
-import {
-  normalizeLinkedinUrl,
-  resolveApifyCollectorConfig,
-} from '../../data/apify_profile_collector/index.js';
+import { resolveApifyCollectorConfig } from '../../data/apify_profile_collector/index.js';
 import type {
   ApifyCollectionResult,
   RawApifyProfile,
 } from '../../data/apify_profile_collector/index.js';
 import { deduplicateBy } from '../../helpers/deduplicate.js';
+import { normalizeLinkedinUrl } from '../../linkedin/index.js';
 import { writeJsonAtomically } from '../../helpers/write_json_atomically.js';
 import type { Logger } from '../../logging/index.js';
 import { APIFY_BENCHMARK_ARTIFACT_NAMES } from './constants.js';
