@@ -65,15 +65,18 @@ export interface ImportedCsvProfile {
   raw: RawLinkedHelperCsvRow;
 }
 
+/** Trims one optional CSV value and treats blank text as absent. */
 function trimmedValue(value: string | undefined): string | undefined {
   const trimmed = value?.trim();
   return trimmed ? trimmed : undefined;
 }
 
+/** Interprets only the exporter literal used for enabled boolean fields. */
 function csvBoolean(value: string | undefined): boolean {
   return value?.trim().toLowerCase() === 'true';
 }
 
+/** Parses a non-negative integer without accepting partial numeric text. */
 function csvNonNegativeInteger(value: string | undefined): number | undefined {
   const trimmed = trimmedValue(value);
 
