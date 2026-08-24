@@ -1,3 +1,10 @@
+import type {
+  GenerateContentParameters,
+  GenerateContentResponse,
+} from '@google/genai';
+
+import { PROFILE_IMAGE_LIMITS } from './config.js';
+
 export const PROFILE_IMAGE_MIME_TYPES = [
   'image/jpeg',
   'image/png',
@@ -120,7 +127,12 @@ export interface GeminiTokenUsage {
   totalTokens?: number;
 }
 
-/* Comelete Profile Image Result **/
+/** The narrow Google SDK boundary accepted by deterministic image tests. */
+export type GeminiContentGenerator = (
+  parameters: GenerateContentParameters,
+) => Promise<GenerateContentResponse>;
+
+/** Complete result returned after one profile image is successfully assessed. */
 export interface ProfileImageExtractionResult {
   assessment: ProfileImageAssessment;
   model: string;
@@ -135,6 +147,9 @@ export interface ProfileImageExtractionOptions {
   imageDownloadTimeoutMs?: number;
   maxImageBytes?: number;
   maxRetries?: number;
+
+  /** Optional model call used by deterministic tests instead of the SDK client. */
+  generateContent?: GeminiContentGenerator;
 }
 
 export interface ProfileImageJob {
@@ -153,6 +168,16 @@ export type ProfileImageJobResult =
       id: string;
       status: 'rejected';
       error: string;
+
+      /**
+       * Tokens Gemini billed before rejecting the image, when it reported any.
+       *
+       * A blocked or truncated response still costs money, so this is what
+       * keeps failed images visible in a cost total. Absent when the failure
+       * happened before a response arrived, such as a download or network
+       * error, because no token count exists in that case.
+       */
+      usage?: GeminiTokenUsage;
     };
 
 export interface ProfileImageBatchOptions
@@ -172,7 +197,7 @@ export const PROFILE_IMAGE_ASSESSMENT_JSON_SCHEMA = {
     faceCount: {
       type: 'integer',
       minimum: 0,
-      maximum: 20,
+      maximum: PROFILE_IMAGE_LIMITS.faceCount,
       description: 'Number of clearly visible human faces.',
     },
     faceVisibility: {
@@ -242,7 +267,7 @@ export const PROFILE_IMAGE_ASSESSMENT_JSON_SCHEMA = {
     reviewRequired: { type: 'boolean' },
     observations: {
       type: 'array',
-      maxItems: 5,
+      maxItems: PROFILE_IMAGE_LIMITS.observationCount,
       items: { type: 'string' },
       description:
         'Short, neutral facts about composition or image quality. No personal judgments.',

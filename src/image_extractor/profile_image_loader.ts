@@ -15,6 +15,12 @@ export interface LoadedProfileImage {
 export interface ProfileImageLoadingOptions {
   downloadTimeoutMs: number;
   maximumBytes: number;
+
+  /**
+   * Performs the image download. Production omits this and gets global fetch;
+   * tests supply a stand-in so no public image URL is ever contacted.
+   */
+  fetchImage?: typeof fetch;
 }
 
 const MIME_TYPE_BY_EXTENSION: Readonly<Record<string, ProfileImageMimeType>> = {
@@ -28,19 +34,23 @@ const MIME_TYPE_BY_EXTENSION: Readonly<Record<string, ProfileImageMimeType>> = {
   '.webp': 'image/webp',
 };
 
+/** Returns whether a provider MIME value is supported by Gemini extraction. */
 function isProfileImageMimeType(value: string): value is ProfileImageMimeType {
   return PROFILE_IMAGE_MIME_TYPES.some((mimeType) => mimeType === value);
 }
 
+/** Extracts a normalized supported MIME type from an HTTP Content-Type header. */
 function parseContentType(value: string | null): ProfileImageMimeType | undefined {
   const mimeType = value?.split(';', 1)[0]?.trim().toLowerCase();
   return mimeType && isProfileImageMimeType(mimeType) ? mimeType : undefined;
 }
 
+/** Infers a supported image MIME type from a local filename extension. */
 function mimeTypeFromPath(path: string): ProfileImageMimeType | undefined {
   return MIME_TYPE_BY_EXTENSION[extname(path).toLowerCase()];
 }
 
+/** Rejects image data that is empty or exceeds the caller's accepted size. */
 function validateImageSize(data: Uint8Array, maximumBytes: number): void {
   if (data.byteLength === 0) {
     throw new Error('The profile image is empty.');
@@ -53,6 +63,7 @@ function validateImageSize(data: Uint8Array, maximumBytes: number): void {
   }
 }
 
+/** Downloads and validates one remote profile image. */
 async function loadRemoteImage(
   urlValue: string,
   options: ProfileImageLoadingOptions,
@@ -63,7 +74,7 @@ async function loadRemoteImage(
     throw new Error('Profile image URLs must use HTTP or HTTPS.');
   }
 
-  const response = await fetch(url, {
+  const response = await (options.fetchImage ?? fetch)(url, {
     headers: { Accept: 'image/*' },
     redirect: 'follow',
     signal: AbortSignal.timeout(options.downloadTimeoutMs),
@@ -95,6 +106,19 @@ async function loadRemoteImage(
   return { data, mimeType };
 }
 
+/**
+ * Resolves any profile image source into bytes with a supported MIME type.
+ *
+ * Size is validated after reading in every case, not only from a declared
+ * `Content-Length`: that header is optional on a chunked response, so the
+ * post-read check is the only thing that bounds an undeclared download.
+ *
+ * @param source - In-memory bytes, a local file, or an HTTP(S) URL.
+ * @param options - Download timeout, size limit, and an optional fetch.
+ * @returns The image bytes and the MIME type to send to the model.
+ * @throws When the image is empty, too large, unreadable, or of an
+ * unsupported type.
+ */
 export async function loadProfileImage(
   source: ProfileImageSource,
   options: ProfileImageLoadingOptions,

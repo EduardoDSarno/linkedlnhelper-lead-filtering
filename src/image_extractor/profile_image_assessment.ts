@@ -2,6 +2,7 @@ import {
   APPARENT_AGE_BRACKETS,
   APPARENT_AGE_CONFIDENCE_VALUES,
 } from './profile_image_types.js';
+import { PROFILE_IMAGE_LIMITS } from './config.js';
 import type {
   ApparentAgeEstimate,
   ProfileImageAssessment,
@@ -43,10 +44,12 @@ const ATTIRE_VALUES = [
 ] as const;
 const CERTAINTY_VALUES = ['certain', 'uncertain', 'unassessable'] as const;
 
+/** Narrows parsed JSON to a non-array object. */
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+/** Checks one provider value against a readonly string enum. */
 function isOneOf<const T extends readonly string[]>(
   value: unknown,
   accepted: T,
@@ -54,6 +57,7 @@ function isOneOf<const T extends readonly string[]>(
   return typeof value === 'string' && accepted.includes(value);
 }
 
+/** Validates and reconciles Gemini's apparent-age bracket and confidence. */
 function validateApparentAge(value: unknown): ApparentAgeEstimate {
   if (
     !isRecord(value) ||
@@ -79,6 +83,7 @@ function validateApparentAge(value: unknown): ApparentAgeEstimate {
   };
 }
 
+/** Validates every required assessment field before it enters the domain. */
 function validateAssessment(value: unknown): ProfileImageAssessment {
   if (!isRecord(value)) {
     throw new Error('Gemini returned a non-object image assessment.');
@@ -89,7 +94,7 @@ function validateAssessment(value: unknown): ProfileImageAssessment {
     typeof value['faceCount'] !== 'number' ||
     !Number.isInteger(value['faceCount']) ||
     value['faceCount'] < 0 ||
-    value['faceCount'] > 20 ||
+    value['faceCount'] > PROFILE_IMAGE_LIMITS.faceCount ||
     !isOneOf(value['faceVisibility'], FACE_VISIBILITY_VALUES) ||
     !isOneOf(value['imageQuality'], IMAGE_QUALITY_VALUES) ||
     typeof value['isBlurry'] !== 'boolean' ||
@@ -101,7 +106,7 @@ function validateAssessment(value: unknown): ProfileImageAssessment {
     !isOneOf(value['certainty'], CERTAINTY_VALUES) ||
     typeof value['reviewRequired'] !== 'boolean' ||
     !Array.isArray(value['observations']) ||
-    value['observations'].length > 5 ||
+    value['observations'].length > PROFILE_IMAGE_LIMITS.observationCount ||
     !value['observations'].every(
       (observation) => typeof observation === 'string',
     )
@@ -127,6 +132,18 @@ function validateAssessment(value: unknown): ProfileImageAssessment {
   };
 }
 
+/**
+ * Validates one Gemini response into a profile image assessment.
+ *
+ * The response is structured output, but structured output is a request rather
+ * than a guarantee, so every field is checked before it enters the application
+ * model. Only known fields are copied across; anything the provider adds is
+ * dropped rather than passed through.
+ *
+ * @param responseText - Raw JSON text returned by Gemini.
+ * @returns A fully validated assessment.
+ * @throws When the text is not JSON, is not an object, or fails validation.
+ */
 export function parseProfileImageAssessment(
   responseText: string,
 ): ProfileImageAssessment {

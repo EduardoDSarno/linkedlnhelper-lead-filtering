@@ -1,8 +1,34 @@
 export {
   extractProfileImage,
   extractProfileImages,
+  extractProfileImagesWithExecutor,
   extractProfilePhoto,
 } from './profile_image_extractor.js';
+export type { ProfileImageExecutor } from './profile_image_extractor.js';
+
+export {
+  GeminiImageError,
+  recognizeProfileImageWithGemini,
+} from './gemini_profile_image_client.js';
+export type {
+  GeminiProfileImageRequest,
+  GeminiProfileImageResponse,
+} from './gemini_profile_image_client.js';
+
+export { loadProfileImage } from './profile_image_loader.js';
+export type {
+  LoadedProfileImage,
+  ProfileImageLoadingOptions,
+} from './profile_image_loader.js';
+
+export {
+  GEMINI_IMAGE_RETRY_POLICY,
+  PROFILE_IMAGE_DEFAULTS,
+  PROFILE_IMAGE_LIMITS,
+  resolveProfileImageBatchConcurrency,
+  resolveProfileImageExtractionOptions,
+} from './config.js';
+export type { ResolvedProfileImageExtractionOptions } from './config.js';
 
 export {
   APPARENT_AGE_BRACKETS,
@@ -16,6 +42,7 @@ export type {
   ApparentAgeConfidence,
   ApparentAgeEstimate,
   GeminiTokenUsage,
+  GeminiContentGenerator,
   ProfileImageAssessment,
   ProfileImageBatchOptions,
   ProfileImageExtractionOptions,
