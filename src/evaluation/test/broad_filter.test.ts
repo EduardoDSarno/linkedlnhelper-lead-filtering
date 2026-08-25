@@ -64,6 +64,7 @@ test('keeps a profile that matches any configured include criterion', () => {
   const evaluation = evaluateBroadCriteria(profile('profile-1'), criteria);
 
   assert.equal(evaluation.decision, 'send_to_ai');
+  assert.match(evaluation.decisionMessage, /"commercial relationships"/);
   assert.equal(evaluation.results[0]?.outcome, 'not_matched');
   assert.equal(evaluation.results[1]?.outcome, 'matched');
 });
@@ -80,6 +81,7 @@ test('excludes a profile that matches an exclusion criterion', () => {
   );
 
   assert.equal(evaluation.decision, 'excluded');
+  assert.match(evaluation.decisionMessage, /Open to work: true/);
   assert.equal(evaluation.results[0]?.outcome, 'matched');
 });
 
@@ -106,6 +108,7 @@ test('keeps a profile for AI when an apparent-age range is unavailable', () => {
   const evaluation = evaluateBroadCriteria(profile('profile-1'), criteria);
 
   assert.equal(evaluation.decision, 'send_to_ai');
+  assert.match(evaluation.decisionMessage, /No reliable apparent-age estimate/);
   assert.equal(evaluation.results[0]?.outcome, 'unknown');
 });
 
@@ -126,6 +129,7 @@ test('removes profiles without photos when that exclusion is configured', () => 
     result.evaluations.map((evaluation) => evaluation.decision),
     ['excluded', 'send_to_ai'],
   );
+  assert.match(result.evaluations[0]?.decisionMessage ?? '', /No profile photo/);
   assert.deepEqual(
     result.profilesForAi.map((profile) => profile.profileId),
     ['with-photo'],

@@ -31,6 +31,7 @@ export type BroadEvaluationDecision = 'excluded' | 'send_to_ai';
 export interface ProfileBroadEvaluation {
   profileId: string;
   decision: BroadEvaluationDecision;
+  decisionMessage: string;
   results: BroadCriterionResult[];
 }
 
@@ -335,15 +336,25 @@ function evaluateOpenToWork(
   };
 }
 
+/** Describes the first evidence item that supports one criterion result. */
+function resultEvidence(result: BroadCriterionResult): string {
+  return result.evidence[0] ?? `The ${result.criterion} criterion has no evidence.`;
+}
+
 /** Decides whether direct evidence is sufficient to exclude one profile. */
-function broadDecision(results: BroadCriterionResult[]): BroadEvaluationDecision {
-  if (
-    results.some(
-      (result) =>
-        result.effect === 'exclude' && result.outcome === 'matched',
-    )
-  ) {
-    return 'excluded';
+function broadDecision(results: BroadCriterionResult[]): {
+  decision: BroadEvaluationDecision;
+  message: string;
+} {
+  const matchedExclusion = results.find(
+    (result) => result.effect === 'exclude' && result.outcome === 'matched',
+  );
+
+  if (matchedExclusion) {
+    return {
+      decision: 'excluded',
+      message: `Excluded because ${matchedExclusion.criterion} matched an exclusion criterion: ${resultEvidence(matchedExclusion)}`,
+    };
   }
 
   const includeResults = results.filter((result) => result.effect === 'include');
@@ -354,9 +365,47 @@ function broadDecision(results: BroadCriterionResult[]): BroadEvaluationDecision
     (result) => result.outcome === 'unknown',
   );
 
-  return includeResults.length > 0 && !hasMatchedInclude && !hasUnknownInclude
-    ? 'excluded'
-    : 'send_to_ai';
+  if (includeResults.length > 0 && !hasMatchedInclude && !hasUnknownInclude) {
+    return {
+      decision: 'excluded',
+      message: `Excluded because no include criterion matched: ${includeResults
+        .map((result) => `${result.criterion} (${resultEvidence(result)})`)
+        .join('; ')}`,
+    };
+  }
+
+  const matchedReview = results.find(
+    (result) => result.effect === 'review' && result.outcome === 'matched',
+  );
+  if (matchedReview) {
+    return {
+      decision: 'send_to_ai',
+      message: `Sent to AI because ${matchedReview.criterion} requires review: ${resultEvidence(matchedReview)}`,
+    };
+  }
+
+  const unknownResult = results.find((result) => result.outcome === 'unknown');
+  if (unknownResult) {
+    return {
+      decision: 'send_to_ai',
+      message: `Sent to AI because ${unknownResult.criterion} is uncertain: ${resultEvidence(unknownResult)}`,
+    };
+  }
+
+  const matchedInclude = includeResults.find(
+    (result) => result.outcome === 'matched',
+  );
+  if (matchedInclude) {
+    return {
+      decision: 'send_to_ai',
+      message: `Sent to AI because ${matchedInclude.criterion} matched an include criterion: ${resultEvidence(matchedInclude)}`,
+    };
+  }
+
+  return {
+    decision: 'send_to_ai',
+    message: 'Sent to AI because no direct criterion determined an exclusion.',
+  };
 }
 
 /** Evaluates every deterministic criterion configured for one compact profile. */
@@ -380,9 +429,12 @@ export function evaluateBroadCriteria(
     results.push(evaluateOpenToWork(profile, criteria.openToWork));
   }
 
+  const broadFilterDecision = broadDecision(results);
+
   return {
     profileId: profile.profileId,
-    decision: broadDecision(results),
+    decision: broadFilterDecision.decision,
+    decisionMessage: broadFilterDecision.message,
     results,
   };
 }
