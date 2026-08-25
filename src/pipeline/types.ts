@@ -1,3 +1,5 @@
+import type { DatabaseSync } from 'node:sqlite';
+
 import type {
   ApifyCollectionResult,
   ApifyCollectionStats,
@@ -71,6 +73,12 @@ export interface FullProfilePipelineDependencies {
 
   extractImages: ProfileImageAnalyzer;
   writeJson: (path: string, value: unknown) => Promise<void>;
+
+  /** Opens the run's database, which the pipeline always closes before return. */
+  openDatabase: () => DatabaseSync;
+
+  /** Saves a completed profile and returns its persistent application identity. */
+  insertProfile: (profile: FullProfile, db: DatabaseSync) => FullProfile;
   now: () => Date;
 }
 

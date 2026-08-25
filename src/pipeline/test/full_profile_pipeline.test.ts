@@ -10,6 +10,7 @@ import type {
   FullProfilePipelineOutputPaths,
 } from '../full_profile_pipeline.js';
 import type { FullProfile } from '../../profile/index.js';
+import { dbInsertProfile, openDatabase } from '../../database/index.js';
 import {
   RAW_ONLY_SENTINEL,
   completeApifyProfile,
@@ -63,6 +64,8 @@ function dependencies(
     writeJson: async () => {
       throw new Error('The pipeline wrote an artifact unexpectedly.');
     },
+    openDatabase: () => openDatabase(':memory:'),
+    insertProfile: dbInsertProfile,
     now: steppingClock(),
     ...overrides,
   };
@@ -251,6 +254,77 @@ test('keeps the raw provider payload reachable through the final profile', async
     (profile?.raw as Record<string, unknown>)[RAW_ONLY_SENTINEL],
     'provider-only value the mapper must not touch',
   );
+});
+
+test('writes the database-stable ID into the full-profile artifact', async () => {
+  const url = 'https://www.linkedin.com/in/person-a';
+  const db = openDatabase(':memory:');
+  const writer = recordingWriter();
+  const stableId = 'stable-profile-id';
+  const insertedProfiles: FullProfile[] = [];
+
+  dbInsertProfile(
+    {
+      id: stableId,
+      linkedinUrl: url,
+      experience: [],
+      education: [],
+      raw: { linkedinUrl: url },
+    },
+    db,
+  );
+
+  await runFullProfilePipelineWithDependencies(
+    importedCsvDataFor([url]),
+    recordingLogger(),
+    dependencies({
+      collectProfiles: async () =>
+        apifyCollectionResult([providerProfile(url)]),
+      extractImages: fakeImageExtractor({}),
+      writeJson: writer.writeJson,
+      openDatabase: () => db,
+      insertProfile: (profile, database) => {
+        const inserted = dbInsertProfile(profile, database);
+        insertedProfiles.push(inserted);
+        return inserted;
+      },
+    }),
+    { outputPaths: OUTPUT_PATHS },
+  );
+
+  assert.equal(insertedProfiles[0]?.id, stableId);
+  assert.equal(fullProfilesFrom(writer)[0]?.id, stableId);
+  assert.equal(db.isOpen, false);
+});
+
+test('stops and closes the database when a profile upsert fails', async () => {
+  const url = 'https://www.linkedin.com/in/person-a';
+  const db = openDatabase(':memory:');
+  const writer = recordingWriter();
+
+  await assert.rejects(
+    () =>
+      runFullProfilePipelineWithDependencies(
+        importedCsvDataFor([url]),
+        recordingLogger(),
+        dependencies({
+          collectProfiles: async () =>
+            apifyCollectionResult([providerProfile(url)]),
+          extractImages: fakeImageExtractor({}),
+          writeJson: writer.writeJson,
+          openDatabase: () => db,
+          insertProfile: () => {
+            throw new Error('SQLite is unavailable.');
+          },
+        }),
+        { outputPaths: OUTPUT_PATHS },
+      ),
+    /SQLite is unavailable/,
+  );
+
+  assert.equal(writer.paths().includes(OUTPUT_PATHS.fullProfiles), false);
+  assert.equal(writer.paths().includes(OUTPUT_PATHS.summary), false);
+  assert.equal(db.isOpen, false);
 });
 
 test('totals token usage across successful and failed images', async () => {

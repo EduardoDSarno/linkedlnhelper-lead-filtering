@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 
+import { dbInsertProfile, openDatabase } from '../../database/index.js';
 import { writeJsonAtomically } from '../../helpers/write_json_atomically.js';
 import { runFullProfilePipelineWithDependencies } from '../full_profile_pipeline.js';
 import type { FullProfilePipelineOutputPaths } from '../full_profile_pipeline.js';
@@ -58,6 +59,12 @@ async function readJson(path: string): Promise<unknown> {
   return JSON.parse(await readFile(path, 'utf8'));
 }
 
+/** Provides a separate in-memory database to each deterministic pipeline run. */
+const inMemoryDatabaseDependencies = {
+  openDatabase: () => openDatabase(':memory:'),
+  insertProfile: dbInsertProfile,
+};
+
 test('writes real artifacts that survive a JSON round trip', async () => {
   await withTemporaryOutput(async (directory, outputPaths) => {
     const urls = [
@@ -76,6 +83,7 @@ test('writes real artifacts that survive a JSON round trip', async () => {
       importedCsvDataFor(urls),
       recordingLogger(),
       {
+        ...inMemoryDatabaseDependencies,
         collectProfiles: async () =>
           apifyCollectionResult([raw], [providerFailure] as never),
         extractImages: async (jobs) =>
@@ -117,6 +125,7 @@ test('persists the raw provider payload through serialization', async () => {
       importedCsvDataFor([url]),
       recordingLogger(),
       {
+        ...inMemoryDatabaseDependencies,
         collectProfiles: async () => apifyCollectionResult([raw]),
         extractImages: async (jobs) =>
           jobs.map((job) => ({
@@ -163,6 +172,7 @@ test('writes provider failures and raw profiles to separate files', async () => 
       importedCsvDataFor(urls),
       recordingLogger(),
       {
+        ...inMemoryDatabaseDependencies,
         collectProfiles: async () =>
           apifyCollectionResult(
             [{ linkedinUrl: urls[0], firstName: 'Avery' }],
@@ -194,6 +204,7 @@ test('leaves no summary on disk when an earlier artifact fails', async () => {
           importedCsvDataFor([url]),
           recordingLogger(),
           {
+            ...inMemoryDatabaseDependencies,
             collectProfiles: async () =>
               apifyCollectionResult([{ linkedinUrl: url }]),
             extractImages: async () => [],

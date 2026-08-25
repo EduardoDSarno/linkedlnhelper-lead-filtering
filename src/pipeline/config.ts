@@ -1,4 +1,5 @@
 import { collectApifyProfiles } from '../data/apify_profile_collector/index.js';
+import { dbInsertProfile, openDatabase } from '../database/index.js';
 import {
   CONFIG_NUMBER_MINIMUMS,
   resolveConfigNumber,
@@ -56,5 +57,7 @@ export const DEFAULT_PIPELINE_DEPENDENCIES = {
   collectProfiles: collectApifyProfiles,
   extractImages: DEFAULT_PROFILE_IMAGE_ANALYZER,
   writeJson: writeJsonAtomically,
+  openDatabase,
+  insertProfile: dbInsertProfile,
   now: currentPipelineTime,
 };

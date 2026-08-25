@@ -140,102 +140,113 @@ export async function runFullProfilePipelineWithDependencies(
     );
   }
 
-  logger.info(
-    {
-      requestedProfiles: profileLinks.length,
-      maximumProfiles,
-    },
-    'Starting full-profile pipeline.',
-  );
+  const db = dependencies.openDatabase();
 
-  // Step 3: collect complete Apify records. The collector runs bounded batches
-  // concurrently. Once a round settles, it pools only transiently failed URLs
-  // into the next retry round; successes and permanent failures are not rerun.
-  const collection = await dependencies.collectProfiles(profileLinks, logger);
-  const rawProfiles = collection.profiles;
-
-  // Step 4: persist successful raw responses and final provider failures as
-  // separate artifacts. This keeps raw provider data intact and makes missing
-  // or retry-exhausted profiles visible without blocking successful profiles.
-  await Promise.all([
-    dependencies.writeJson(outputPaths.rawApifyProfiles, rawProfiles),
-    dependencies.writeJson(
-      outputPaths.apifyProfileFailures,
-      collection.failures,
-    ),
-  ]);
-  logger.info(
-    {
-      collectedProfiles: rawProfiles.length,
-      failedProfiles: collection.failures.length,
-      retryRounds: collection.stats.retryRounds,
-      actorRuns: collection.stats.actorRuns,
-      outputPath: outputPaths.rawApifyProfiles,
-      failuresOutputPath: outputPaths.apifyProfileFailures,
-    },
-    'Saved Apify collection results.',
-  );
-
-  // A count mismatch is not automatically fatal, but it is important evidence
-  // that a requested profile may be unavailable or duplicated by the provider.
-  if (rawProfiles.length !== profileLinks.length) {
-    logger.warn(
+  try {
+    logger.info(
       {
         requestedProfiles: profileLinks.length,
-        collectedProfiles: rawProfiles.length,
-        providerFailures: collection.failures.length,
+        maximumProfiles,
       },
-      'Apify result count differs from requested profile count.',
+      'Starting full-profile pipeline.',
     );
+
+    // Step 3: collect complete Apify records. The collector runs bounded batches
+    // concurrently. Once a round settles, it pools only transiently failed URLs
+    // into the next retry round; successes and permanent failures are not rerun.
+    const collection = await dependencies.collectProfiles(profileLinks, logger);
+    const rawProfiles = collection.profiles;
+
+    // Step 4: persist successful raw responses and final provider failures as
+    // separate artifacts. This keeps raw provider data intact and makes missing
+    // or retry-exhausted profiles visible without blocking successful profiles.
+    await Promise.all([
+      dependencies.writeJson(outputPaths.rawApifyProfiles, rawProfiles),
+      dependencies.writeJson(
+        outputPaths.apifyProfileFailures,
+        collection.failures,
+      ),
+    ]);
+    logger.info(
+      {
+        collectedProfiles: rawProfiles.length,
+        failedProfiles: collection.failures.length,
+        retryRounds: collection.stats.retryRounds,
+        actorRuns: collection.stats.actorRuns,
+        outputPath: outputPaths.rawApifyProfiles,
+        failuresOutputPath: outputPaths.apifyProfileFailures,
+      },
+      'Saved Apify collection results.',
+    );
+
+    // A count mismatch is not automatically fatal, but it is important evidence
+    // that a requested profile may be unavailable or duplicated by the provider.
+    if (rawProfiles.length !== profileLinks.length) {
+      logger.warn(
+        {
+          requestedProfiles: profileLinks.length,
+          collectedProfiles: rawProfiles.length,
+          providerFailures: collection.failures.length,
+        },
+        'Apify result count differs from requested profile count.',
+      );
+    }
+
+    // Step 5: map each raw Apify object into the small application Profile model
+    // used for identity, employment, education, location, and manual review.
+    const normalized = await normalizeProfiles(rawProfiles, logger);
+    logger.info(
+      {
+        normalizedProfiles: normalized.profiles.length,
+        mappingFailures: normalized.failures.length,
+      },
+      'Normalized Apify profiles.',
+    );
+
+    // Steps 6 to 8: analyze the photos that exist and join the successful
+    // assessments back onto their profiles. Profiles without a photo, and
+    // profiles whose analysis failed, both survive into the output.
+    const imageAnalysis = await analyzeProfileImages(
+      normalized.profiles,
+      dependencies.extractImages,
+      logger,
+      options.imageConcurrency,
+    );
+
+    // Step 9: persist completed profiles before writing them. An existing
+    // LinkedIn identity restores its stable database ID in every later artifact.
+    const fullProfiles = imageAnalysis.fullProfiles.map((profile) =>
+      dependencies.insertProfile(profile, db),
+    );
+    await dependencies.writeJson(outputPaths.fullProfiles, fullProfiles);
+
+    // Step 10: build operational totals and failure details for this exact run.
+    const completedAt = dependencies.now();
+    const summary = createFullProfilePipelineSummary({
+      startedAt,
+      completedAt,
+      requestedProfiles: profileLinks.length,
+      collection,
+      normalization: normalized,
+      imageAnalysis: { ...imageAnalysis, fullProfiles },
+      outputPaths,
+    });
+
+    // Step 11: persist the summary last. Its presence signals that the run made
+    // it through provider collection, normalization, image analysis, and output.
+    await dependencies.writeJson(outputPaths.summary, summary);
+    logger.info(
+      {
+        durationMs: summary.durationMs,
+        fullProfilesWritten: summary.fullProfilesWritten,
+        fullProfilesOutputPath: outputPaths.fullProfiles,
+        summaryOutputPath: outputPaths.summary,
+      },
+      'Completed full-profile pipeline.',
+    );
+
+    return summary;
+  } finally {
+    db.close();
   }
-
-  // Step 5: map each raw Apify object into the small application Profile model
-  // used for identity, employment, education, location, and manual review.
-  const normalized = await normalizeProfiles(rawProfiles, logger);
-  logger.info(
-    {
-      normalizedProfiles: normalized.profiles.length,
-      mappingFailures: normalized.failures.length,
-    },
-    'Normalized Apify profiles.',
-  );
-
-  // Steps 6 to 8: analyze the photos that exist and join the successful
-  // assessments back onto their profiles. Profiles without a photo, and
-  // profiles whose analysis failed, both survive into the output.
-  const imageAnalysis = await analyzeProfileImages(
-    normalized.profiles,
-    dependencies.extractImages,
-    logger,
-    options.imageConcurrency,
-  );
-  const fullProfiles = imageAnalysis.fullProfiles;
-  await dependencies.writeJson(outputPaths.fullProfiles, fullProfiles);
-
-  // Step 9: build operational totals and failure details for this exact run.
-  const completedAt = dependencies.now();
-  const summary = createFullProfilePipelineSummary({
-    startedAt,
-    completedAt,
-    requestedProfiles: profileLinks.length,
-    collection,
-    normalization: normalized,
-    imageAnalysis,
-    outputPaths,
-  });
-
-  // Step 10: persist the summary last. Its presence signals that the run made
-  // it through provider collection, normalization, image analysis, and output.
-  await dependencies.writeJson(outputPaths.summary, summary);
-  logger.info(
-    {
-      durationMs: summary.durationMs,
-      fullProfilesWritten: summary.fullProfilesWritten,
-      fullProfilesOutputPath: outputPaths.fullProfiles,
-      summaryOutputPath: outputPaths.summary,
-    },
-    'Completed full-profile pipeline.',
-  );
-
-  return summary;
 }
