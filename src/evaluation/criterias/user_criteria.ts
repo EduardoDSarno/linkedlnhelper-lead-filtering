@@ -68,7 +68,7 @@ export interface NetWorthCriteria {
   maximumNetWorth?: number;
   effect: EvaluationEffect;
 }
-
+//. 
 /** Configures matching against neutral properties of an analyzed profile photo. */
 export interface PhotoReviewCriteria {
   requirePhoto?: boolean;
