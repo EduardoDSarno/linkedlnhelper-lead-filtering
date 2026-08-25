@@ -1,5 +1,4 @@
 import {
-  extractProfileImages,
   resolveProfileImageBatchConcurrency,
   resolveProfileImageResolution,
 } from '../image_extractor/index.js';
@@ -12,9 +11,9 @@ import type {
 import type { Logger } from '../logging/index.js';
 import { attachProfileImageAnalysis } from '../profile/index.js';
 import type { FullProfile, Profile } from '../profile/index.js';
+import { PIPELINE_ENVIRONMENT_KEYS } from './config.js';
 
-const IMAGE_CONCURRENCY_ENVIRONMENT_KEY = 'IMAGE_ANALYSIS_CONCURRENCY';
-const IMAGE_RESOLUTION_ENVIRONMENT_KEY = 'IMAGE_ANALYSIS_RESOLUTION';
+export { DEFAULT_PROFILE_IMAGE_ANALYZER } from './config.js';
 
 /** Tokens billed across a whole run, with every count present. */
 export type ImageTokenUsageTotal = Required<GeminiTokenUsage>;
@@ -38,10 +37,6 @@ export type ProfileImageAnalyzer = (
   jobs: readonly ProfileImageJob[],
   options: ProfileImageBatchOptions,
 ) => Promise<ProfileImageJobResult[]>;
-
-/** The production analyzer, used when a caller injects nothing. */
-export const DEFAULT_PROFILE_IMAGE_ANALYZER: ProfileImageAnalyzer =
-  extractProfileImages;
 
 /** Everything one image-analysis stage produces for the run summary. */
 export interface ProfileImageAnalysisOutcome {
@@ -92,7 +87,7 @@ export function imageResolutionFromEnvironment(
   environment: NodeJS.ProcessEnv = process.env,
 ) {
   return resolveProfileImageResolution(
-    environment[IMAGE_RESOLUTION_ENVIRONMENT_KEY],
+    environment[PIPELINE_ENVIRONMENT_KEYS.imageResolution],
   );
 }
 
@@ -101,7 +96,7 @@ export function imageConcurrencyFromEnvironment(
   environment: NodeJS.ProcessEnv = process.env,
 ): number {
   return resolveProfileImageBatchConcurrency(
-    environment[IMAGE_CONCURRENCY_ENVIRONMENT_KEY],
+    environment[PIPELINE_ENVIRONMENT_KEYS.imageConcurrency],
   );
 }
 

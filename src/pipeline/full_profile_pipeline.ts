@@ -1,4 +1,3 @@
-import { collectApifyProfiles } from '../data/apify_profile_collector/index.js';
 import type {
   ApifyCollectionResult,
   ApifyCollectionStats,
@@ -6,49 +5,25 @@ import type {
 } from '../data/apify_profile_collector/index.js';
 import { getLinkedlnProfileDataFromExternalProvidor } from '../data/csvdata.js';
 import type { ImportedCsvData } from '../data/csvdata.js';
-import {
-  CONFIG_NUMBER_MINIMUMS,
-  resolveConfigNumber,
-  writeJsonAtomically,
-} from '../helpers/index.js';
 import type { Logger } from '../logging/index.js';
 import { mapApifyProfile } from '../mapper/index.js';
 import type { Profile } from '../profile/index.js';
-import {
-  DEFAULT_PROFILE_IMAGE_ANALYZER,
-  analyzeProfileImages,
-} from './image_analysis.js';
+import { analyzeProfileImages } from './image_analysis.js';
 import type {
   ImageAnalysisFailure,
   ImageTokenUsageTotal,
   ProfileImageAnalyzer,
 } from './image_analysis.js';
+import {
+  DEFAULT_PIPELINE_DEPENDENCIES,
+  DEFAULT_PIPELINE_OUTPUT_PATHS,
+  maxPipelineProfilesFromEnvironment,
+} from './config.js';
 
-export const MAX_PIPELINE_PROFILES = 1_000;
-
-const MAX_PROFILES_ENVIRONMENT_KEY = 'MAX_PIPELINE_PROFILES';
-
-/**
- * Resolves the per-run profile ceiling, allowing an environment override.
- *
- * The override exists so an operator can lower the ceiling for a constrained
- * plan or raise it for a known-large import without a code change. An unusable
- * value falls back to {@link MAX_PIPELINE_PROFILES}.
- */
-export function maxPipelineProfilesFromEnvironment(
-  environment: NodeJS.ProcessEnv = process.env,
-): number {
-  return resolveConfigNumber(environment[MAX_PROFILES_ENVIRONMENT_KEY], {
-    fallback: MAX_PIPELINE_PROFILES,
-    minimum: CONFIG_NUMBER_MINIMUMS.positive,
-    integer: true,
-  });
-}
-
-const RAW_APIFY_OUTPUT_PATH = 'output/apify-profiles.json';
-const APIFY_FAILURES_OUTPUT_PATH = 'output/apify-profile-failures.json';
-const FULL_PROFILES_OUTPUT_PATH = 'output/full-profiles.json';
-const PIPELINE_SUMMARY_OUTPUT_PATH = 'output/pipeline-summary.json';
+export {
+  MAX_PIPELINE_PROFILES,
+  maxPipelineProfilesFromEnvironment,
+} from './config.js';
 
 interface ProfileMappingFailure {
   providerRecordIndex: number;
@@ -89,20 +64,6 @@ export interface FullProfilePipelineOptions {
   imageConcurrency?: number;
   outputPaths?: FullProfilePipelineOutputPaths;
 }
-
-const DEFAULT_OUTPUT_PATHS: FullProfilePipelineOutputPaths = {
-  rawApifyProfiles: RAW_APIFY_OUTPUT_PATH,
-  apifyProfileFailures: APIFY_FAILURES_OUTPUT_PATH,
-  fullProfiles: FULL_PROFILES_OUTPUT_PATH,
-  summary: PIPELINE_SUMMARY_OUTPUT_PATH,
-};
-
-const DEFAULT_DEPENDENCIES: FullProfilePipelineDependencies = {
-  collectProfiles: collectApifyProfiles,
-  extractImages: DEFAULT_PROFILE_IMAGE_ANALYZER,
-  writeJson: writeJsonAtomically,
-  now: () => new Date(),
-};
 
 export interface FullProfilePipelineSummary {
   startedAt: string;
@@ -180,7 +141,7 @@ export async function runFullProfilePipeline(
   return runFullProfilePipelineWithDependencies(
     importedData,
     logger,
-    DEFAULT_DEPENDENCIES,
+    DEFAULT_PIPELINE_DEPENDENCIES,
   );
 }
 
@@ -195,10 +156,10 @@ export async function runFullProfilePipeline(
 export async function runFullProfilePipelineWithDependencies(
   importedData: ImportedCsvData,
   logger: Logger,
-  dependencies: FullProfilePipelineDependencies = DEFAULT_DEPENDENCIES,
+  dependencies: FullProfilePipelineDependencies = DEFAULT_PIPELINE_DEPENDENCIES,
   options: FullProfilePipelineOptions = {},
 ): Promise<FullProfilePipelineSummary> {
-  const outputPaths = options.outputPaths ?? DEFAULT_OUTPUT_PATHS;
+  const outputPaths = options.outputPaths ?? DEFAULT_PIPELINE_OUTPUT_PATHS;
 
   // Step 1: record the start time and extract the deduplicated LinkedIn URLs
   // that the external profile provider needs from the imported CSV data.

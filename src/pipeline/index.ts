@@ -1,6 +1,4 @@
 export {
-  MAX_PIPELINE_PROFILES,
-  maxPipelineProfilesFromEnvironment,
   runFullProfilePipeline,
   runFullProfilePipelineWithDependencies,
 } from './full_profile_pipeline.js';
@@ -10,6 +8,14 @@ export type {
   FullProfilePipelineOutputPaths,
   FullProfilePipelineSummary,
 } from './full_profile_pipeline.js';
+
+export {
+  DEFAULT_PIPELINE_DEPENDENCIES,
+  DEFAULT_PIPELINE_OUTPUT_PATHS,
+  MAX_PIPELINE_PROFILES,
+  PIPELINE_ENVIRONMENT_KEYS,
+  maxPipelineProfilesFromEnvironment,
+} from './config.js';
 
 export {
   DEFAULT_PROFILE_IMAGE_ANALYZER,
