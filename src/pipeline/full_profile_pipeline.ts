@@ -6,15 +6,17 @@ import type {
 } from '../data/apify_profile_collector/index.js';
 import { getLinkedlnProfileDataFromExternalProvidor } from '../data/csvdata.js';
 import type { ImportedCsvData } from '../data/csvdata.js';
-import { extractProfileImages } from '../image_extractor/index.js';
+import {
+  extractProfileImages,
+  resolveProfileImageBatchConcurrency,
+} from '../image_extractor/index.js';
 import type {
   GeminiTokenUsage,
   ProfileImageBatchOptions,
   ProfileImageJob,
   ProfileImageJobResult,
 } from '../image_extractor/index.js';
-import { resolveProfileImageBatchConcurrency } from '../image_extractor/index.js';
-import { writeJsonAtomically } from '../helpers/write_json_atomically.js';
+import { writeJsonAtomically } from '../helpers/index.js';
 import type { Logger } from '../logging/index.js';
 import { mapApifyProfile } from '../mapper/index.js';
 import { attachProfileImageAnalysis } from '../profile/index.js';

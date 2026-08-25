@@ -2,7 +2,6 @@ import { setTimeout as delay } from 'node:timers/promises';
 
 import { ApifyClient } from 'apify-client';
 
-import { deduplicateBy } from '../../helpers/deduplicate.js';
 import {
   APIFY_RETRY_JITTER_MS,
   requireApifyApiKey,
@@ -19,7 +18,7 @@ import {
 } from './error_handling.js';
 import type { FailureDescriptor } from './error_handling.js';
 import { normalizeLinkedinUrl } from '../../linkedin/index.js';
-import { asRecord, asString } from '../../helpers/type_guards.js';
+import { asRecord, asString, deduplicateBy } from '../../helpers/index.js';
 import type { Logger } from '../../logging/index.js';
 import type {
   ApifyBatchContext,

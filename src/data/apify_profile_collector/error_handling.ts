@@ -19,7 +19,7 @@ import {
   asHttpStatus,
   asRecord,
   asString,
-} from '../../helpers/type_guards.js';
+} from '../../helpers/index.js';
 
 /**
  * A failure classified but not yet tied to a profile or a retry count. The
