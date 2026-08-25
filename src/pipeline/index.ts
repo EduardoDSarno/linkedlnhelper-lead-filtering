@@ -1,5 +1,6 @@
 export {
   MAX_PIPELINE_PROFILES,
+  maxPipelineProfilesFromEnvironment,
   runFullProfilePipeline,
   runFullProfilePipelineWithDependencies,
 } from './full_profile_pipeline.js';
@@ -13,6 +14,7 @@ export type {
 export {
   DEFAULT_PROFILE_IMAGE_ANALYZER,
   analyzeProfileImages,
+  imageResolutionFromEnvironment,
 } from './image_analysis.js';
 export type {
   ImageAnalysisFailure,

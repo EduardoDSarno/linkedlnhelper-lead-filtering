@@ -1,6 +1,7 @@
 import {
   extractProfileImages,
   resolveProfileImageBatchConcurrency,
+  resolveProfileImageResolution,
 } from '../image_extractor/index.js';
 import type {
   GeminiTokenUsage,
@@ -13,7 +14,7 @@ import { attachProfileImageAnalysis } from '../profile/index.js';
 import type { FullProfile, Profile } from '../profile/index.js';
 
 const IMAGE_CONCURRENCY_ENVIRONMENT_KEY = 'IMAGE_ANALYSIS_CONCURRENCY';
-const IMAGE_ANALYSIS_RESOLUTION = 'medium';
+const IMAGE_RESOLUTION_ENVIRONMENT_KEY = 'IMAGE_ANALYSIS_RESOLUTION';
 
 /** Tokens billed across a whole run, with every count present. */
 export type ImageTokenUsageTotal = Required<GeminiTokenUsage>;
@@ -86,10 +87,21 @@ export function totalImageTokenUsage(
   return total;
 }
 
-/** Resolves the environment override through the image module's shared limits. */
-export function imageConcurrencyFromEnvironment(): number {
+/** Resolves the environment's image resolution, defaulting when unusable. */
+export function imageResolutionFromEnvironment(
+  environment: NodeJS.ProcessEnv = process.env,
+) {
+  return resolveProfileImageResolution(
+    environment[IMAGE_RESOLUTION_ENVIRONMENT_KEY],
+  );
+}
+
+/** Resolves an injectable environment override through shared numeric rules. */
+export function imageConcurrencyFromEnvironment(
+  environment: NodeJS.ProcessEnv = process.env,
+): number {
   return resolveProfileImageBatchConcurrency(
-    process.env[IMAGE_CONCURRENCY_ENVIRONMENT_KEY],
+    environment[IMAGE_CONCURRENCY_ENVIRONMENT_KEY],
   );
 }
 
@@ -165,7 +177,7 @@ export async function analyzeProfileImages(
     })),
     {
       concurrency,
-      resolution: IMAGE_ANALYSIS_RESOLUTION,
+      resolution: imageResolutionFromEnvironment(),
     },
   );
 

@@ -2,6 +2,17 @@ import type {
   ProfileImageExtractionOptions,
   ProfileImageResolution,
 } from './profile_image_types.js';
+import {
+  CONFIG_NUMBER_MINIMUMS,
+  resolveConfigNumber,
+} from '../helpers/index.js';
+
+/** Environment variables this module reads when caller options are absent. */
+const ENVIRONMENT_KEYS = {
+  model: 'GEMINI_MODEL',
+  resolution: 'IMAGE_ANALYSIS_RESOLUTION',
+  requestTimeoutMs: 'GEMINI_REQUEST_TIMEOUT_MS',
+} as const;
 
 /** Defaults used when an image-extraction caller omits an option. */
 export const PROFILE_IMAGE_DEFAULTS = {
@@ -38,68 +49,79 @@ export interface ResolvedProfileImageExtractionOptions {
   maxRetries: number;
 }
 
-/** Returns a positive integer or the supplied fallback. */
-function positiveInteger(value: unknown, fallback: number): number {
-  const numericValue = Number(value);
-  const integerValue = Math.floor(numericValue);
-  return Number.isFinite(numericValue) && integerValue > 0
-    ? integerValue
-    : fallback;
-}
-
-/** Returns a non-negative integer or the supplied fallback. */
-function nonNegativeInteger(value: unknown, fallback: number): number {
-  const numericValue = Number(value);
-  return Number.isFinite(numericValue) && numericValue >= 0
-    ? Math.floor(numericValue)
-    : fallback;
-}
-
 /**
  * Resolves untrusted extraction options into values safe for downloads and the
  * Gemini SDK. The optional injected model call remains outside this result.
  */
+export function resolveProfileImageResolution(
+  value: unknown,
+): ProfileImageResolution {
+  return typeof value === 'string' &&
+    ['low', 'medium', 'high'].includes(value.trim())
+    ? (value.trim() as ProfileImageResolution)
+    : PROFILE_IMAGE_DEFAULTS.resolution;
+}
+
 export function resolveProfileImageExtractionOptions(
   options: ProfileImageExtractionOptions = {},
+  environment: NodeJS.ProcessEnv = process.env,
 ): ResolvedProfileImageExtractionOptions {
-  const model = options.model?.trim() || PROFILE_IMAGE_DEFAULTS.model;
-  const resolution = ['low', 'medium', 'high'].includes(
-    options.resolution ?? '',
-  )
-    ? (options.resolution as ProfileImageResolution)
-    : PROFILE_IMAGE_DEFAULTS.resolution;
+  // Precedence for each setting: caller option, environment, module default.
+  const model =
+    options.model?.trim() ||
+    environment[ENVIRONMENT_KEYS.model]?.trim() ||
+    PROFILE_IMAGE_DEFAULTS.model;
+  const resolution = resolveProfileImageResolution(
+    options.resolution ?? environment[ENVIRONMENT_KEYS.resolution],
+  );
 
   return {
     model,
     resolution,
-    requestTimeoutMs: positiveInteger(
-      options.requestTimeoutMs,
-      PROFILE_IMAGE_DEFAULTS.requestTimeoutMs,
+    requestTimeoutMs: resolveConfigNumber(
+      options.requestTimeoutMs ??
+        environment[ENVIRONMENT_KEYS.requestTimeoutMs],
+      {
+        fallback: PROFILE_IMAGE_DEFAULTS.requestTimeoutMs,
+        minimum: CONFIG_NUMBER_MINIMUMS.positive,
+        integer: true,
+      },
     ),
-    imageDownloadTimeoutMs: positiveInteger(
+    imageDownloadTimeoutMs: resolveConfigNumber(
       options.imageDownloadTimeoutMs,
-      PROFILE_IMAGE_DEFAULTS.downloadTimeoutMs,
+      {
+        fallback: PROFILE_IMAGE_DEFAULTS.downloadTimeoutMs,
+        minimum: CONFIG_NUMBER_MINIMUMS.positive,
+        integer: true,
+      },
     ),
-    maxImageBytes: positiveInteger(
+    maxImageBytes: resolveConfigNumber(
       options.maxImageBytes,
-      PROFILE_IMAGE_DEFAULTS.maximumBytes,
+      {
+        fallback: PROFILE_IMAGE_DEFAULTS.maximumBytes,
+        minimum: CONFIG_NUMBER_MINIMUMS.positive,
+        integer: true,
+      },
     ),
-    maxRetries: nonNegativeInteger(
+    maxRetries: resolveConfigNumber(
       options.maxRetries,
-      PROFILE_IMAGE_DEFAULTS.maxRetries,
+      {
+        fallback: PROFILE_IMAGE_DEFAULTS.maxRetries,
+        minimum: CONFIG_NUMBER_MINIMUMS.nonNegative,
+        integer: true,
+      },
     ),
   };
 }
 
 /** Resolves a batch worker count within the module's configured safety bound. */
 export function resolveProfileImageBatchConcurrency(value: unknown): number {
-  const numericValue = Number(value);
-  if (!Number.isFinite(numericValue)) {
-    return PROFILE_IMAGE_DEFAULTS.batchConcurrency;
-  }
-
-  return Math.max(
-    1,
-    Math.min(Math.floor(numericValue), PROFILE_IMAGE_LIMITS.batchConcurrency),
-  );
+  return resolveConfigNumber(value, {
+    fallback: PROFILE_IMAGE_DEFAULTS.batchConcurrency,
+    minimum: CONFIG_NUMBER_MINIMUMS.positive,
+    maximum: PROFILE_IMAGE_LIMITS.batchConcurrency,
+    integer: true,
+    clampMinimum: true,
+    clampMaximum: true,
+  });
 }

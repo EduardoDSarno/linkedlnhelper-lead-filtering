@@ -10,7 +10,8 @@ import { createFileLogger } from './logging/index.js';
 import type { Logger } from './logging/index.js';
 import { runFullProfilePipeline } from './pipeline/index.js';
 
-const LOG_PATH = 'output/pipeline.log';
+// Resolved at startup, after dotenv has loaded; blank means absent.
+const LOG_PATH = process.env['LOG_PATH']?.trim() || 'output/pipeline.log';
 const IMPORTED_CSV_OUTPUT_PATH = 'output/imported-csv-profiles.json';
 
 /** Converts an unknown application failure into a log-safe message. */

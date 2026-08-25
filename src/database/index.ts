@@ -6,6 +6,21 @@ import { linkedinProfileKey } from '../linkedin/index.js';
 import type { FullProfile } from '../profile/index.js';
 
 const DEFAULT_DATABASE_PATH = 'data/application.sqlite';
+const DATABASE_PATH_ENVIRONMENT_KEY = 'DATABASE_PATH';
+
+/**
+ * Resolves the SQLite file location, allowing an environment override.
+ *
+ * The path differs legitimately between a laptop, a server, and a test, so it
+ * is configuration rather than code. A blank value means absent.
+ */
+export function defaultDatabasePath(
+  environment: NodeJS.ProcessEnv = process.env,
+): string {
+  return (
+    environment[DATABASE_PATH_ENVIRONMENT_KEY]?.trim() || DEFAULT_DATABASE_PATH
+  );
+}
 const PROFILE_TABLE_NAME = 'profiles';
 
 /** Creates the tables required by the current MVP. */
@@ -24,7 +39,7 @@ export function initializeDatabase(db: DatabaseSync): void {
 
 /** Opens a SQLite file and ensures the MVP schema exists before returning it. */
 export function openDatabase(
-  path: string = DEFAULT_DATABASE_PATH,
+  path: string = defaultDatabasePath(),
 ): DatabaseSync {
   if (path !== ':memory:') {
     mkdirSync(dirname(path), { recursive: true });

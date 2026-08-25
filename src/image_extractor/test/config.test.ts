@@ -65,6 +65,14 @@ test('bounds batch concurrency through the shared image configuration', () => {
     resolveProfileImageBatchConcurrency(undefined),
     PROFILE_IMAGE_DEFAULTS.batchConcurrency,
   );
+  assert.equal(
+    resolveProfileImageBatchConcurrency(''),
+    PROFILE_IMAGE_DEFAULTS.batchConcurrency,
+  );
+  assert.equal(
+    resolveProfileImageBatchConcurrency('   '),
+    PROFILE_IMAGE_DEFAULTS.batchConcurrency,
+  );
   assert.equal(resolveProfileImageBatchConcurrency(0), 1);
   assert.equal(
     resolveProfileImageBatchConcurrency(Number.POSITIVE_INFINITY),

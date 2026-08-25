@@ -27,6 +27,7 @@ export {
   PROFILE_IMAGE_LIMITS,
   resolveProfileImageBatchConcurrency,
   resolveProfileImageExtractionOptions,
+  resolveProfileImageResolution,
 } from './config.js';
 export type { ResolvedProfileImageExtractionOptions } from './config.js';
 

@@ -6,7 +6,11 @@ import type {
 } from '../data/apify_profile_collector/index.js';
 import { getLinkedlnProfileDataFromExternalProvidor } from '../data/csvdata.js';
 import type { ImportedCsvData } from '../data/csvdata.js';
-import { writeJsonAtomically } from '../helpers/index.js';
+import {
+  CONFIG_NUMBER_MINIMUMS,
+  resolveConfigNumber,
+  writeJsonAtomically,
+} from '../helpers/index.js';
 import type { Logger } from '../logging/index.js';
 import { mapApifyProfile } from '../mapper/index.js';
 import type { Profile } from '../profile/index.js';
@@ -21,6 +25,25 @@ import type {
 } from './image_analysis.js';
 
 export const MAX_PIPELINE_PROFILES = 1_000;
+
+const MAX_PROFILES_ENVIRONMENT_KEY = 'MAX_PIPELINE_PROFILES';
+
+/**
+ * Resolves the per-run profile ceiling, allowing an environment override.
+ *
+ * The override exists so an operator can lower the ceiling for a constrained
+ * plan or raise it for a known-large import without a code change. An unusable
+ * value falls back to {@link MAX_PIPELINE_PROFILES}.
+ */
+export function maxPipelineProfilesFromEnvironment(
+  environment: NodeJS.ProcessEnv = process.env,
+): number {
+  return resolveConfigNumber(environment[MAX_PROFILES_ENVIRONMENT_KEY], {
+    fallback: MAX_PIPELINE_PROFILES,
+    minimum: CONFIG_NUMBER_MINIMUMS.positive,
+    integer: true,
+  });
+}
 
 const RAW_APIFY_OUTPUT_PATH = 'output/apify-profiles.json';
 const APIFY_FAILURES_OUTPUT_PATH = 'output/apify-profile-failures.json';
@@ -189,16 +212,17 @@ export async function runFullProfilePipelineWithDependencies(
     throw new Error('The imported CSV does not contain any LinkedIn URLs.');
   }
 
-  if (profileLinks.length > MAX_PIPELINE_PROFILES) {
+  const maximumProfiles = maxPipelineProfilesFromEnvironment();
+  if (profileLinks.length > maximumProfiles) {
     throw new Error(
-      `The pipeline accepts at most ${MAX_PIPELINE_PROFILES} profiles per run; received ${profileLinks.length}.`,
+      `The pipeline accepts at most ${maximumProfiles} profiles per run; received ${profileLinks.length}.`,
     );
   }
 
   logger.info(
     {
       requestedProfiles: profileLinks.length,
-      maximumProfiles: MAX_PIPELINE_PROFILES,
+      maximumProfiles,
     },
     'Starting full-profile pipeline.',
   );

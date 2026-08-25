@@ -85,6 +85,20 @@ test('falls back to defaults for unusable environment values', () => {
   });
 });
 
+test('treats blank environment values as absent', () => {
+  const config = resolveApifyCollectorConfig(
+    {},
+    {
+      APIFY_BATCH_SIZE: '',
+      APIFY_BATCH_CONCURRENCY: '   ',
+      APIFY_MAX_ATTEMPTS: '\t',
+      APIFY_RETRY_BASE_DELAY_MS: '',
+    },
+  );
+
+  assert.deepEqual(config, APIFY_COLLECTOR_DEFAULTS);
+});
+
 test('keeps the API key separate and rejects a missing credential', () => {
   assert.equal(
     requireApifyApiKey({ APIFY_API_KEY: '  test-api-key  ' }),

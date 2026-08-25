@@ -1,4 +1,8 @@
 import type { ApifyCollectorOptions } from './types.js';
+import {
+  CONFIG_NUMBER_MINIMUMS,
+  resolveConfigNumber,
+} from '../../helpers/index.js';
 
 /** Defaults used when neither caller options nor environment values exist. */
 export const APIFY_COLLECTOR_DEFAULTS = {
@@ -35,39 +39,6 @@ export interface ResolvedApifyCollectorConfig {
 }
 
 /**
- * Converts untrusted configuration into a positive integer within a safety
- * ceiling. Invalid values fall back to the configured default.
- *
- * @param value - Function option or environment value to validate.
- * @param fallback - Value used when the supplied value is unusable.
- * @param maximum - Greatest accepted integer.
- * @returns A positive integer no greater than the supplied maximum.
- */
-function boundedPositiveInteger(
-  value: unknown,
-  fallback: number,
-  maximum: number,
-): number {
-  const numericValue = Number(value);
-  if (!Number.isFinite(numericValue) || numericValue <= 0) return fallback;
-  return Math.min(maximum, Math.floor(numericValue));
-}
-
-/**
- * Converts untrusted configuration into a non-negative number.
- *
- * @param value - Function option or environment value to validate.
- * @param fallback - Value used when the supplied value is unusable.
- * @returns The validated number, including zero, or the fallback.
- */
-function nonNegativeNumber(value: unknown, fallback: number): number {
-  const numericValue = Number(value);
-  return Number.isFinite(numericValue) && numericValue >= 0
-    ? numericValue
-    : fallback;
-}
-
-/**
  * Resolves caller options and environment values into safe collector settings.
  * Explicit function options take precedence over environment configuration.
  *
@@ -80,24 +51,42 @@ export function resolveApifyCollectorConfig(
   environment: NodeJS.ProcessEnv = process.env,
 ): ResolvedApifyCollectorConfig {
   return {
-    profilesPerActorRun: boundedPositiveInteger(
+    profilesPerActorRun: resolveConfigNumber(
       options.batchSize ?? environment[ENVIRONMENT_KEYS.profilesPerActorRun],
-      APIFY_COLLECTOR_DEFAULTS.profilesPerActorRun,
-      APIFY_COLLECTOR_LIMITS.profilesPerActorRun,
+      {
+        fallback: APIFY_COLLECTOR_DEFAULTS.profilesPerActorRun,
+        minimum: CONFIG_NUMBER_MINIMUMS.positive,
+        maximum: APIFY_COLLECTOR_LIMITS.profilesPerActorRun,
+        integer: true,
+        clampMaximum: true,
+      },
     ),
-    actorRunConcurrency: boundedPositiveInteger(
+    actorRunConcurrency: resolveConfigNumber(
       options.concurrency ?? environment[ENVIRONMENT_KEYS.actorRunConcurrency],
-      APIFY_COLLECTOR_DEFAULTS.actorRunConcurrency,
-      APIFY_COLLECTOR_LIMITS.actorRunConcurrency,
+      {
+        fallback: APIFY_COLLECTOR_DEFAULTS.actorRunConcurrency,
+        minimum: CONFIG_NUMBER_MINIMUMS.positive,
+        maximum: APIFY_COLLECTOR_LIMITS.actorRunConcurrency,
+        integer: true,
+        clampMaximum: true,
+      },
     ),
-    maxAttempts: boundedPositiveInteger(
+    maxAttempts: resolveConfigNumber(
       options.maxAttempts ?? environment[ENVIRONMENT_KEYS.maxAttempts],
-      APIFY_COLLECTOR_DEFAULTS.maxAttempts,
-      APIFY_COLLECTOR_LIMITS.maxAttempts,
+      {
+        fallback: APIFY_COLLECTOR_DEFAULTS.maxAttempts,
+        minimum: CONFIG_NUMBER_MINIMUMS.positive,
+        maximum: APIFY_COLLECTOR_LIMITS.maxAttempts,
+        integer: true,
+        clampMaximum: true,
+      },
     ),
-    retryBaseDelayMs: nonNegativeNumber(
+    retryBaseDelayMs: resolveConfigNumber(
       options.retryBaseDelayMs ?? environment[ENVIRONMENT_KEYS.retryBaseDelayMs],
-      APIFY_COLLECTOR_DEFAULTS.retryBaseDelayMs,
+      {
+        fallback: APIFY_COLLECTOR_DEFAULTS.retryBaseDelayMs,
+        minimum: CONFIG_NUMBER_MINIMUMS.nonNegative,
+      },
     ),
   };
 }
