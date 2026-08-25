@@ -25,6 +25,8 @@ export interface ProfileLocation {
 export interface ProfileExperience {
   position: string;
   companyName: string;
+  /** Provider-reported location of this job, when available. */
+  location?: string;
 
   startDate?: ProfileDate;
   endDate?: ProfileDate;

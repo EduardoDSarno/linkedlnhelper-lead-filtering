@@ -36,6 +36,8 @@ test('maps every normalized field from a complete provider payload', () => {
     countryCode: 'PT',
   });
   assert.equal(profile.experience.length, 2);
+  assert.equal(profile.experience[0]?.location, 'Lisbon, Portugal');
+  assert.equal(profile.experience[1]?.location, 'Porto, Portugal');
   assert.equal(profile.education.length, 1);
 });
 
@@ -179,6 +181,31 @@ test('collapses only exact duplicate employment entries', () => {
   // The surviving copy keeps the original formatting, not the normalized
   // identity text used for comparison.
   assert.equal(profile.experience[0]?.position, 'Operations Lead');
+});
+
+test('keeps employment entries with different reported locations', () => {
+  const profile = mapApifyProfile({
+    linkedinUrl: 'https://www.linkedin.com/in/test-employment-locations',
+    experience: [
+      {
+        position: 'Account Manager',
+        companyName: 'Example Company',
+        location: 'Goiânia, Goiás, Brasil',
+        startDate: { year: 2020 },
+      },
+      {
+        position: 'Account Manager',
+        companyName: 'Example Company',
+        location: 'Brasília, Distrito Federal, Brasil',
+        startDate: { year: 2020 },
+      },
+    ],
+  });
+
+  assert.deepEqual(
+    profile.experience.map((experience) => experience.location),
+    ['Goiânia, Goiás, Brasil', 'Brasília, Distrito Federal, Brasil'],
+  );
 });
 
 test('keeps simultaneous current roles as separate jobs', () => {

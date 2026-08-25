@@ -134,6 +134,7 @@ function mapExperience(value: unknown): ProfileExperience | undefined {
 
   const position = recordString(rawExperience, 'position');
   const companyName = recordString(rawExperience, 'companyName');
+  const location = recordString(rawExperience, 'location');
 
   // Entries missing either review-critical field cannot satisfy the normalized
   // experience contract, but remain available inside the raw payload.
@@ -145,6 +146,7 @@ function mapExperience(value: unknown): ProfileExperience | undefined {
   return {
     position,
     companyName,
+    ...(location ? { location } : {}),
     ...(startDate ? { startDate } : {}),
     ...(endDate ? { endDate } : {}),
   };
@@ -183,14 +185,15 @@ function experienceDateIdentity(date: ProfileDate | undefined): {
 /**
  * Builds an exact identity for one normalized employment entry.
  *
- * Two entries are duplicates only when title, company, and every available
- * start/end-date component match. Consequently, simultaneous current roles at
- * different companies or with different titles/dates remain separate jobs.
+ * Two entries are duplicates only when title, company, location, and every
+ * available start/end-date component match. Consequently, simultaneous current
+ * roles with different locations, companies, titles, or dates remain separate.
  */
 function experienceIdentity(experience: ProfileExperience): string {
   return JSON.stringify({
     position: normalizeExperienceIdentityText(experience.position),
     companyName: normalizeExperienceIdentityText(experience.companyName),
+    location: normalizeExperienceIdentityText(experience.location),
     startDate: experienceDateIdentity(experience.startDate),
     endDate: experienceDateIdentity(experience.endDate),
   });

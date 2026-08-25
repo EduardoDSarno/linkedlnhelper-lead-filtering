@@ -43,12 +43,14 @@ export function completeApifyProfile(): RawApifyProfile {
       {
         position: 'Operations Lead',
         companyName: 'Example Logistics',
+        location: 'Lisbon, Portugal',
         startDate: { year: 2021, month: 3, text: 'Mar 2021' },
         endDate: { text: 'Present' },
       },
       {
         position: 'Operations Analyst',
         companyName: 'Sample Freight',
+        location: 'Porto, Portugal',
         startDate: { year: 2018, month: 'September' },
         endDate: { year: 2021, month: 2 },
       },
