@@ -1,0 +1,114 @@
+import type {
+  ApifyCollectionResult,
+  ApifyCollectionStats,
+  ApifyProfileFailure,
+} from '../data/apify_profile_collector/index.js';
+import type {
+  GeminiTokenUsage,
+  ProfileImageBatchOptions,
+  ProfileImageJob,
+  ProfileImageJobResult,
+} from '../image_extractor/index.js';
+import type { Logger } from '../logging/index.js';
+import type { FullProfile, Profile } from '../profile/index.js';
+
+/** Tokens billed across a whole run, with every count present. */
+export type ImageTokenUsageTotal = Required<GeminiTokenUsage>;
+
+/** One profile photo the analyzer returned an error for. */
+export interface ImageAnalysisFailure {
+  profileId: string;
+  error: string;
+
+  /** Tokens Gemini billed before rejecting this image, when it reported any. */
+  usage?: GeminiTokenUsage;
+}
+
+/** Injectable image-analysis boundary used by production and tests. */
+export type ProfileImageAnalyzer = (
+  jobs: readonly ProfileImageJob[],
+  options: ProfileImageBatchOptions,
+) => Promise<ProfileImageJobResult[]>;
+
+/** Everything one image-analysis stage produces for the run summary. */
+export interface ProfileImageAnalysisOutcome {
+  /** Every supplied profile, with an assessment attached where one succeeded. */
+  fullProfiles: FullProfile[];
+
+  profilesWithoutPhoto: number;
+  successfulImageAnalyses: number;
+  failedImageAnalyses: number;
+  failures: ImageAnalysisFailure[];
+  tokenUsage: ImageTokenUsageTotal;
+}
+
+/** One provider record that could not be mapped into an application profile. */
+export interface ProfileMappingFailure {
+  providerRecordIndex: number;
+  error: string;
+}
+
+/** Successful profiles and isolated failures produced by normalization. */
+export interface ProfileNormalizationOutcome {
+  profiles: Profile[];
+  failures: ProfileMappingFailure[];
+}
+
+/** Where one run writes its artifacts. */
+export interface FullProfilePipelineOutputPaths {
+  rawApifyProfiles: string;
+  apifyProfileFailures: string;
+  fullProfiles: string;
+  summary: string;
+}
+
+/** External boundaries that production provides and tests can replace. */
+export interface FullProfilePipelineDependencies {
+  collectProfiles: (
+    profileLinks: readonly string[],
+    logger: Logger,
+  ) => Promise<ApifyCollectionResult>;
+
+  extractImages: ProfileImageAnalyzer;
+  writeJson: (path: string, value: unknown) => Promise<void>;
+  now: () => Date;
+}
+
+/** Runtime settings a caller may override, such as test output paths. */
+export interface FullProfilePipelineOptions {
+  imageConcurrency?: number;
+  outputPaths?: FullProfilePipelineOutputPaths;
+}
+
+/** Serializable operational record of one completed pipeline run. */
+export interface FullProfilePipelineSummary {
+  startedAt: string;
+  completedAt: string;
+  durationMs: number;
+  requestedProfiles: number;
+  collectedProfiles: number;
+  providerCollection: ApifyCollectionStats;
+  providerFailures: ApifyProfileFailure[];
+  normalizedProfiles: number;
+  profilesWithoutPhoto: number;
+  successfulImageAnalyses: number;
+  failedImageAnalyses: number;
+  fullProfilesWritten: number;
+  mappingFailures: ProfileMappingFailure[];
+  imageAnalysisFailures: ImageAnalysisFailure[];
+
+  /** Includes usage from failed responses because Gemini may still bill them. */
+  imageTokenUsage: ImageTokenUsageTotal;
+  outputs: FullProfilePipelineOutputPaths;
+}
+
+/** Stage results needed to build the serializable pipeline summary. */
+export interface FullProfilePipelineSummaryInput {
+  startedAt: Date;
+  completedAt: Date;
+  requestedProfiles: number;
+  collection: ApifyCollectionResult;
+  normalization: ProfileNormalizationOutcome;
+  imageAnalysis: ProfileImageAnalysisOutcome;
+  outputPaths: FullProfilePipelineOutputPaths;
+}

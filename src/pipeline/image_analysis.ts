@@ -2,53 +2,24 @@ import {
   resolveProfileImageBatchConcurrency,
   resolveProfileImageResolution,
 } from '../image_extractor/index.js';
-import type {
-  GeminiTokenUsage,
-  ProfileImageBatchOptions,
-  ProfileImageJob,
-  ProfileImageJobResult,
-} from '../image_extractor/index.js';
+import type { ProfileImageJobResult } from '../image_extractor/index.js';
 import type { Logger } from '../logging/index.js';
 import { attachProfileImageAnalysis } from '../profile/index.js';
 import type { FullProfile, Profile } from '../profile/index.js';
 import { PIPELINE_ENVIRONMENT_KEYS } from './config.js';
+import type {
+  ImageTokenUsageTotal,
+  ProfileImageAnalysisOutcome,
+  ProfileImageAnalyzer,
+} from './types.js';
 
 export { DEFAULT_PROFILE_IMAGE_ANALYZER } from './config.js';
-
-/** Tokens billed across a whole run, with every count present. */
-export type ImageTokenUsageTotal = Required<GeminiTokenUsage>;
-
-/** One profile photo the analyzer returned an error for. */
-export interface ImageAnalysisFailure {
-  profileId: string;
-  error: string;
-
-  /** Tokens Gemini billed before rejecting this image, when it reported any. */
-  usage?: GeminiTokenUsage;
-}
-
-/**
- * The image analyzer the pipeline depends on.
- *
- * Production supplies {@link extractProfileImages}; a test supplies a stand-in
- * so a run makes no paid Gemini request.
- */
-export type ProfileImageAnalyzer = (
-  jobs: readonly ProfileImageJob[],
-  options: ProfileImageBatchOptions,
-) => Promise<ProfileImageJobResult[]>;
-
-/** Everything one image-analysis stage produces for the run summary. */
-export interface ProfileImageAnalysisOutcome {
-  /** Every supplied profile, with an assessment attached where one succeeded. */
-  fullProfiles: FullProfile[];
-
-  profilesWithoutPhoto: number;
-  successfulImageAnalyses: number;
-  failedImageAnalyses: number;
-  failures: ImageAnalysisFailure[];
-  tokenUsage: ImageTokenUsageTotal;
-}
+export type {
+  ImageAnalysisFailure,
+  ImageTokenUsageTotal,
+  ProfileImageAnalysisOutcome,
+  ProfileImageAnalyzer,
+} from './types.js';
 
 /**
  * Adds up the tokens every image job reported, billed or wasted.

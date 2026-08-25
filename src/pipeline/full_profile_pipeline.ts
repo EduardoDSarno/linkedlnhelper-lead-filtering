@@ -1,100 +1,33 @@
-import type {
-  ApifyCollectionResult,
-  ApifyCollectionStats,
-  ApifyProfileFailure,
-} from '../data/apify_profile_collector/index.js';
 import { getLinkedlnProfileDataFromExternalProvidor } from '../data/csvdata.js';
 import type { ImportedCsvData } from '../data/csvdata.js';
 import type { Logger } from '../logging/index.js';
 import { mapApifyProfile } from '../mapper/index.js';
 import type { Profile } from '../profile/index.js';
 import { analyzeProfileImages } from './image_analysis.js';
-import type {
-  ImageAnalysisFailure,
-  ImageTokenUsageTotal,
-  ProfileImageAnalyzer,
-} from './image_analysis.js';
 import {
   DEFAULT_PIPELINE_DEPENDENCIES,
   DEFAULT_PIPELINE_OUTPUT_PATHS,
   maxPipelineProfilesFromEnvironment,
 } from './config.js';
+import type {
+  FullProfilePipelineDependencies,
+  FullProfilePipelineOptions,
+  FullProfilePipelineSummary,
+  FullProfilePipelineSummaryInput,
+  ProfileMappingFailure,
+  ProfileNormalizationOutcome,
+} from './types.js';
 
 export {
   MAX_PIPELINE_PROFILES,
   maxPipelineProfilesFromEnvironment,
 } from './config.js';
-
-interface ProfileMappingFailure {
-  providerRecordIndex: number;
-  error: string;
-}
-
-/** Where one run writes its artifacts. */
-export interface FullProfilePipelineOutputPaths {
-  rawApifyProfiles: string;
-  apifyProfileFailures: string;
-  fullProfiles: string;
-  summary: string;
-}
-
-/**
- * The outside world this pipeline touches.
- *
- * Only genuine boundaries appear here: the paid provider, the paid image
- * analyzer, the filesystem, and the clock. The mapper is deliberately absent
- * because it is pure and has nothing to isolate — running the real one is what
- * lets an integration test catch drift between mapping and the pipeline.
- */
-export interface FullProfilePipelineDependencies {
-  collectProfiles: (
-    profileLinks: readonly string[],
-    logger: Logger,
-  ) => Promise<ApifyCollectionResult>;
-
-  extractImages: ProfileImageAnalyzer;
-
-  writeJson: (path: string, value: unknown) => Promise<void>;
-
-  now: () => Date;
-}
-
-/** Runtime settings a caller may override, such as a test writing elsewhere. */
-export interface FullProfilePipelineOptions {
-  imageConcurrency?: number;
-  outputPaths?: FullProfilePipelineOutputPaths;
-}
-
-export interface FullProfilePipelineSummary {
-  startedAt: string;
-  completedAt: string;
-  durationMs: number;
-  requestedProfiles: number;
-  collectedProfiles: number;
-  providerCollection: ApifyCollectionStats;
-  providerFailures: ApifyProfileFailure[];
-  normalizedProfiles: number;
-  profilesWithoutPhoto: number;
-  successfulImageAnalyses: number;
-  failedImageAnalyses: number;
-  fullProfilesWritten: number;
-  mappingFailures: ProfileMappingFailure[];
-  imageAnalysisFailures: ImageAnalysisFailure[];
-
-  /**
-   * Tokens Gemini billed across this run, successes and failures together.
-   *
-   * Failed images are included deliberately: a blocked or truncated response
-   * is charged for, so leaving it out would understate what the run cost.
-   */
-  imageTokenUsage: ImageTokenUsageTotal;
-  outputs: {
-    rawApifyProfiles: string;
-    apifyProfileFailures: string;
-    fullProfiles: string;
-    summary: string;
-  };
-}
+export type {
+  FullProfilePipelineDependencies,
+  FullProfilePipelineOptions,
+  FullProfilePipelineOutputPaths,
+  FullProfilePipelineSummary,
+} from './types.js';
 
 /** Converts an unknown failure into a stable message suitable for artifacts. */
 function errorMessage(error: unknown): string {
@@ -105,10 +38,7 @@ function errorMessage(error: unknown): string {
 async function normalizeProfiles(
   rawProfiles: readonly Record<string, unknown>[],
   logger: Logger,
-): Promise<{
-  profiles: Profile[];
-  failures: ProfileMappingFailure[];
-}> {
+): Promise<ProfileNormalizationOutcome> {
   const profiles: Profile[] = [];
   const failures: ProfileMappingFailure[] = [];
 
@@ -128,6 +58,36 @@ async function normalizeProfiles(
   }
 
   return { profiles, failures };
+}
+
+/** Builds the serializable totals and failure details for one completed run. */
+export function createFullProfilePipelineSummary({
+  startedAt,
+  completedAt,
+  requestedProfiles,
+  collection,
+  normalization,
+  imageAnalysis,
+  outputPaths,
+}: FullProfilePipelineSummaryInput): FullProfilePipelineSummary {
+  return {
+    startedAt: startedAt.toISOString(),
+    completedAt: completedAt.toISOString(),
+    durationMs: completedAt.getTime() - startedAt.getTime(),
+    requestedProfiles,
+    collectedProfiles: collection.profiles.length,
+    providerCollection: collection.stats,
+    providerFailures: collection.failures,
+    normalizedProfiles: normalization.profiles.length,
+    profilesWithoutPhoto: imageAnalysis.profilesWithoutPhoto,
+    successfulImageAnalyses: imageAnalysis.successfulImageAnalyses,
+    failedImageAnalyses: imageAnalysis.failedImageAnalyses,
+    fullProfilesWritten: imageAnalysis.fullProfiles.length,
+    mappingFailures: normalization.failures,
+    imageAnalysisFailures: imageAnalysis.failures,
+    imageTokenUsage: imageAnalysis.tokenUsage,
+    outputs: { ...outputPaths },
+  };
 }
 
 /**
@@ -254,24 +214,15 @@ export async function runFullProfilePipelineWithDependencies(
 
   // Step 9: build operational totals and failure details for this exact run.
   const completedAt = dependencies.now();
-  const summary: FullProfilePipelineSummary = {
-    startedAt: startedAt.toISOString(),
-    completedAt: completedAt.toISOString(),
-    durationMs: completedAt.getTime() - startedAt.getTime(),
+  const summary = createFullProfilePipelineSummary({
+    startedAt,
+    completedAt,
     requestedProfiles: profileLinks.length,
-    collectedProfiles: rawProfiles.length,
-    providerCollection: collection.stats,
-    providerFailures: collection.failures,
-    normalizedProfiles: normalized.profiles.length,
-    profilesWithoutPhoto: imageAnalysis.profilesWithoutPhoto,
-    successfulImageAnalyses: imageAnalysis.successfulImageAnalyses,
-    failedImageAnalyses: imageAnalysis.failedImageAnalyses,
-    fullProfilesWritten: fullProfiles.length,
-    mappingFailures: normalized.failures,
-    imageAnalysisFailures: imageAnalysis.failures,
-    imageTokenUsage: imageAnalysis.tokenUsage,
-    outputs: { ...outputPaths },
-  };
+    collection,
+    normalization: normalized,
+    imageAnalysis,
+    outputPaths,
+  });
 
   // Step 10: persist the summary last. Its presence signals that the run made
   // it through provider collection, normalization, image analysis, and output.
