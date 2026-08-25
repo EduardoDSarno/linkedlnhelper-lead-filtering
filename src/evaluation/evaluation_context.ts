@@ -19,6 +19,7 @@ export interface EvaluationProfileData {
   headline?: string;
   location?: ProfileLocation;
   openToWork?: boolean;
+  hasPhoto: boolean;
   experience: ProfileExperience[];
   imageAnalysis?: ProfileImageAssessment;
   about?: string;
@@ -31,6 +32,12 @@ export interface EvaluationProfileData {
 export interface EvaluationContext {
   criteria: FullEvaluationCriteria;
   profile: EvaluationProfileData;
+}
+
+/** The compact profiles that share one campaign's evaluation criteria. */
+export interface EvaluationBatchContext {
+  criteria: FullEvaluationCriteria;
+  profiles: EvaluationProfileData[];
 }
 
 /** Reads the short provider fields that add meaning beyond normalized work data. */
@@ -85,6 +92,8 @@ export function createEvaluationContext(
       ...(typeof fullProfile.openToWork === 'boolean'
         ? { openToWork: fullProfile.openToWork }
         : {}),
+      hasPhoto:
+        typeof fullProfile.photo === 'string' && fullProfile.photo.length > 0,
       experience: fullProfile.experience.map((experience) => ({
         ...experience,
       })),
@@ -94,5 +103,18 @@ export function createEvaluationContext(
       ...(about ? { about } : {}),
       ...(workDetails.length > 0 ? { workDetails } : {}),
     },
+  };
+}
+
+/** Builds one shared-criteria evaluation payload for a group of full profiles. */
+export function createEvaluationBatchContext(
+  fullProfiles: readonly FullProfile[],
+  criteria: FullEvaluationCriteria,
+): EvaluationBatchContext {
+  return {
+    criteria,
+    profiles: fullProfiles.map(
+      (fullProfile) => createEvaluationContext(fullProfile, criteria).profile,
+    ),
   };
 }
