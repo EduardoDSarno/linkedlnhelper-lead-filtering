@@ -15,5 +15,6 @@ export type {
   LocationField,
   LocationMatch,
   NetWorthCriteria,
+  OpenToWorkCriteria,
   PhotoReviewCriteria,
 } from './user_criteria.js';

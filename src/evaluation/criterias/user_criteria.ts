@@ -1,5 +1,3 @@
-import type { ProfileImageAssessment } from '../../image_extractor/index.js';
-
 /** The action a campaign takes when one criterion matches a profile. */
 export const EVALUATION_EFFECTS = ['include', 'exclude', 'review'] as const;
 
@@ -78,6 +76,12 @@ export interface PhotoReviewCriteria {
   effect: EvaluationEffect;
 }
 
+/** Matches the profile's reported open-to-work state. */
+export interface OpenToWorkCriteria {
+  expectedValue: boolean;
+  effect: EvaluationEffect;
+}
+
 /** The optional criteria a user combines for one profile evaluation. */
 export interface FullEvaluationCriteria {
   location?: LocationCriteria;
@@ -87,6 +91,7 @@ export interface FullEvaluationCriteria {
   ageIncomeBands?: AgeIncomeBandCriteria[];
   netWorth?: NetWorthCriteria;
   photoReview?: PhotoReviewCriteria;
+  openToWork?: OpenToWorkCriteria;
   systemPrompt: string;
   userPrompt: string;
 }
