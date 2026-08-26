@@ -1,19 +1,22 @@
 import {
   createPartFromBase64,
-  GoogleGenAI,
   PartMediaResolutionLevel,
   ThinkingLevel,
 } from '@google/genai';
 import type { GenerateContentResponse } from '@google/genai';
 
+import {
+  generateContentWithGemini,
+  mapGeminiTokenUsage,
+} from '../models/index.js';
+import type {
+  GeminiContentGenerator,
+  GeminiTokenUsage,
+} from '../models/index.js';
 import { GEMINI_IMAGE_RETRY_POLICY } from './config.js';
 import type { LoadedProfileImage } from './profile_image_loader.js';
 import { PROFILE_IMAGE_ASSESSMENT_JSON_SCHEMA } from './profile_image_types.js';
-import type {
-  GeminiTokenUsage,
-  GeminiContentGenerator,
-  ProfileImageResolution,
-} from './profile_image_types.js';
+import type { ProfileImageResolution } from './profile_image_types.js';
 
 const IMAGE_ASSESSMENT_PROMPT = `
 Analyze this profile image using only directly visible, neutral properties.
@@ -90,34 +93,6 @@ export class GeminiImageError extends Error {
   }
 }
 
-let cachedClient: { apiKey: string; client: GoogleGenAI } | undefined;
-
-/**
- * Returns the shared Gemini client, rebuilding it when the key changes.
- *
- * The key is re-read on every call rather than captured once, so a rotated
- * credential takes effect without restarting the process.
- */
-function getGeminiClient(): GoogleGenAI {
-  const apiKey = process.env['GEMINI_API_KEY']?.trim();
-  if (!apiKey) {
-    throw new Error('GEMINI_API_KEY is not configured.');
-  }
-
-  if (cachedClient?.apiKey === apiKey) return cachedClient.client;
-
-  cachedClient = {
-    apiKey,
-    client: new GoogleGenAI({ apiKey, apiVersion: 'v1beta' }),
-  };
-  return cachedClient.client;
-}
-
-/** Calls the shared production client, constructing it on first use. */
-const generateContentWithSharedClient: GeminiContentGenerator = async (
-  parameters,
-) => getGeminiClient().models.generateContent(parameters);
-
 /** Extracts usable response text or reports why Gemini produced none. */
 function getResponseText(
   response: GenerateContentResponse,
@@ -143,29 +118,6 @@ function getResponseText(
   );
 }
 
-/** Maps optional SDK usage metadata into the application's stable shape. */
-function mapTokenUsage(
-  response: GenerateContentResponse,
-): GeminiTokenUsage | undefined {
-  const usage = response.usageMetadata;
-  if (!usage) return undefined;
-
-  return {
-    ...(usage.promptTokenCount !== undefined
-      ? { promptTokens: usage.promptTokenCount }
-      : {}),
-    ...(usage.candidatesTokenCount !== undefined
-      ? { outputTokens: usage.candidatesTokenCount }
-      : {}),
-    ...(usage.thoughtsTokenCount !== undefined
-      ? { thinkingTokens: usage.thoughtsTokenCount }
-      : {}),
-    ...(usage.totalTokenCount !== undefined
-      ? { totalTokens: usage.totalTokenCount }
-      : {}),
-  };
-}
-
 /**
  * Sends one loaded image to Gemini and returns its raw assessment text.
  *
@@ -183,7 +135,7 @@ export async function recognizeProfileImageWithGemini(
   request: GeminiProfileImageRequest,
 ): Promise<GeminiProfileImageResponse> {
   const generateContent =
-    request.generateContent ?? generateContentWithSharedClient;
+    request.generateContent ?? generateContentWithGemini;
   const response = await generateContent({
     model: request.model,
     contents: [
@@ -209,7 +161,7 @@ export async function recognizeProfileImageWithGemini(
       },
     },
   });
-  const usage = mapTokenUsage(response);
+  const usage = mapGeminiTokenUsage(response);
 
   return {
     text: getResponseText(response, usage),

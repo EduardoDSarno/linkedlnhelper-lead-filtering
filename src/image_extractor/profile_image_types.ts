@@ -1,9 +1,13 @@
 import type {
-  GenerateContentParameters,
-  GenerateContentResponse,
-} from '@google/genai';
-
+  GeminiContentGenerator,
+  GeminiTokenUsage,
+} from '../models/index.js';
 import { PROFILE_IMAGE_LIMITS } from './config.js';
+
+export type {
+  GeminiContentGenerator,
+  GeminiTokenUsage,
+} from '../models/index.js';
 
 export const PROFILE_IMAGE_MIME_TYPES = [
   'image/jpeg',
@@ -119,18 +123,6 @@ export interface ProfileImageAssessment {
   /** Short, neutral observations about composition or image quality only. */
   observations: string[];
 }
-
-export interface GeminiTokenUsage {
-  promptTokens?: number;
-  outputTokens?: number;
-  thinkingTokens?: number;
-  totalTokens?: number;
-}
-
-/** The narrow Google SDK boundary accepted by deterministic image tests. */
-export type GeminiContentGenerator = (
-  parameters: GenerateContentParameters,
-) => Promise<GenerateContentResponse>;
 
 /** Complete result returned after one profile image is successfully assessed. */
 export interface ProfileImageExtractionResult {
