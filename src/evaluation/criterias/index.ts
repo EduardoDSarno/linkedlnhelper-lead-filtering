@@ -1,20 +1,11 @@
-export {
-  EVALUATION_EFFECTS,
-  LOCATION_FIELDS,
-} from './user_criteria.js';
-
 export type {
   AgeCriteria,
   AgeIncomeBandCriteria,
+  CriteriaMatch,
   EstimatedIncomeCriteria,
-  EvaluationEffect,
   FullEvaluationCriteria,
   KeywordList,
-  KeywordMatch,
   LocationCriteria,
   LocationField,
-  LocationMatch,
   NetWorthCriteria,
-  OpenToWorkCriteria,
-  PhotoReviewCriteria,
 } from './user_criteria.js';
