@@ -50,6 +50,7 @@ function profile(
         location: 'Goiânia, Goiás, Brasil',
       },
     ],
+    education: [],
     about: 'Builds commercial relationships with enterprise customers.',
     ...overrides,
   };
@@ -148,8 +149,10 @@ test('sends a profile to AI when location is uncertain', () => {
     ...prompts(),
   };
 
-  const candidate = profile('profile-1');
-  delete candidate.location;
+  const candidateWithLocation = profile('profile-1');
+  const { location, ...candidate } = candidateWithLocation;
+
+  assert.ok(location);
 
   const evaluation = evaluateBroadCriteria(candidate, criteria);
 
@@ -226,8 +229,10 @@ test('sends a profile to AI when open-to-work is configured but unknown', () => 
     ...prompts(),
   };
 
-  const candidate = profile('profile-1');
-  delete candidate.openToWork;
+  const candidateWithOpenToWork = profile('profile-1');
+  const { openToWork, ...candidate } = candidateWithOpenToWork;
+
+  assert.equal(openToWork, false);
 
   const evaluation = evaluateBroadCriteria(candidate, criteria);
 

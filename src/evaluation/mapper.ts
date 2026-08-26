@@ -7,42 +7,55 @@ import { asRecord, asString } from '../helpers/index.js';
 import type { ProfileImageAssessment } from '../image_extractor/index.js';
 import type {
   FullProfile,
+  ProfileEducation,
   ProfileExperience,
   ProfileLocation,
 } from '../profile/index.js';
 
+/**
+ * Recursively marks shared profile values as read-only.
+ *
+ * Evaluation stages inspect normalized profile data owned by FullProfile. The
+ * read-only contract prevents accidental mutation without defensively cloning
+ * every nested value.
+ */
+type ReadonlyEvaluationValue<T> = T extends readonly (infer Item)[]
+  ? readonly ReadonlyEvaluationValue<Item>[]
+  : T extends object
+    ? { readonly [Key in keyof T]: ReadonlyEvaluationValue<T[Key]> }
+    : T;
+
 /** Supplementary provider fields that help interpret one position. */
 export interface EvaluationWorkDetails {
-  position: string;
-  companyName: string;
-  description?: string;
-  employmentType?: string;
-  workplaceType?: string;
+  readonly position: string;
+  readonly companyName: string;
+  readonly description?: string;
+  readonly employmentType?: string;
+  readonly workplaceType?: string;
 }
 
-/** The compact profile data sent to the future AI evaluator. */
+/**
+ * The compact profile data sent to the future AI evaluator.
+ *
+ * Every field is read-only because filtering and AI stages may inspect shared
+ * profile data but must never modify the canonical FullProfile.
+ */
 export interface EvaluationProfileData {
-  profileId: string;
-  headline?: string;
-  location?: ProfileLocation;
-  openToWork?: boolean;
-  hasPhoto: boolean;
-  experience: ProfileExperience[];
-  imageAnalysis?: ProfileImageAssessment;
-  about?: string;
-  workDetails?: EvaluationWorkDetails[];
+  readonly profileId: string;
+  readonly headline?: string;
+  readonly location?: ReadonlyEvaluationValue<ProfileLocation>;
+  readonly openToWork?: boolean;
+  readonly hasPhoto: boolean;
+  readonly experience: ReadonlyEvaluationValue<ProfileExperience[]>;
+  readonly education: ReadonlyEvaluationValue<ProfileEducation[]>;
+  readonly imageAnalysis?: ReadonlyEvaluationValue<ProfileImageAssessment>;
+  readonly about?: string;
+  readonly workDetails?: ReadonlyEvaluationValue<EvaluationWorkDetails[]>;
 }
 
 /** Reports whether the profile includes a usable photo URL. */
 function hasProfilePhoto(photo: FullProfile['photo']): boolean {
   return typeof photo === 'string' && photo.length > 0;
-}
-
-/** Copies employment entries so later evaluation cannot mutate the source profile. */
-function copyExperience(
-  experience: readonly ProfileExperience[],
-): ProfileExperience[] {
-  return experience.map((entry) => ({ ...entry }));
 }
 
 /** Reads the About text from the untouched provider payload, when present. */
@@ -101,22 +114,20 @@ export function mapEvaluationProfileData(
   const about = aboutFromRaw(fullProfile.raw);
   const workDetails = mapWorkDetailsFromRaw(fullProfile.raw);
 
-  const profile: EvaluationProfileData = {
+  return {
     profileId: fullProfile.id,
     hasPhoto: hasProfilePhoto(fullProfile.photo),
-    experience: copyExperience(fullProfile.experience),
+    experience: fullProfile.experience,
+    education: fullProfile.education,
+    ...(fullProfile.headline ? { headline: fullProfile.headline } : {}),
+    ...(fullProfile.location ? { location: fullProfile.location } : {}),
+    ...(typeof fullProfile.openToWork === 'boolean'
+      ? { openToWork: fullProfile.openToWork }
+      : {}),
+    ...(fullProfile.imageAnalysis
+      ? { imageAnalysis: fullProfile.imageAnalysis.assessment }
+      : {}),
+    ...(about ? { about } : {}),
+    ...(workDetails.length > 0 ? { workDetails } : {}),
   };
-
-  if (fullProfile.headline) profile.headline = fullProfile.headline;
-  if (fullProfile.location) profile.location = fullProfile.location;
-  if (typeof fullProfile.openToWork === 'boolean') {
-    profile.openToWork = fullProfile.openToWork;
-  }
-  if (fullProfile.imageAnalysis) {
-    profile.imageAnalysis = fullProfile.imageAnalysis.assessment;
-  }
-  if (about) profile.about = about;
-  if (workDetails.length > 0) profile.workDetails = workDetails;
-
-  return profile;
 }

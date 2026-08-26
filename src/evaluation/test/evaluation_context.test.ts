@@ -30,7 +30,15 @@ test('builds a compact AI evaluation payload without exposing the raw profile', 
         startDate: { year: 2024, month: 3 },
       },
     ],
-    education: [],
+    education: [
+      {
+        schoolName: 'Example University',
+        degree: 'Bachelor of Business Administration',
+        fieldOfStudy: 'Business Administration',
+        startDate: { year: 2017 },
+        endDate: { year: 2021 },
+      },
+    ],
     raw: {
       about: 'Builds long-term customer relationships.',
       emails: ['private@example.test'],
@@ -80,6 +88,7 @@ test('builds a compact AI evaluation payload without exposing the raw profile', 
     openToWork: false,
     hasPhoto: false,
     experience: fullProfile.experience,
+    education: fullProfile.education,
     imageAnalysis: imageAnalysis.assessment,
     about: 'Builds long-term customer relationships.',
     workDetails: [
@@ -94,4 +103,6 @@ test('builds a compact AI evaluation payload without exposing the raw profile', 
   });
   assert.equal('raw' in context.profile, false);
   assert.equal('emails' in context.profile, false);
+  assert.equal(context.profile.experience, fullProfile.experience);
+  assert.equal(context.profile.education, fullProfile.education);
 });

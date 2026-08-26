@@ -6,22 +6,22 @@ import type {
 
 /** One direct criterion result and the profile evidence used to reach it. */
 export interface BroadCriterionResult {
-  criterion: string;
-  outcome: BroadCriterionOutcome;
-  excludes: boolean;
-  evidence: string[];
+  readonly criterion: string;
+  readonly outcome: BroadCriterionOutcome;
+  readonly excludes: boolean;
+  readonly evidence: readonly string[];
 }
 
 /** The direct evaluation results and next action for one compact profile. */
 export interface ProfileBroadEvaluation {
-  profileId: string;
-  decision: BroadEvaluationDecision;
-  decisionMessage: string;
-  results: BroadCriterionResult[];
+  readonly profileId: string;
+  readonly decision: BroadEvaluationDecision;
+  readonly decisionMessage: string;
+  readonly results: readonly BroadCriterionResult[];
 }
 
 /** The profiles retained for AI plus every broad-filter decision. */
 export interface BroadFilterBatchResult {
-  profilesForAi: EvaluationProfileData[];
-  evaluations: ProfileBroadEvaluation[];
+  readonly profilesForAi: readonly EvaluationProfileData[];
+  readonly evaluations: readonly ProfileBroadEvaluation[];
 }
