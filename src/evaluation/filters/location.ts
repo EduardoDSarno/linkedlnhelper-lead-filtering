@@ -47,6 +47,23 @@ export function evaluateLocation(
   profile: EvaluationProfileData,
   criteria: LocationCriteria,
 ): BroadCriterionResult {
+  const configuredLocations = criteria.locations.filter(
+    (location) => normalizedText(location).length > 0,
+  );
+
+  if (criteria.fields.length === 0 || configuredLocations.length === 0) {
+    return {
+      criterion: 'location',
+      outcome: BROAD_OUTCOME.unknown,
+      excludes: false,
+      evidence: [
+        criteria.fields.length === 0
+          ? 'The location criterion has no fields to compare.'
+          : 'The location criterion has no usable locations.',
+      ],
+    };
+  }
+
   if (!profile.location) {
     return {
       criterion: 'location',
@@ -59,7 +76,7 @@ export function evaluateLocation(
   const fieldResults = criteria.fields.map((field) => {
     const value = profile.location?.[field];
     const matched = value
-      ? criteria.locations.some((configuredLocation) =>
+      ? configuredLocations.some((configuredLocation) =>
           locationMatches(value, configuredLocation, field === LOCATION_TEXT_FIELD),
         )
       : undefined;

@@ -1,7 +1,11 @@
 import { type KeywordList } from '../criterias/index.js';
 import type { EvaluationProfileData } from '../evaluation_context.js';
 import { BROAD_OUTCOME, CRITERIA_MATCH } from './constants.js';
-import { criterionOutcome, normalizedText } from './helpers.js';
+import {
+  containsNormalizedTerm,
+  criterionOutcome,
+  normalizedText,
+} from './helpers.js';
 import type { BroadCriterionResult } from './types.js';
 
 /** Collects the compact profile text available to direct keyword matching. */
@@ -61,7 +65,7 @@ export function evaluateKeywordList(
   }
 
   const matchedTerms = terms.filter((term) =>
-    text.some(({ value }) => normalizedText(value).includes(term)),
+    text.some(({ value }) => containsNormalizedTerm(value, term)),
   );
   const outcome =
     criteria.match === CRITERIA_MATCH.any
@@ -76,7 +80,7 @@ export function evaluateKeywordList(
       matchedTerms.length > 0
         ? matchedTerms.flatMap((term) =>
             text
-              .filter(({ value }) => normalizedText(value).includes(term))
+              .filter(({ value }) => containsNormalizedTerm(value, term))
               .map(({ source }) => `"${term}" matched ${source}.`),
           )
         : ['No configured terms matched the compact profile text.'],

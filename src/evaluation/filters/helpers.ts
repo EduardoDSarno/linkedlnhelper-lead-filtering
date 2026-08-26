@@ -14,3 +14,15 @@ export function normalizedText(value: string): string {
     .replace(/[^\p{L}\p{N}]+/gu, ' ')
     .trim();
 }
+
+/** Checks whether a normalized word or phrase occurs at token boundaries. */
+export function containsNormalizedTerm(
+  value: string,
+  normalizedTerm: string,
+): boolean {
+  const normalizedValue = normalizedText(value);
+
+  if (!normalizedValue || !normalizedTerm) return false;
+
+  return ` ${normalizedValue} `.includes(` ${normalizedTerm} `);
+}

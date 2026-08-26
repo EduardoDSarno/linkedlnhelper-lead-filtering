@@ -105,6 +105,22 @@ test('sends a profile to AI when reject-list keywords do not match', () => {
   assert.equal(evaluation.results[0]?.excludes, false);
 });
 
+test('does not match a reject-list keyword inside a larger word', () => {
+  const criteria: FullEvaluationCriteria = {
+    keywordLists: [{ list: ['intern'], match: CRITERIA_MATCH.any }],
+    ...prompts(),
+  };
+
+  const evaluation = evaluateBroadCriteria(
+    profile('profile-1', { headline: 'International Sales Manager' }),
+    criteria,
+  );
+
+  assert.equal(evaluation.decision, BROAD_DECISION.NextPhase);
+  assert.equal(evaluation.results[0]?.outcome, BROAD_OUTCOME.notMatched);
+  assert.equal(evaluation.results[0]?.excludes, false);
+});
+
 test('excludes a profile whose current location is known not to match', () => {
   const criteria: FullEvaluationCriteria = {
     location: {
@@ -136,6 +152,40 @@ test('sends a profile to AI when location is uncertain', () => {
   delete candidate.location;
 
   const evaluation = evaluateBroadCriteria(candidate, criteria);
+
+  assert.equal(evaluation.decision, BROAD_DECISION.NextPhase);
+  assert.equal(evaluation.results[0]?.outcome, BROAD_OUTCOME.unknown);
+  assert.equal(evaluation.results[0]?.excludes, false);
+});
+
+test('sends a profile to AI when location fields are empty', () => {
+  const criteria: FullEvaluationCriteria = {
+    location: {
+      locations: ['Brasil'],
+      fields: [],
+      match: CRITERIA_MATCH.any,
+    },
+    ...prompts(),
+  };
+
+  const evaluation = evaluateBroadCriteria(profile('profile-1'), criteria);
+
+  assert.equal(evaluation.decision, BROAD_DECISION.NextPhase);
+  assert.equal(evaluation.results[0]?.outcome, BROAD_OUTCOME.unknown);
+  assert.equal(evaluation.results[0]?.excludes, false);
+});
+
+test('sends a profile to AI when configured locations are empty', () => {
+  const criteria: FullEvaluationCriteria = {
+    location: {
+      locations: ['   '],
+      fields: ['country'],
+      match: CRITERIA_MATCH.any,
+    },
+    ...prompts(),
+  };
+
+  const evaluation = evaluateBroadCriteria(profile('profile-1'), criteria);
 
   assert.equal(evaluation.decision, BROAD_DECISION.NextPhase);
   assert.equal(evaluation.results[0]?.outcome, BROAD_OUTCOME.unknown);
