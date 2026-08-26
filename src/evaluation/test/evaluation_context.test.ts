@@ -7,7 +7,7 @@ import type { FullProfile } from '../../profile/index.js';
 
 test('builds a compact AI evaluation payload without exposing the raw profile', () => {
   const criteria: FullEvaluationCriteria = {
-    openToWork: { expectedValue: false, effect: 'review' },
+    openToWork: false,
     systemPrompt: 'Evaluate the profile using the selected criteria.',
     userPrompt: 'Prioritize evidence from the professional trajectory.',
   };
