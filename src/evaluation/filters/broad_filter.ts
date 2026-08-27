@@ -27,7 +27,6 @@ export {
 export type {
   BroadCriterionOutcome,
   BroadEvaluationDecision,
-  CriteriaMatch,
 } from './constants.js';
 export type {
   BroadCriterionResult,
