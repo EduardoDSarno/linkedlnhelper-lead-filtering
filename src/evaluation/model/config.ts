@@ -1,0 +1,207 @@
+import { ThinkingLevel } from '@google/genai';
+
+import {
+  CONFIG_NUMBER_MINIMUMS,
+  resolveConfigNumber,
+} from '../../helpers/index.js';
+import type { ModelEvaluationOptions } from './types.js';
+
+/** Environment variables understood by the model-evaluation stage. */
+export const MODEL_EVALUATION_ENVIRONMENT_KEYS = {
+  model: 'EVALUATION_GEMINI_MODEL',
+  profilesPerRequest: 'EVALUATION_PROFILES_PER_REQUEST',
+  concurrency: 'EVALUATION_CONCURRENCY',
+  requestTimeoutMs: 'EVALUATION_REQUEST_TIMEOUT_MS',
+  maximumAttempts: 'EVALUATION_MAXIMUM_ATTEMPTS',
+  retryBaseDelayMs: 'EVALUATION_RETRY_BASE_DELAY_MS',
+} as const;
+
+/** MVP defaults for Gemini evaluation requests. */
+export const MODEL_EVALUATION_DEFAULTS = {
+  model: 'gemini-3.7-flash',
+  profilesPerRequest: 5,
+  concurrency: 10,
+  requestTimeoutMs: 30_000,
+  maximumAttempts: 3,
+  retryBaseDelayMs: 250,
+  retryMaximumDelayMs: 4_000,
+  thinkingLevel: ThinkingLevel.MEDIUM,
+} as const;
+
+/** Safety ceilings for request scheduling and structured responses. */
+export const MODEL_EVALUATION_LIMITS = {
+  profilesPerRequest: 20,
+  concurrency: 50,
+  matchPercentMinimum: 0,
+  matchPercentMaximum: 100,
+  monthlyIncomeMinimum: 0,
+  reasonsPerProfile: 5,
+  evidencePerProfile: 6,
+  uncertaintiesPerProfile: 5,
+} as const;
+
+/** Errors that may succeed when the same model request is attempted again. */
+export const MODEL_EVALUATION_RETRY_POLICY = {
+  sdkAttemptsPerCall: 1,
+  httpStatusCodes: [408, 429, 500, 502, 503, 504],
+  networkErrorCodes: [
+    'ECONNRESET',
+    'ECONNREFUSED',
+    'EHOSTUNREACH',
+    'ENETUNREACH',
+    'ETIMEDOUT',
+  ],
+} as const;
+
+/** Placeholder tokens interpolated into the model-evaluation prompt templates. */
+export const MODEL_EVALUATION_PROMPT_SLOTS = {
+  systemPrompt: '{{systemPrompt}}',
+  minimumMatchPercent: '{{minimumMatchPercent}}',
+  additionalGuidance: '{{additionalGuidance}}',
+  approvalPolicy: '{{approvalPolicy}}',
+  campaignCriteria: '{{campaignCriteria}}',
+  profilesJson: '{{profilesJson}}',
+} as const;
+
+/** Fallback text when the campaign did not supply extra user guidance. */
+export const MODEL_EVALUATION_EMPTY_USER_PROMPT =
+  'No additional user guidance was supplied.';
+
+/** Fallback text when no structured campaign cuts were configured. */
+export const MODEL_EVALUATION_EMPTY_CAMPAIGN_CRITERIA =
+  'No additional structured campaign criteria were supplied.';
+
+/** Decision policy when the campaign keeps final approve/reject with the user. */
+export const MODEL_EVALUATION_APPROVAL_DISABLED =
+  'Model approval is disabled. Return "manual_review" for every decision.';
+
+/** Decision policy when the model may approve profiles at the configured threshold. */
+export const MODEL_EVALUATION_APPROVAL_ENABLED = [
+  'Model approval is enabled.',
+  `An "approved" decision requires a matchPercent of at least ${MODEL_EVALUATION_PROMPT_SLOTS.minimumMatchPercent}.`,
+  'Use "manual_review" when evidence is incomplete or ambiguous.',
+].join(' ');
+
+/** Protected system instruction sent with every evaluation request. */
+export const MODEL_EVALUATION_SYSTEM_INSTRUCTION = `
+You evaluate how well each profile matches the campaign using every supplied
+profile field: headline, about, location, open-to-work, photo presence,
+experience, education, work details, and image analysis including apparent age.
+
+=== PRIMARY CAMPAIGN INSTRUCTIONS ===
+The following user-authored prompt is the primary guidance for campaign fit:
+
+${MODEL_EVALUATION_PROMPT_SLOTS.systemPrompt}
+
+=== REQUIRED EVALUATION RULES ===
+- Apply the primary campaign instructions and the campaign criteria JSON
+  consistently to every profile.
+- Use apparent age when it is present. Treat it as an estimate, not a fact.
+- Estimate a monthly salary range from education, job titles, seniority,
+  experience, location, and typical market pay for that combination. Look up
+  public compensation data when the estimate would otherwise be too uncertain.
+- Put that estimate in estimatedSalary as minimumMonthlyIncome and
+  maximumMonthlyIncome integers. When campaign estimatedIncome or
+  ageIncomeBands are present, compare the estimate against them.
+- Do not estimate or use net worth.
+- Do not invent missing career facts. Put missing or ambiguous information in
+  uncertainties.
+- Explain each result using evidence from that profile.
+- Return exactly one structured result for every supplied profile ID.
+`.trim();
+
+/** Per-request user content wrapping guidance, criteria, and compact profiles. */
+export const MODEL_EVALUATION_USER_CONTENT = `
+=== ADDITIONAL USER GUIDANCE ===
+${MODEL_EVALUATION_PROMPT_SLOTS.additionalGuidance}
+
+=== MODEL DECISION POLICY ===
+${MODEL_EVALUATION_PROMPT_SLOTS.approvalPolicy}
+
+=== CAMPAIGN CRITERIA ===
+${MODEL_EVALUATION_PROMPT_SLOTS.campaignCriteria}
+
+=== PROFILES TO EVALUATE ===
+${MODEL_EVALUATION_PROMPT_SLOTS.profilesJson}
+
+Return only the required structured JSON response.
+`.trim();
+
+/** Validated settings used by the model-evaluation worker pool. */
+export interface ResolvedModelEvaluationOptions {
+  model: string;
+  profilesPerRequest: number;
+  concurrency: number;
+  requestTimeoutMs: number;
+  maximumAttempts: number;
+  retryBaseDelayMs: number;
+}
+
+/**
+ * Resolves caller and environment settings into bounded model-evaluation values.
+ *
+ * Caller values take precedence over environment values. Blank or otherwise
+ * unusable values fall back to the module defaults.
+ */
+export function resolveModelEvaluationOptions(
+  options: ModelEvaluationOptions = {},
+  environment: NodeJS.ProcessEnv = process.env,
+): ResolvedModelEvaluationOptions {
+  return {
+    model:
+      options.model?.trim() ||
+      environment[MODEL_EVALUATION_ENVIRONMENT_KEYS.model]?.trim() ||
+      MODEL_EVALUATION_DEFAULTS.model,
+    profilesPerRequest: resolveConfigNumber(
+      options.profilesPerRequest ??
+        environment[MODEL_EVALUATION_ENVIRONMENT_KEYS.profilesPerRequest],
+      {
+        fallback: MODEL_EVALUATION_DEFAULTS.profilesPerRequest,
+        minimum: CONFIG_NUMBER_MINIMUMS.positive,
+        maximum: MODEL_EVALUATION_LIMITS.profilesPerRequest,
+        integer: true,
+        clampMinimum: true,
+        clampMaximum: true,
+      },
+    ),
+    concurrency: resolveConfigNumber(
+      options.concurrency ??
+        environment[MODEL_EVALUATION_ENVIRONMENT_KEYS.concurrency],
+      {
+        fallback: MODEL_EVALUATION_DEFAULTS.concurrency,
+        minimum: CONFIG_NUMBER_MINIMUMS.positive,
+        maximum: MODEL_EVALUATION_LIMITS.concurrency,
+        integer: true,
+        clampMinimum: true,
+        clampMaximum: true,
+      },
+    ),
+    requestTimeoutMs: resolveConfigNumber(
+      options.requestTimeoutMs ??
+        environment[MODEL_EVALUATION_ENVIRONMENT_KEYS.requestTimeoutMs],
+      {
+        fallback: MODEL_EVALUATION_DEFAULTS.requestTimeoutMs,
+        minimum: CONFIG_NUMBER_MINIMUMS.positive,
+        integer: true,
+      },
+    ),
+    maximumAttempts: resolveConfigNumber(
+      options.maximumAttempts ??
+        environment[MODEL_EVALUATION_ENVIRONMENT_KEYS.maximumAttempts],
+      {
+        fallback: MODEL_EVALUATION_DEFAULTS.maximumAttempts,
+        minimum: CONFIG_NUMBER_MINIMUMS.positive,
+        integer: true,
+      },
+    ),
+    retryBaseDelayMs: resolveConfigNumber(
+      options.retryBaseDelayMs ??
+        environment[MODEL_EVALUATION_ENVIRONMENT_KEYS.retryBaseDelayMs],
+      {
+        fallback: MODEL_EVALUATION_DEFAULTS.retryBaseDelayMs,
+        minimum: CONFIG_NUMBER_MINIMUMS.nonNegative,
+        integer: true,
+      },
+    ),
+  };
+}
