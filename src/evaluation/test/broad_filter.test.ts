@@ -12,7 +12,7 @@ import type { FullEvaluationCriteria } from '../criterias/index.js';
 import type {
   EvaluationBatchContext,
   EvaluationProfileData,
-} from '../evaluation_context.js';
+} from '../context.js';
 import type {
   ApparentAgeBracket,
   ApparentAgeConfidence,

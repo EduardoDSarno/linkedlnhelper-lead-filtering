@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { createEvaluationContext } from '../evaluation_context.js';
+import { createEvaluationContext } from '../context.js';
 import type { FullEvaluationCriteria } from '../criterias/index.js';
 import type { FullProfile } from '../../profile/index.js';
 

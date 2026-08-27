@@ -1,3 +1,7 @@
+export {
+  MODEL_APPROVAL_PERCENT,
+} from './user_criteria.js';
+
 export type {
   AgeCriteria,
   AgeIncomeBandCriteria,
@@ -7,5 +11,6 @@ export type {
   KeywordList,
   LocationCriteria,
   LocationField,
+  ModelApprovalCriteria,
   NetWorthCriteria,
 } from './user_criteria.js';

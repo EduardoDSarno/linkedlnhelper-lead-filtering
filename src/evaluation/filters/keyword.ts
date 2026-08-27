@@ -1,5 +1,5 @@
 import { type KeywordList } from '../criterias/index.js';
-import type { EvaluationProfileData } from '../evaluation_context.js';
+import type { EvaluationProfileData } from '../context.js';
 import { BROAD_OUTCOME, CRITERIA_MATCH } from './constants.js';
 import {
   containsNormalizedTerm,

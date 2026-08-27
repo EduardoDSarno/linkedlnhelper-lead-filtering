@@ -57,11 +57,30 @@ export interface NetWorthCriteria {
   maximumNetWorth?: number;
 }
 
+/** Inclusive bounds for a user-configured model-approval match percent. */
+export const MODEL_APPROVAL_PERCENT = {
+  minimum: 0,
+  maximum: 100,
+} as const;
+
+/**
+ * Lets the model approve profiles that are close enough to the campaign.
+ *
+ * Omit this field, or set `enabled` to false, to keep final approve/reject
+ * with the user. When enabled, the model may approve only at or above
+ * `minimumMatchPercent`.
+ */
+export interface ModelApprovalCriteria {
+  enabled: boolean;
+  minimumMatchPercent: number;
+}
+
 /**
  * Campaign settings for the first pass plus prompts and ranges for later AI.
  *
  * The broad filter only applies hard excludes from location, reject-list
- * keywords, age, photo, and open-to-work. Money ranges stay here for Gemini.
+ * keywords, age, photo, and open-to-work. Money ranges and model approval
+ * stay here for Gemini.
  */
 export interface FullEvaluationCriteria {
   location?: LocationCriteria;
@@ -70,6 +89,7 @@ export interface FullEvaluationCriteria {
   estimatedIncome?: EstimatedIncomeCriteria;
   ageIncomeBands?: AgeIncomeBandCriteria[];
   netWorth?: NetWorthCriteria;
+  modelApproval?: ModelApprovalCriteria;
   /**
    * When true, profiles without a photo are excluded before AI.
    * Omit this field when photo presence should not cut the first pass.

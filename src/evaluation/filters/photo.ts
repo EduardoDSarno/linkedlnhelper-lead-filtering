@@ -1,4 +1,4 @@
-import type { EvaluationProfileData } from '../evaluation_context.js';
+import type { EvaluationProfileData } from '../context.js';
 import { criterionOutcome } from './helpers.js';
 import type { BroadCriterionResult } from './types.js';
 
