@@ -8,36 +8,38 @@ import {
 } from './helpers.js';
 import type { BroadCriterionResult } from './types.js';
 
-/** Collects the compact profile text available to direct keyword matching. */
+/** Provider value that identifies an experience as current. */
+const CURRENT_EXPERIENCE_END_DATE = 'present';
+
+/** Reports whether an experience is explicitly marked as current. */
+function isCurrentExperience(
+  experience: EvaluationProfileData['experience'][number],
+): boolean {
+  return (
+    normalizedText(experience.endDate?.text ?? '') ===
+    CURRENT_EXPERIENCE_END_DATE
+  );
+}
+
+/**
+ * Collects current-role titles for hard rejection.
+ *
+ * Headline is used only when the provider did not identify a current
+ * experience. Historical roles must not trigger a current-role exclusion.
+ */
 function searchableText(profile: EvaluationProfileData): Array<{
   source: string;
   value: string;
 }> {
-  return [
-    ...(profile.headline ? [{ source: 'headline', value: profile.headline }] : []),
-    ...(profile.location?.text
-      ? [{ source: 'current location', value: profile.location.text }]
-      : []),
-    ...(profile.about ? [{ source: 'about', value: profile.about }] : []),
-    ...profile.experience.flatMap((experience) => [
-      { source: 'job title', value: experience.position },
-      { source: 'company', value: experience.companyName },
-      ...(experience.location
-        ? [{ source: 'job location', value: experience.location }]
-        : []),
-    ]),
-    ...(profile.workDetails ?? []).flatMap((details) => [
-      ...(details.description
-        ? [{ source: 'job description', value: details.description }]
-        : []),
-      ...(details.employmentType
-        ? [{ source: 'employment type', value: details.employmentType }]
-        : []),
-      ...(details.workplaceType
-        ? [{ source: 'workplace type', value: details.workplaceType }]
-        : []),
-    ]),
-  ];
+  const currentRoleTitles = profile.experience
+    .filter(isCurrentExperience)
+    .map(({ position }) => ({ source: 'current job title', value: position }));
+
+  if (currentRoleTitles.length > 0) return currentRoleTitles;
+
+  return profile.headline
+    ? [{ source: 'headline used as current-role fallback', value: profile.headline }]
+    : [];
 }
 
 /** Evaluates one reject-list against every compact text field. */

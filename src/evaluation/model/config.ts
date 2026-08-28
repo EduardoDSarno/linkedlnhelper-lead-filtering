@@ -98,6 +98,8 @@ ${MODEL_EVALUATION_PROMPT_SLOTS.systemPrompt}
 === REQUIRED EVALUATION RULES ===
 - Apply the primary campaign instructions and the campaign criteria JSON
   consistently to every profile.
+- Treat keywordLists as current-role exclusions only. A keyword found solely
+  in historical experience must not reduce campaign fit or cause rejection.
 - Use apparent age when it is present. Treat it as an estimate, not a fact.
 - Estimate total monthly professional compensation in Brazilian reais (BRL)
   only when the supplied career evidence supports a defensible range. This can

@@ -66,6 +66,7 @@ test('sends profile evidence while keeping desired compensation out of the promp
       fields: ['state'],
       match: CRITERIA_MATCH.any,
     },
+    keywordLists: [{ list: ['intern'], match: CRITERIA_MATCH.any }],
     netWorth: { minimumNetWorth: 1_000_000 },
     ...prompts(),
   };
@@ -82,6 +83,8 @@ test('sends profile evidence while keeping desired compensation out of the promp
   assert.match(prompt.userContent, /"bracket":"35_44"/);
   assert.match(prompt.userContent, /"state":"Goiás"/);
   assert.match(prompt.userContent, /"minimumAge":30/);
+  assert.match(prompt.systemInstruction, /current-role exclusions only/);
+  assert.match(prompt.userContent, /"list":\["intern"\]/);
   assert.doesNotMatch(prompt.userContent, /minimumMonthlyCompensation/);
   assert.match(prompt.systemInstruction, /Do not estimate or use net worth/);
   assert.doesNotMatch(prompt.userContent, /minimumNetWorth/);

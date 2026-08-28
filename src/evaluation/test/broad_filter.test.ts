@@ -82,6 +82,7 @@ test('excludes a profile that matches a reject-list keyword', () => {
         {
           position: 'Marketing Intern',
           companyName: 'Example Company',
+          endDate: { text: 'Present' },
         },
       ],
     }),
@@ -91,6 +92,36 @@ test('excludes a profile that matches a reject-list keyword', () => {
   assert.equal(evaluation.decision, BROAD_DECISION.Failed);
   assert.equal(evaluation.results[0]?.outcome, BROAD_OUTCOME.matched);
   assert.equal(evaluation.results[0]?.excludes, true);
+});
+
+test('ignores reject-list keywords found only in historical roles', () => {
+  const criteria: FullEvaluationCriteria = {
+    keywordLists: [{ list: ['intern', 'trainee'], match: CRITERIA_MATCH.any }],
+    ...prompts(),
+  };
+
+  const evaluation = evaluateBroadCriteria(
+    profile('profile-1', {
+      headline: 'Senior Account Manager',
+      experience: [
+        {
+          position: 'Senior Account Manager',
+          companyName: 'Current Company',
+          endDate: { text: 'Present' },
+        },
+        {
+          position: 'Sales Intern',
+          companyName: 'Previous Company',
+          endDate: { year: 2020, month: 12, text: 'Dec 2020' },
+        },
+      ],
+    }),
+    criteria,
+  );
+
+  assert.equal(evaluation.decision, BROAD_DECISION.NextPhase);
+  assert.equal(evaluation.results[0]?.outcome, BROAD_OUTCOME.notMatched);
+  assert.equal(evaluation.results[0]?.excludes, false);
 });
 
 test('sends a profile to AI when reject-list keywords do not match', () => {
