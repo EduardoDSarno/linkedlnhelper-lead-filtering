@@ -82,6 +82,26 @@ test('inserts one profile into the initialized database', () => {
   }
 });
 
+test('preserves the exact Linked Helper public ID in profile JSON', () => {
+  const db = openDatabase(':memory:');
+  const linkedHelperPublicId = 'Exact-CSV-Public-ID';
+
+  try {
+    const stored = dbInsertProfile(
+      {
+        ...profile('profile-id', 'https://linkedin.com/in/example-profile'),
+        linkedHelperPublicId,
+      },
+      db,
+    );
+    const retrieved = dbGetProfileById(stored.id, db);
+
+    assert.equal(retrieved?.linkedHelperPublicId, linkedHelperPublicId);
+  } finally {
+    db.close();
+  }
+});
+
 test('updates a repeated LinkedIn profile without replacing its ID', () => {
   const db = openDatabase(':memory:');
 

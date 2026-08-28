@@ -42,6 +42,7 @@ export interface EvaluationWorkDetails {
  */
 export interface EvaluationProfileData {
   readonly profileId: string;
+  readonly linkedHelperPublicId?: string;
   readonly headline?: string;
   readonly location?: ReadonlyEvaluationValue<ProfileLocation>;
   readonly openToWork?: boolean;
@@ -116,6 +117,9 @@ export function mapEvaluationProfileData(
 
   return {
     profileId: fullProfile.id,
+    ...(fullProfile.linkedHelperPublicId
+      ? { linkedHelperPublicId: fullProfile.linkedHelperPublicId }
+      : {}),
     hasPhoto: hasProfilePhoto(fullProfile.photo),
     experience: fullProfile.experience,
     education: fullProfile.education,

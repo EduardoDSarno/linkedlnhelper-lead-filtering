@@ -65,6 +65,7 @@ export interface ProfileModelAssessment {
 
 /** A model assessment enriched with the application's deterministic decision. */
 export interface ProfileModelEvaluation extends ProfileModelAssessment {
+  readonly linkedHelperPublicId?: string;
   readonly decision: ModelEvaluationDecision;
   readonly compensationRangeMatch?: CompensationRangeMatch;
 }

@@ -18,5 +18,8 @@ export type {
   ProfileLocation,
 } from './apify_profile.js';
 
-export { attachProfileImageAnalysis } from './full_profile.js';
+export {
+  attachLinkedHelperPublicId,
+  attachProfileImageAnalysis,
+} from './full_profile.js';
 export type { FullProfile } from './full_profile.js';

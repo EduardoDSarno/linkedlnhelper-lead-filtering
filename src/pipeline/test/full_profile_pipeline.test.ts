@@ -150,6 +150,18 @@ test('processes a mixed run and reconciles every total', async () => {
   assert.equal(summary.fullProfilesWritten, 3);
   assert.equal(summary.providerFailures.length, 1);
 
+  assert.deepEqual(
+    fullProfilesFrom(writer).map((profile) => ({
+      linkedinUrl: profile.linkedinUrl,
+      linkedHelperPublicId: profile.linkedHelperPublicId,
+    })),
+    [
+      { linkedinUrl: urls[0], linkedHelperPublicId: 'imported-0' },
+      { linkedinUrl: urls[1], linkedHelperPublicId: 'imported-1' },
+      { linkedinUrl: urls[2], linkedHelperPublicId: 'imported-2' },
+    ],
+  );
+
   const imageLogs = logger.entries.filter(
     (entry) => entry.message === 'Profile image analysis outcome.',
   );
@@ -248,6 +260,40 @@ test('joins image results by profile ID, not by position', async () => {
   for (const profile of fullProfilesFrom(writer)) {
     assert.equal(profile.imageAnalysis?.model, `model-for-${profile.id}`);
   }
+});
+
+test('correlates exact CSV public IDs by LinkedIn identity, not provider order', async () => {
+  const urls = [
+    'https://www.linkedin.com/in/person-a',
+    'https://www.linkedin.com/in/person-b',
+  ];
+  const writer = recordingWriter();
+
+  await runFullProfilePipelineWithDependencies(
+    importedCsvDataFor(urls),
+    recordingLogger(),
+    dependencies({
+      collectProfiles: async () =>
+        apifyCollectionResult([
+          providerProfile(urls[1] ?? ''),
+          providerProfile(urls[0] ?? ''),
+        ]),
+      extractImages: fakeImageExtractor({}),
+      writeJson: writer.writeJson,
+    }),
+    { outputPaths: OUTPUT_PATHS },
+  );
+
+  assert.deepEqual(
+    fullProfilesFrom(writer).map((profile) => ({
+      linkedinUrl: profile.linkedinUrl,
+      linkedHelperPublicId: profile.linkedHelperPublicId,
+    })),
+    [
+      { linkedinUrl: urls[1], linkedHelperPublicId: 'imported-1' },
+      { linkedinUrl: urls[0], linkedHelperPublicId: 'imported-0' },
+    ],
+  );
 });
 
 test('keeps the raw provider payload reachable through the final profile', async () => {

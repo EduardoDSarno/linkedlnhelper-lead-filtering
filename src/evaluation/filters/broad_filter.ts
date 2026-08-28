@@ -82,6 +82,9 @@ export function evaluateBroadCriteria(
 
   return {
     profileId: profile.profileId,
+    ...(profile.linkedHelperPublicId
+      ? { linkedHelperPublicId: profile.linkedHelperPublicId }
+      : {}),
     decision: broadFilterDecision.decision,
     decisionMessage: broadFilterDecision.message,
     results,

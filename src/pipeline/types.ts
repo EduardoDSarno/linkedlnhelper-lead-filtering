@@ -14,7 +14,7 @@ import type {
   ProfileImageJobResult,
 } from '../image_extractor/index.js';
 import type { Logger } from '../logging/index.js';
-import type { FullProfile, Profile } from '../profile/index.js';
+import type { FullProfile } from '../profile/index.js';
 
 /** Tokens billed across a whole run, with every count present. */
 export type ImageTokenUsageTotal = Required<GeminiTokenUsage>;
@@ -54,7 +54,7 @@ export interface ProfileMappingFailure {
 
 /** Successful profiles and isolated failures produced by normalization. */
 export interface ProfileNormalizationOutcome {
-  profiles: Profile[];
+  profiles: FullProfile[];
   failures: ProfileMappingFailure[];
 }
 

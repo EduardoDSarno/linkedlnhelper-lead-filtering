@@ -1,8 +1,10 @@
 import { getLinkedlnProfileDataFromExternalProvidor } from '../data/csvdata.js';
 import type { ImportedCsvData } from '../data/csvdata.js';
+import { linkedinProfileKey } from '../linkedin/index.js';
 import type { Logger } from '../logging/index.js';
 import { mapApifyProfile } from '../mapper/index.js';
-import type { Profile } from '../profile/index.js';
+import { attachLinkedHelperPublicId } from '../profile/index.js';
+import type { FullProfile } from '../profile/index.js';
 import { analyzeProfileImages } from './image_analysis.js';
 import {
   DEFAULT_PIPELINE_DEPENDENCIES,
@@ -40,16 +42,31 @@ function errorMessage(error: unknown): string {
 /** Maps provider records independently so one malformed profile cannot cancel a run. */
 async function normalizeProfiles(
   rawProfiles: readonly Record<string, unknown>[],
+  linkedHelperPublicIds: ReadonlyMap<string, string>,
   logger: Logger,
 ): Promise<ProfileNormalizationOutcome> {
-  const profiles: Profile[] = [];
+  const profiles: FullProfile[] = [];
   const failures: ProfileMappingFailure[] = [];
 
   // Map profiles independently. One malformed provider record is reported and
   // skipped without preventing the remaining records from being processed.
   for (const [providerRecordIndex, rawProfile] of rawProfiles.entries()) {
     try {
-      profiles.push(mapApifyProfile(rawProfile));
+      const profile = mapApifyProfile(rawProfile);
+      const profileKey = linkedinProfileKey(profile.linkedinUrl);
+      const linkedHelperPublicId = profileKey
+        ? linkedHelperPublicIds.get(profileKey)
+        : undefined;
+
+      if (!linkedHelperPublicId) {
+        throw new Error(
+          `Could not correlate ${profile.linkedinUrl} with a Linked Helper public_id.`,
+        );
+      }
+
+      profiles.push(
+        attachLinkedHelperPublicId(profile, linkedHelperPublicId),
+      );
     } catch (error: unknown) {
       const failure = {
         providerRecordIndex,
@@ -61,6 +78,22 @@ async function normalizeProfiles(
   }
 
   return { profiles, failures };
+}
+
+/** Indexes exact CSV public IDs by normalized LinkedIn profile identity. */
+function linkedHelperPublicIdsByProfileKey(
+  importedData: ImportedCsvData,
+): ReadonlyMap<string, string> {
+  const publicIds = new Map<string, string>();
+
+  for (const importedProfile of Object.values(importedData.records)) {
+    const profileKey = linkedinProfileKey(importedProfile.summary.profileUrl);
+    if (!profileKey || publicIds.has(profileKey)) continue;
+
+    publicIds.set(profileKey, importedProfile.summary.publicId);
+  }
+
+  return publicIds;
 }
 
 /** Builds the serializable totals and failure details for one completed run. */
@@ -130,6 +163,8 @@ export async function runFullProfilePipelineWithDependencies(
   const profileLinks = getLinkedlnProfileDataFromExternalProvidor(
     importedData.records,
   );
+  const linkedHelperPublicIds =
+    linkedHelperPublicIdsByProfileKey(importedData);
 
   // Step 2: reject empty and oversized runs before making paid API calls.
   if (profileLinks.length === 0) {
@@ -197,7 +232,11 @@ export async function runFullProfilePipelineWithDependencies(
 
     // Step 5: map each raw Apify object into the small application Profile model
     // used for identity, employment, education, location, and manual review.
-    const normalized = await normalizeProfiles(rawProfiles, logger);
+    const normalized = await normalizeProfiles(
+      rawProfiles,
+      linkedHelperPublicIds,
+      logger,
+    );
     logger.info(
       {
         normalizedProfiles: normalized.profiles.length,

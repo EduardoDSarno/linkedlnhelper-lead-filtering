@@ -181,10 +181,22 @@ test('connects stable full profiles to broad filtering, Gemini, and SQLite', asy
     result.profilePipeline.profiles.map((profile) => profile.id),
     [PROFILE_WITH_PHOTO_ID, PROFILE_WITHOUT_PHOTO_ID],
   );
+  assert.deepEqual(
+    result.profilePipeline.profiles.map(
+      (profile) => profile.linkedHelperPublicId,
+    ),
+    ['imported-0', 'imported-1'],
+  );
   assert.equal(modelCalls, 1);
   assert.equal(result.evaluationRun.id, REVIEW_RUN_ID);
   assert.equal(result.evaluationRun.createdAt, REVIEW_RUN_TIME);
   assert.equal(result.evaluationRun.evaluation.broadFilter.evaluations.length, 2);
+  assert.deepEqual(
+    result.evaluationRun.evaluation.broadFilter.evaluations.map(
+      (evaluation) => evaluation.linkedHelperPublicId,
+    ),
+    ['imported-0', 'imported-1'],
+  );
   assert.deepEqual(
     result.evaluationRun.evaluation.broadFilter.profilesForAi.map(
       (profile) => profile.profileId,
@@ -195,6 +207,11 @@ test('connects stable full profiles to broad filtering, Gemini, and SQLite', asy
     result.evaluationRun.evaluation.modelEvaluation.evaluations[0]
       ?.compensationRangeMatch?.outcome,
     'matched',
+  );
+  assert.equal(
+    result.evaluationRun.evaluation.modelEvaluation.evaluations[0]
+      ?.linkedHelperPublicId,
+    'imported-0',
   );
   assert.deepEqual(storedRun, result.evaluationRun);
 

@@ -13,6 +13,7 @@ test('builds a compact AI evaluation payload without exposing the raw profile', 
   };
   const fullProfile: FullProfile = {
     id: 'profile-1',
+    linkedHelperPublicId: 'example-profile',
     linkedinUrl: 'https://www.linkedin.com/in/example-profile',
     headline: 'Customer Success Manager',
     openToWork: false,
@@ -83,6 +84,7 @@ test('builds a compact AI evaluation payload without exposing the raw profile', 
   assert.equal(context.criteria, criteria);
   assert.deepEqual(context.profile, {
     profileId: 'profile-1',
+    linkedHelperPublicId: 'example-profile',
     headline: 'Customer Success Manager',
     location: fullProfile.location,
     openToWork: false,

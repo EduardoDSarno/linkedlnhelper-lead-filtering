@@ -15,6 +15,7 @@ export interface BroadCriterionResult {
 /** The direct evaluation results and next action for one compact profile. */
 export interface ProfileBroadEvaluation {
   readonly profileId: string;
+  readonly linkedHelperPublicId?: string;
   readonly decision: BroadEvaluationDecision;
   readonly decisionMessage: string;
   readonly results: readonly BroadCriterionResult[];

@@ -217,10 +217,28 @@ async function evaluateProfileGroup(
           : evaluations.map((evaluation) =>
               attachCompensationRangeMatch(evaluation, desiredCompensation),
             );
+      const publicIdsByProfileId = new Map(
+        profiles.map((profile) => [
+          profile.profileId,
+          profile.linkedHelperPublicId,
+        ]),
+      );
+      const correlatedEvaluations = evaluationsWithCompensation.map(
+        (evaluation): ProfileModelEvaluation => {
+          const linkedHelperPublicId = publicIdsByProfileId.get(
+            evaluation.profileId,
+          );
+
+          return {
+            ...evaluation,
+            ...(linkedHelperPublicId ? { linkedHelperPublicId } : {}),
+          };
+        },
+      );
 
       return {
         status: 'fulfilled',
-        evaluations: evaluationsWithCompensation,
+        evaluations: correlatedEvaluations,
         tokenUsage,
       };
     } catch (error: unknown) {

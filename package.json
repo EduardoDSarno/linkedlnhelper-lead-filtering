@@ -28,6 +28,7 @@
     "apify-client": "^2.25.0",
     "csv-parse": "^7.0.2",
     "dotenv": "^17.4.2",
+    "fastify": "^5.12.1",
     "pino": "^10.3.1"
   },
   "engines": {
