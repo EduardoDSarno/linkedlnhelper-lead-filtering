@@ -108,7 +108,7 @@ test('processes a mixed run and reconciles every total', async () => {
   const writer = recordingWriter();
   const logger = recordingLogger();
 
-  const summary = await runFullProfilePipelineWithDependencies(
+  const { summary } = await runFullProfilePipelineWithDependencies(
     importedCsvDataFor(urls),
     logger,
     dependencies({
@@ -256,7 +256,7 @@ test('keeps the raw provider payload reachable through the final profile', async
   );
 });
 
-test('writes the database-stable ID into the full-profile artifact', async () => {
+test('returns and writes profiles with their database-stable IDs', async () => {
   const url = 'https://www.linkedin.com/in/person-a';
   const db = openDatabase(':memory:');
   const writer = recordingWriter();
@@ -274,7 +274,7 @@ test('writes the database-stable ID into the full-profile artifact', async () =>
     db,
   );
 
-  await runFullProfilePipelineWithDependencies(
+  const result = await runFullProfilePipelineWithDependencies(
     importedCsvDataFor([url]),
     recordingLogger(),
     dependencies({
@@ -293,6 +293,7 @@ test('writes the database-stable ID into the full-profile artifact', async () =>
   );
 
   assert.equal(insertedProfiles[0]?.id, stableId);
+  assert.equal(result.profiles[0]?.id, stableId);
   assert.equal(fullProfilesFrom(writer)[0]?.id, stableId);
   assert.equal(db.isOpen, false);
 });
@@ -333,7 +334,7 @@ test('totals token usage across successful and failed images', async () => {
     'https://www.linkedin.com/in/person-b',
   ];
 
-  const summary = await runFullProfilePipelineWithDependencies(
+  const { summary } = await runFullProfilePipelineWithDependencies(
     importedCsvDataFor(urls),
     recordingLogger(),
     dependencies({
@@ -380,7 +381,7 @@ test('totals token usage across successful and failed images', async () => {
 test('reports zero token usage when nothing reported any', async () => {
   const url = 'https://www.linkedin.com/in/person-a';
 
-  const summary = await runFullProfilePipelineWithDependencies(
+  const { summary } = await runFullProfilePipelineWithDependencies(
     importedCsvDataFor([url]),
     recordingLogger(),
     dependencies({
@@ -467,7 +468,7 @@ test('writes raw profiles and provider failures as separate artifacts', async ()
 test('uses the injected clock for both timestamps and the duration', async () => {
   const url = 'https://www.linkedin.com/in/person-a';
 
-  const summary = await runFullProfilePipelineWithDependencies(
+  const { summary } = await runFullProfilePipelineWithDependencies(
     importedCsvDataFor([url]),
     recordingLogger(),
     dependencies({
@@ -488,7 +489,7 @@ test('uses the injected clock for both timestamps and the duration', async () =>
 test('reports the configured output paths in the summary', async () => {
   const url = 'https://www.linkedin.com/in/person-a';
 
-  const summary = await runFullProfilePipelineWithDependencies(
+  const { summary } = await runFullProfilePipelineWithDependencies(
     importedCsvDataFor([url]),
     recordingLogger(),
     dependencies({
@@ -559,7 +560,7 @@ test('analyzes no images when no profile has a photo', async () => {
   const writer = recordingWriter();
   let analyzerCalls = 0;
 
-  const summary = await runFullProfilePipelineWithDependencies(
+  const { summary } = await runFullProfilePipelineWithDependencies(
     importedCsvDataFor(urls),
     recordingLogger(),
     dependencies({
@@ -590,7 +591,7 @@ test('keeps every profile when all image analyses fail', async () => {
   ];
   const writer = recordingWriter();
 
-  const summary = await runFullProfilePipelineWithDependencies(
+  const { summary } = await runFullProfilePipelineWithDependencies(
     importedCsvDataFor(urls),
     recordingLogger(),
     dependencies({

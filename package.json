@@ -7,6 +7,7 @@
     "start": "tsx src/index.ts",
     "collect": "tsx src/index.ts --collect",
     "collect:apify": "tsx src/index.ts --collect-apify",
+    "review": "tsx src/index.ts --review",
     "benchmark:apify": "tsx src/benchmark/apify_profile_collector/index.ts",
     "test": "npm run typecheck && npm run test:unit",
     "typecheck": "tsc --noEmit --noUnusedLocals --noUnusedParameters",

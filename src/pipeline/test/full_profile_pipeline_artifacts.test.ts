@@ -79,7 +79,7 @@ test('writes real artifacts that survive a JSON round trip', async () => {
       attempts: 1,
     };
 
-    const summary = await runFullProfilePipelineWithDependencies(
+    const { summary } = await runFullProfilePipelineWithDependencies(
       importedCsvDataFor(urls),
       recordingLogger(),
       {

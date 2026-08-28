@@ -5,6 +5,8 @@ import type {
   ApifyCollectionStats,
   ApifyProfileFailure,
 } from '../data/apify_profile_collector/index.js';
+import type { StoredEvaluationRun } from '../database/types.js';
+import type { ModelEvaluationOptions } from '../evaluation/index.js';
 import type {
   GeminiTokenUsage,
   ProfileImageBatchOptions,
@@ -108,6 +110,36 @@ export interface FullProfilePipelineSummary {
   /** Includes usage from failed responses because Gemini may still bill them. */
   imageTokenUsage: ImageTokenUsageTotal;
   outputs: FullProfilePipelineOutputPaths;
+}
+
+/** Profiles produced by a run together with its operational summary. */
+export interface FullProfilePipelineResult {
+  summary: FullProfilePipelineSummary;
+  profiles: FullProfile[];
+}
+
+/** Runtime overrides passed to the two stages coordinated by a review run. */
+export interface ReviewPipelineOptions {
+  profilePipeline?: FullProfilePipelineOptions;
+  modelEvaluation?: ModelEvaluationOptions;
+}
+
+/** External boundaries replaced by deterministic review-pipeline tests. */
+export interface ReviewPipelineDependencies {
+  profilePipeline: FullProfilePipelineDependencies;
+  openDatabase: () => DatabaseSync;
+  insertEvaluationRun: (
+    run: StoredEvaluationRun,
+    db: DatabaseSync,
+  ) => StoredEvaluationRun;
+  createRunId: () => string;
+  now: () => Date;
+}
+
+/** Complete acquisition and evaluation result returned to a future interface. */
+export interface ReviewPipelineResult {
+  profilePipeline: FullProfilePipelineResult;
+  evaluationRun: StoredEvaluationRun;
 }
 
 /** Stage results needed to build the serializable pipeline summary. */

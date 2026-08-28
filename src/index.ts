@@ -4,11 +4,20 @@ import 'dotenv/config';
 import { randomUUID } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 
+import {
+  APPLICATION_MODE,
+  APPLICATION_USAGE,
+  parseApplicationArguments,
+} from './cli/arguments.js';
 import { loadProfilesFromCsv } from './data/csvdata.js';
 import type { ImportedCsvData } from './data/csvdata.js';
+import { loadFullEvaluationCriteria } from './evaluation/index.js';
 import { createFileLogger } from './logging/index.js';
 import type { Logger } from './logging/index.js';
-import { runFullProfilePipeline } from './pipeline/index.js';
+import {
+  runFullProfilePipeline,
+  runReviewPipeline,
+} from './pipeline/index.js';
 
 // Resolved at startup, after dotenv has loaded; blank means absent.
 const LOG_PATH = process.env['LOG_PATH']?.trim() || 'output/pipeline.log';
@@ -17,22 +26,6 @@ const IMPORTED_CSV_OUTPUT_PATH = 'output/imported-csv-profiles.json';
 /** Converts an unknown application failure into a log-safe message. */
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
-}
-
-/** Determines whether the selected CLI mode should contact profile providers. */
-function shouldCollectProfiles(arguments_: readonly string[]): boolean {
-  return (
-    arguments_.includes('--collect') ||
-    arguments_.includes('--collect-apify')
-  );
-}
-
-/** Finds the CSV path while excluding the supported mode flags. */
-function csvPathFromArguments(arguments_: readonly string[]): string | undefined {
-  return arguments_.find(
-    (argument) =>
-      argument !== '--collect' && argument !== '--collect-apify',
-  );
 }
 
 /** Writes the normalized CSV-only import for the non-provider CLI mode. */
@@ -54,22 +47,27 @@ async function saveImportedCsvData(importedData: ImportedCsvData): Promise<void>
  * Complete Apify + image-analysis pipeline:
  *   npm run collect -- "test_data/profiles.csv"
  *   npm run collect:apify -- "test_data/profiles.csv"
+ *
+ * Complete collection + evaluation pipeline:
+ *   npm run review -- "test_data/profiles.csv" "criteria.json"
  */
 export async function main(logger: Logger): Promise<void> {
-  const commandLineArguments = process.argv.slice(2);
-  const csvPath = csvPathFromArguments(commandLineArguments);
-
-  if (!csvPath) {
+  let applicationArguments;
+  try {
+    applicationArguments = parseApplicationArguments(process.argv.slice(2));
+  } catch (error: unknown) {
     logger.error(
       {
-        usage: 'npm run collect -- <path-to-csv>',
+        error: errorMessage(error),
+        usage: Object.values(APPLICATION_USAGE),
       },
-      'CSV path is required.',
+      'Invalid command-line arguments.',
     );
     process.exitCode = 1;
     return;
   }
 
+  const { csvPath } = applicationArguments;
   logger.info({ csvPath }, 'Loading Linked Helper CSV.');
   const importedData = await loadProfilesFromCsv(csvPath);
 
@@ -82,7 +80,7 @@ export async function main(logger: Logger): Promise<void> {
     'Imported Linked Helper CSV.',
   );
 
-  if (!shouldCollectProfiles(commandLineArguments)) {
+  if (applicationArguments.mode === APPLICATION_MODE.importCsv) {
     await saveImportedCsvData(importedData);
     logger.info(
       {
@@ -94,7 +92,23 @@ export async function main(logger: Logger): Promise<void> {
     return;
   }
 
-  await runFullProfilePipeline(importedData, logger);
+  if (applicationArguments.mode === APPLICATION_MODE.collectProfiles) {
+    await runFullProfilePipeline(importedData, logger);
+    return;
+  }
+
+  const criteria = await loadFullEvaluationCriteria(
+    applicationArguments.criteriaPath,
+  );
+  const result = await runReviewPipeline(importedData, criteria, logger);
+  logger.info(
+    {
+      evaluationRunId: result.evaluationRun.id,
+      evaluatedProfiles:
+        result.evaluationRun.evaluation.broadFilter.evaluations.length,
+    },
+    'Review results are available in SQLite.',
+  );
 }
 
 /** Creates the run logger and guarantees its transport is closed on shutdown. */

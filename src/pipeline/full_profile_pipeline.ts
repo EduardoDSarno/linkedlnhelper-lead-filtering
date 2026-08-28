@@ -12,6 +12,7 @@ import {
 import type {
   FullProfilePipelineDependencies,
   FullProfilePipelineOptions,
+  FullProfilePipelineResult,
   FullProfilePipelineSummary,
   FullProfilePipelineSummaryInput,
   ProfileMappingFailure,
@@ -26,6 +27,7 @@ export type {
   FullProfilePipelineDependencies,
   FullProfilePipelineOptions,
   FullProfilePipelineOutputPaths,
+  FullProfilePipelineResult,
   FullProfilePipelineSummary,
 } from './types.js';
 
@@ -97,7 +99,7 @@ export function createFullProfilePipelineSummary({
 export async function runFullProfilePipeline(
   importedData: ImportedCsvData,
   logger: Logger,
-): Promise<FullProfilePipelineSummary> {
+): Promise<FullProfilePipelineResult> {
   return runFullProfilePipelineWithDependencies(
     importedData,
     logger,
@@ -118,7 +120,7 @@ export async function runFullProfilePipelineWithDependencies(
   logger: Logger,
   dependencies: FullProfilePipelineDependencies = DEFAULT_PIPELINE_DEPENDENCIES,
   options: FullProfilePipelineOptions = {},
-): Promise<FullProfilePipelineSummary> {
+): Promise<FullProfilePipelineResult> {
   const outputPaths = options.outputPaths ?? DEFAULT_PIPELINE_OUTPUT_PATHS;
 
   // Step 1: record the start time and extract the deduplicated LinkedIn URLs
@@ -245,7 +247,7 @@ export async function runFullProfilePipelineWithDependencies(
       'Completed full-profile pipeline.',
     );
 
-    return summary;
+    return { summary, profiles: fullProfiles };
   } finally {
     db.close();
   }

@@ -1,5 +1,11 @@
+import { randomUUID } from 'node:crypto';
+
 import { collectApifyProfiles } from '../data/apify_profile_collector/index.js';
-import { dbInsertProfile, openDatabase } from '../database/index.js';
+import {
+  dbInsertEvaluationRun,
+  dbInsertProfile,
+  openDatabase,
+} from '../database/index.js';
 import {
   CONFIG_NUMBER_MINIMUMS,
   resolveConfigNumber,
@@ -52,6 +58,11 @@ function currentPipelineTime(): Date {
   return new Date();
 }
 
+/** Creates an application-owned identity for one persisted evaluation run. */
+function createReviewRunId(): string {
+  return randomUUID();
+}
+
 /** Production implementations for every external boundary used by the pipeline. */
 export const DEFAULT_PIPELINE_DEPENDENCIES = {
   collectProfiles: collectApifyProfiles,
@@ -59,5 +70,14 @@ export const DEFAULT_PIPELINE_DEPENDENCIES = {
   writeJson: writeJsonAtomically,
   openDatabase,
   insertProfile: dbInsertProfile,
+  now: currentPipelineTime,
+};
+
+/** Production boundaries used by the complete CSV-to-evaluation workflow. */
+export const DEFAULT_REVIEW_PIPELINE_DEPENDENCIES = {
+  profilePipeline: DEFAULT_PIPELINE_DEPENDENCIES,
+  openDatabase,
+  insertEvaluationRun: dbInsertEvaluationRun,
+  createRunId: createReviewRunId,
   now: currentPipelineTime,
 };
