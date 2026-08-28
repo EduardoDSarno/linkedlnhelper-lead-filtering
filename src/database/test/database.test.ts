@@ -3,11 +3,15 @@ import test from 'node:test';
 
 import {
   dbDeleteProfile,
+  dbGetEvaluationRunById,
   dbGetProfileById,
+  dbInsertEvaluationRun,
   dbInsertProfile,
+  dbListEvaluationRuns,
   dbListProfiles,
   openDatabase,
 } from '../index.js';
+import type { StoredEvaluationRun } from '../index.js';
 import type { FullProfile } from '../../profile/index.js';
 
 /** Builds the minimum complete profile needed by database tests. */
@@ -23,6 +27,38 @@ function profile(
     experience: [],
     education: [],
     raw: { linkedinUrl },
+  };
+}
+
+/** Builds one compact evaluation run for persistence tests. */
+function evaluationRun(
+  id: string,
+  createdAt: string,
+  systemPrompt: string,
+): StoredEvaluationRun {
+  return {
+    id,
+    createdAt,
+    criteria: { systemPrompt },
+    evaluation: {
+      broadFilter: {
+        profilesForAi: [],
+        evaluations: [],
+      },
+      modelEvaluation: {
+        requestedProfiles: 0,
+        successfulProfiles: 0,
+        failedProfiles: 0,
+        evaluations: [],
+        failures: [],
+        tokenUsage: {
+          promptTokens: 0,
+          outputTokens: 0,
+          thinkingTokens: 0,
+          totalTokens: 0,
+        },
+      },
+    },
   };
 }
 
@@ -130,6 +166,48 @@ test('lists all profiles in their original insertion order', () => {
     );
 
     assert.deepEqual(dbListProfiles(db), [first, second]);
+  } finally {
+    db.close();
+  }
+});
+
+test('stores and retrieves a complete evaluation run', () => {
+  const db = openDatabase(':memory:');
+
+  try {
+    const run = evaluationRun(
+      'evaluation-run-id',
+      '2026-08-27T10:00:00.000Z',
+      'Evaluate the supplied campaign profiles.',
+    );
+
+    assert.deepEqual(dbInsertEvaluationRun(run, db), run);
+    assert.deepEqual(dbGetEvaluationRunById(run.id, db), run);
+    assert.equal(dbGetEvaluationRunById('missing-run-id', db), undefined);
+  } finally {
+    db.close();
+  }
+});
+
+test('preserves evaluation history and lists the newest run first', () => {
+  const db = openDatabase(':memory:');
+
+  try {
+    const older = evaluationRun(
+      'older-run',
+      '2026-08-26T10:00:00.000Z',
+      'Use the earlier campaign criteria.',
+    );
+    const newer = evaluationRun(
+      'newer-run',
+      '2026-08-27T10:00:00.000Z',
+      'Use the later campaign criteria.',
+    );
+
+    dbInsertEvaluationRun(older, db);
+    dbInsertEvaluationRun(newer, db);
+
+    assert.deepEqual(dbListEvaluationRuns(db), [newer, older]);
   } finally {
     db.close();
   }

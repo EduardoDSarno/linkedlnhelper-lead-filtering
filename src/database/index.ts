@@ -4,6 +4,9 @@ import { DatabaseSync } from 'node:sqlite';
 
 import { linkedinProfileKey } from '../linkedin/index.js';
 import type { FullProfile } from '../profile/index.js';
+import type { StoredEvaluationRun } from './types.js';
+
+export type { StoredEvaluationRun } from './types.js';
 
 const DEFAULT_DATABASE_PATH = 'data/application.sqlite';
 const DATABASE_PATH_ENVIRONMENT_KEY = 'DATABASE_PATH';
@@ -22,6 +25,7 @@ export function defaultDatabasePath(
   );
 }
 const PROFILE_TABLE_NAME = 'profiles';
+const EVALUATION_RUN_TABLE_NAME = 'evaluation_runs';
 
 /** Creates the tables required by the current MVP. */
 export function initializeDatabase(db: DatabaseSync): void {
@@ -33,6 +37,13 @@ export function initializeDatabase(db: DatabaseSync): void {
       profile_json TEXT NOT NULL CHECK (json_valid(profile_json)),
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS ${EVALUATION_RUN_TABLE_NAME} (
+      id TEXT PRIMARY KEY NOT NULL,
+      criteria_json TEXT NOT NULL CHECK (json_valid(criteria_json)),
+      evaluation_json TEXT NOT NULL CHECK (json_valid(evaluation_json)),
+      created_at TEXT NOT NULL
     );
   `);
 }
@@ -148,4 +159,85 @@ export function dbDeleteProfile(
     .run(profile.id);
 
   return result.changes > 0;
+}
+
+/** Stores one completed evaluation batch without duplicating full profiles. */
+export function dbInsertEvaluationRun(
+  run: StoredEvaluationRun,
+  db: DatabaseSync,
+): StoredEvaluationRun {
+  db.prepare(`
+    INSERT INTO ${EVALUATION_RUN_TABLE_NAME} (
+      id,
+      criteria_json,
+      evaluation_json,
+      created_at
+    )
+    VALUES (?, ?, ?, ?)
+  `).run(
+    run.id,
+    JSON.stringify(run.criteria),
+    JSON.stringify(run.evaluation),
+    run.createdAt,
+  );
+
+  return run;
+}
+
+/** Converts one database row into the application evaluation-run shape. */
+function evaluationRunFromRow(row: {
+  id: string;
+  criteria_json: string;
+  evaluation_json: string;
+  created_at: string;
+}): StoredEvaluationRun {
+  return {
+    id: row.id,
+    createdAt: row.created_at,
+    criteria: JSON.parse(row.criteria_json) as StoredEvaluationRun['criteria'],
+    evaluation: JSON.parse(
+      row.evaluation_json,
+    ) as StoredEvaluationRun['evaluation'],
+  };
+}
+
+/** Retrieves one stored evaluation run by its application-owned ID. */
+export function dbGetEvaluationRunById(
+  id: string,
+  db: DatabaseSync,
+): StoredEvaluationRun | undefined {
+  const row = db
+    .prepare(`
+      SELECT id, criteria_json, evaluation_json, created_at
+      FROM ${EVALUATION_RUN_TABLE_NAME}
+      WHERE id = ?
+    `)
+    .get(id) as
+    | {
+        id: string;
+        criteria_json: string;
+        evaluation_json: string;
+        created_at: string;
+      }
+    | undefined;
+
+  return row ? evaluationRunFromRow(row) : undefined;
+}
+
+/** Lists stored evaluation runs from newest creation time to oldest. */
+export function dbListEvaluationRuns(db: DatabaseSync): StoredEvaluationRun[] {
+  const rows = db
+    .prepare(`
+      SELECT id, criteria_json, evaluation_json, created_at
+      FROM ${EVALUATION_RUN_TABLE_NAME}
+      ORDER BY created_at DESC, rowid DESC
+    `)
+    .all() as Array<{
+    id: string;
+    criteria_json: string;
+    evaluation_json: string;
+    created_at: string;
+  }>;
+
+  return rows.map(evaluationRunFromRow);
 }
