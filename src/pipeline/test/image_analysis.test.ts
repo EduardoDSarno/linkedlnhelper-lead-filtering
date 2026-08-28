@@ -293,10 +293,10 @@ test('prefers an explicit concurrency over the environment', async () => {
   });
 });
 
-test('logs the stage start, each failure, and the stage total', async () => {
+test('logs stage totals and returns failures for stable profile logging', async () => {
   const logger = recordingLogger();
 
-  await analyzeProfileImages(
+  const result = await analyzeProfileImages(
     [
       profile('a', 'https://example.invalid/a.jpg'),
       profile('b', 'https://example.invalid/b.jpg'),
@@ -323,14 +323,9 @@ test('logs the stage start, each failure, and the stage total', async () => {
   const messages = logger.entries.map((entry) => entry.message);
   assert.ok(messages.includes('Starting profile image analysis.'));
   assert.ok(messages.includes('Completed profile image analysis.'));
-
-  // Every failure gets its own warning so an operator can see which profile.
-  const warnings = logger.entries.filter((entry) => entry.level === 'warn');
-  assert.equal(warnings.length, 1);
-  assert.equal(
-    (warnings[0]?.payload as { profileId: string }).profileId,
-    'b',
-  );
+  assert.deepEqual(result.failures, [
+    { profileId: 'b', error: 'Gemini is unavailable.' },
+  ]);
 });
 
 test('totalImageTokenUsage sums both result branches', () => {

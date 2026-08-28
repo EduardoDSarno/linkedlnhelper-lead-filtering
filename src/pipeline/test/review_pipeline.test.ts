@@ -19,6 +19,7 @@ import {
   recordingWriter,
   steppingClock,
 } from '../../test_support/pipeline_fakes.js';
+import type { RecordingLogger } from '../../test_support/pipeline_fakes.js';
 import { runReviewPipelineWithDependencies } from '../review_pipeline.js';
 import type {
   FullProfilePipelineDependencies,
@@ -29,6 +30,16 @@ const PROFILE_WITH_PHOTO_ID = 'stable-profile-with-photo';
 const PROFILE_WITHOUT_PHOTO_ID = 'stable-profile-without-photo';
 const REVIEW_RUN_ID = 'review-run-id';
 const REVIEW_RUN_TIME = '2026-08-27T12:00:00.000Z';
+
+/** Reads object payloads recorded for one exact log message. */
+function payloadsFor(
+  logger: RecordingLogger,
+  message: string,
+): Array<Record<string, unknown>> {
+  return logger.entries
+    .filter((entry) => entry.message === message)
+    .map((entry) => entry.payload as Record<string, unknown>);
+}
 
 /** Builds campaign criteria that exercise broad filtering and model approval. */
 function criteria(): FullEvaluationCriteria {
@@ -144,11 +155,12 @@ test('connects stable full profiles to broad filtering, Gemini, and SQLite', asy
   ];
   let storedRun: StoredEvaluationRun | undefined;
   let modelCalls = 0;
+  const logger = recordingLogger();
 
   const result = await runReviewPipelineWithDependencies(
     importedCsvDataFor(urls),
     criteria(),
-    recordingLogger(),
+    logger,
     reviewDependencies(profilePipelineDependencies(), (run) => {
       storedRun = run;
     }),
@@ -182,10 +194,47 @@ test('connects stable full profiles to broad filtering, Gemini, and SQLite', asy
     'matched',
   );
   assert.deepEqual(storedRun, result.evaluationRun);
+
+  const imageLogs = payloadsFor(logger, 'Profile image analysis outcome.');
+  assert.equal(imageLogs.length, 2);
+  assert.deepEqual(
+    imageLogs.map(({ profileId, linkedinUrl, status }) => ({
+      profileId,
+      linkedinUrl,
+      status,
+    })),
+    [
+      {
+        profileId: PROFILE_WITH_PHOTO_ID,
+        linkedinUrl: urls[0],
+        status: 'succeeded',
+      },
+      {
+        profileId: PROFILE_WITHOUT_PHOTO_ID,
+        linkedinUrl: urls[1],
+        status: 'skipped_missing_photo',
+      },
+    ],
+  );
+
+  const broadLogs = payloadsFor(logger, 'Broad-filter profile decision.');
+  assert.equal(broadLogs.length, 2);
+  assert.equal(broadLogs[1]?.['profileId'], PROFILE_WITHOUT_PHOTO_ID);
+  assert.equal(broadLogs[1]?.['linkedinUrl'], urls[1]);
+  assert.equal(broadLogs[1]?.['decision'], 'Failed');
+  assert.match(String(broadLogs[1]?.['reason']), /No profile photo/);
+
+  const modelLogs = payloadsFor(logger, 'Gemini profile decision.');
+  assert.equal(modelLogs.length, 1);
+  assert.equal(modelLogs[0]?.['profileId'], PROFILE_WITH_PHOTO_ID);
+  assert.equal(modelLogs[0]?.['linkedinUrl'], urls[0]);
+  assert.equal(modelLogs[0]?.['decision'], 'approved');
+  assert.equal(modelLogs[0]?.['matchPercent'], 85);
 });
 
 test('persists isolated model failures as a completed review run', async () => {
   let storedRun: StoredEvaluationRun | undefined;
+  const logger = recordingLogger();
 
   const result = await runReviewPipelineWithDependencies(
     importedCsvDataFor([
@@ -193,7 +242,7 @@ test('persists isolated model failures as a completed review run', async () => {
       'https://linkedin.com/in/profile-without-photo',
     ]),
     criteria(),
-    recordingLogger(),
+    logger,
     reviewDependencies(profilePipelineDependencies(), (run) => {
       storedRun = run;
     }),
@@ -208,6 +257,18 @@ test('persists isolated model failures as a completed review run', async () => {
   assert.equal(result.evaluationRun.evaluation.modelEvaluation.failedProfiles, 1);
   assert.equal(result.evaluationRun.evaluation.modelEvaluation.failures.length, 1);
   assert.deepEqual(storedRun, result.evaluationRun);
+
+  const failureLogs = payloadsFor(
+    logger,
+    'Gemini profile evaluation failed.',
+  );
+  assert.equal(failureLogs.length, 1);
+  assert.equal(failureLogs[0]?.['profileId'], PROFILE_WITH_PHOTO_ID);
+  assert.equal(
+    failureLogs[0]?.['linkedinUrl'],
+    'https://linkedin.com/in/profile-with-photo',
+  );
+  assert.match(String(failureLogs[0]?.['reason']), /valid JSON/);
 });
 
 test('does not create an evaluation run when profile acquisition fails', async () => {

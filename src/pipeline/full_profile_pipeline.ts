@@ -9,6 +9,7 @@ import {
   DEFAULT_PIPELINE_OUTPUT_PATHS,
   maxPipelineProfilesFromEnvironment,
 } from './config.js';
+import { logProfileImageOutcomes } from './profile_decision_logging.js';
 import type {
   FullProfilePipelineDependencies,
   FullProfilePipelineOptions,
@@ -220,6 +221,7 @@ export async function runFullProfilePipelineWithDependencies(
     const fullProfiles = imageAnalysis.fullProfiles.map((profile) =>
       dependencies.insertProfile(profile, db),
     );
+    logProfileImageOutcomes(logger, fullProfiles, imageAnalysis);
     await dependencies.writeJson(outputPaths.fullProfiles, fullProfiles);
 
     // Step 10: build operational totals and failure details for this exact run.

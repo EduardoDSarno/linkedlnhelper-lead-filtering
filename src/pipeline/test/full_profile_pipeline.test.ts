@@ -150,6 +150,24 @@ test('processes a mixed run and reconciles every total', async () => {
   assert.equal(summary.fullProfilesWritten, 3);
   assert.equal(summary.providerFailures.length, 1);
 
+  const imageLogs = logger.entries.filter(
+    (entry) => entry.message === 'Profile image analysis outcome.',
+  );
+  assert.equal(imageLogs.length, 3);
+  const failedImageLog = imageLogs.find(
+    (entry) =>
+      (entry.payload as Record<string, unknown>)['status'] === 'failed',
+  );
+  assert.ok(failedImageLog);
+  assert.equal(
+    (failedImageLog.payload as Record<string, unknown>)['linkedinUrl'],
+    urls[1],
+  );
+  assert.match(
+    String((failedImageLog.payload as Record<string, unknown>)['reason']),
+    /SAFETY/,
+  );
+
   // Every profile that mapped survives to the output, including the one whose
   // image failed and the one that never had a photo.
   assert.equal(

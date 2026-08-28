@@ -7,6 +7,10 @@ import {
 import type { Logger } from '../logging/index.js';
 import { DEFAULT_REVIEW_PIPELINE_DEPENDENCIES } from './config.js';
 import { runFullProfilePipelineWithDependencies } from './full_profile_pipeline.js';
+import {
+  logBroadFilterDecisions,
+  logModelDecisions,
+} from './profile_decision_logging.js';
 import type {
   ReviewPipelineDependencies,
   ReviewPipelineOptions,
@@ -65,6 +69,18 @@ export async function runReviewPipelineWithDependencies(
     criteria,
     evaluation,
   };
+  logBroadFilterDecisions(
+    logger,
+    profilePipeline.profiles,
+    evaluationRun.id,
+    evaluation,
+  );
+  logModelDecisions(
+    logger,
+    profilePipeline.profiles,
+    evaluationRun.id,
+    evaluation,
+  );
   const db = dependencies.openDatabase();
 
   try {

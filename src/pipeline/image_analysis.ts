@@ -148,7 +148,7 @@ export async function analyzeProfileImages(
   );
 
   // Convert rejected image jobs into a compact, serializable failure list for
-  // logs and the final pipeline summary.
+  // the final summary and the pipeline's stable per-profile log entries.
   const failures = imageResults
     .filter((result) => result.status === 'rejected')
     .map((result) => ({
@@ -156,10 +156,6 @@ export async function analyzeProfileImages(
       error: result.error,
       ...(result.usage ? { usage: result.usage } : {}),
     }));
-
-  for (const failure of failures) {
-    logger.warn(failure, 'Profile image analysis failed.');
-  }
 
   const successfulImageAnalyses = imageResults.length - failures.length;
   logger.info(
