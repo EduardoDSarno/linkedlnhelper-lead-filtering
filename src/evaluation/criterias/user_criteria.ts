@@ -37,21 +37,13 @@ export interface AgeCriteria {
   maximumAge?: number;
 }
 
-/** An estimated monthly-income range used by the later AI evaluation. */
-export interface EstimatedIncomeCriteria {
-  minimumMonthlyIncome?: number;
-  maximumMonthlyIncome?: number;
+/** Desired total monthly professional-compensation range for the campaign. */
+export interface DesiredMonthlyCompensationCriteria {
+  minimumMonthlyCompensation?: number;
+  maximumMonthlyCompensation?: number;
 }
 
-/** An age-specific estimated-income range used by the later AI evaluation. */
-export interface AgeIncomeBandCriteria {
-  minimumAge?: number;
-  maximumAge?: number;
-  minimumMonthlyIncome?: number;
-  maximumMonthlyIncome?: number;
-}
-
-/** An estimated net-worth range used by the later AI evaluation. */
+/** A retained net-worth range that the current evaluator deliberately ignores. */
 export interface NetWorthCriteria {
   minimumNetWorth?: number;
   maximumNetWorth?: number;
@@ -79,15 +71,14 @@ export interface ModelApprovalCriteria {
  * Campaign settings for the first pass plus prompts and ranges for later AI.
  *
  * The broad filter only applies hard excludes from location, reject-list
- * keywords, age, photo, and open-to-work. Money ranges and model approval
- * stay here for Gemini.
+ * keywords, age, photo, and open-to-work. Gemini estimates compensation, and
+ * application code compares that estimate with the desired campaign range.
  */
 export interface FullEvaluationCriteria {
   location?: LocationCriteria;
   keywordLists?: KeywordList[];
   age?: AgeCriteria;
-  estimatedIncome?: EstimatedIncomeCriteria;
-  ageIncomeBands?: AgeIncomeBandCriteria[];
+  desiredMonthlyCompensation?: DesiredMonthlyCompensationCriteria;
   netWorth?: NetWorthCriteria;
   modelApproval?: ModelApprovalCriteria;
   /**

@@ -2,11 +2,16 @@ export {
   MODEL_APPROVAL_PERCENT,
 } from './user_criteria.js';
 
+export {
+  EvaluationCriteriaFileError,
+  loadFullEvaluationCriteria,
+  parseFullEvaluationCriteria,
+} from './criteria_file.js';
+
 export type {
   AgeCriteria,
-  AgeIncomeBandCriteria,
   CriteriaMatch,
-  EstimatedIncomeCriteria,
+  DesiredMonthlyCompensationCriteria,
   FullEvaluationCriteria,
   KeywordList,
   LocationCriteria,

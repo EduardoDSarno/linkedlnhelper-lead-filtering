@@ -54,12 +54,12 @@ function profile(): EvaluationProfileData {
   };
 }
 
-test('sends apparent age, location, and campaign age to the model', () => {
+test('sends profile evidence while keeping desired compensation out of the prompt', () => {
   const criteria: FullEvaluationCriteria = {
     age: { minimumAge: 30, maximumAge: 40 },
-    estimatedIncome: {
-      minimumMonthlyIncome: 8_000,
-      maximumMonthlyIncome: 20_000,
+    desiredMonthlyCompensation: {
+      minimumMonthlyCompensation: 8_000,
+      maximumMonthlyCompensation: 20_000,
     },
     location: {
       locations: ['Goiás'],
@@ -73,17 +73,21 @@ test('sends apparent age, location, and campaign age to the model', () => {
   const prompt = buildModelEvaluationPrompt(criteria, [profile()]);
 
   assert.match(prompt.systemInstruction, /apparent age/);
-  assert.match(prompt.systemInstruction, /estimatedSalary/);
+  assert.match(
+    prompt.systemInstruction,
+    /estimatedTotalMonthlyCompensation/,
+  );
+  assert.match(prompt.systemInstruction, /insufficient_evidence/);
   assert.doesNotMatch(prompt.systemInstruction, /Do not use or infer age/);
   assert.match(prompt.userContent, /"bracket":"35_44"/);
   assert.match(prompt.userContent, /"state":"Goiás"/);
   assert.match(prompt.userContent, /"minimumAge":30/);
-  assert.match(prompt.userContent, /"minimumMonthlyIncome":8000/);
+  assert.doesNotMatch(prompt.userContent, /minimumMonthlyCompensation/);
   assert.match(prompt.systemInstruction, /Do not estimate or use net worth/);
   assert.doesNotMatch(prompt.userContent, /minimumNetWorth/);
 });
 
-test('parses an estimated monthly salary range from the model response', () => {
+test('parses a supported total monthly compensation range', () => {
   const evaluations = parseModelEvaluationResponse(
     JSON.stringify({
       evaluations: [
@@ -91,9 +95,13 @@ test('parses an estimated monthly salary range from the model response', () => {
           profileId: 'profile-1',
           matchPercent: 82,
           decision: MODEL_EVALUATION_DECISION.manualReview,
-          estimatedSalary: {
-            minimumMonthlyIncome: 9_000,
-            maximumMonthlyIncome: 14_000,
+          estimatedTotalMonthlyCompensation: {
+            status: 'estimated',
+            currency: 'BRL',
+            minimumMonthlyCompensation: 9_000,
+            maximumMonthlyCompensation: 14_000,
+            confidence: 'medium',
+            basis: ['Senior customer-success role in the supplied profile.'],
           },
           reasons: ['Senior customer-success trajectory in the campaign market.'],
           evidence: ['Headline is Customer Success Manager in Goiânia.'],
@@ -104,13 +112,44 @@ test('parses an estimated monthly salary range from the model response', () => {
     ['profile-1'],
   );
 
-  assert.deepEqual(evaluations[0]?.estimatedSalary, {
-    minimumMonthlyIncome: 9_000,
-    maximumMonthlyIncome: 14_000,
+  assert.deepEqual(evaluations[0]?.estimatedTotalMonthlyCompensation, {
+    status: 'estimated',
+    currency: 'BRL',
+    minimumMonthlyCompensation: 9_000,
+    maximumMonthlyCompensation: 14_000,
+    confidence: 'medium',
+    basis: ['Senior customer-success role in the supplied profile.'],
   });
 });
 
-test('rejects an inverted estimated salary range', () => {
+test('parses an explicit insufficient-evidence compensation result', () => {
+  const evaluations = parseModelEvaluationResponse(
+    JSON.stringify({
+      evaluations: [
+        {
+          profileId: 'profile-1',
+          matchPercent: 55,
+          decision: MODEL_EVALUATION_DECISION.manualReview,
+          estimatedTotalMonthlyCompensation: {
+            status: 'insufficient_evidence',
+            reasons: ['The supplied profile has no role or seniority details.'],
+          },
+          reasons: ['Professional evidence is incomplete.'],
+          evidence: ['Only a profile identifier was supplied.'],
+          uncertainties: ['Current role and seniority are unknown.'],
+        },
+      ],
+    }),
+    ['profile-1'],
+  );
+
+  assert.deepEqual(evaluations[0]?.estimatedTotalMonthlyCompensation, {
+    status: 'insufficient_evidence',
+    reasons: ['The supplied profile has no role or seniority details.'],
+  });
+});
+
+test('rejects an inverted estimated compensation range', () => {
   assert.throws(
     () =>
       parseModelEvaluationResponse(
@@ -120,9 +159,13 @@ test('rejects an inverted estimated salary range', () => {
               profileId: 'profile-1',
               matchPercent: 50,
               decision: MODEL_EVALUATION_DECISION.manualReview,
-              estimatedSalary: {
-                minimumMonthlyIncome: 20_000,
-                maximumMonthlyIncome: 8_000,
+              estimatedTotalMonthlyCompensation: {
+                status: 'estimated',
+                currency: 'BRL',
+                minimumMonthlyCompensation: 20_000,
+                maximumMonthlyCompensation: 8_000,
+                confidence: 'low',
+                basis: ['The profile contains limited professional evidence.'],
               },
               reasons: ['Range is invalid.'],
               evidence: ['Salary bounds are inverted.'],

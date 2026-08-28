@@ -3,19 +3,25 @@ import type { ModelApprovalCriteria } from '../criterias/index.js';
 import { MODEL_EVALUATION_LIMITS } from './config.js';
 import {
   MODEL_EVALUATION_DECISION,
-  type EstimatedSalaryRange,
+  type CompensationEstimateConfidence,
+  type EstimatedTotalMonthlyCompensation,
   type ModelEvaluationDecision,
   type ProfileModelEvaluation,
 } from './types.js';
 
-/** JSON Schema supplied to Gemini for a machine-readable batch response. */
+/**
+ * JSON Schema supplied to Gemini for a machine-readable batch response.
+ *
+ * The evaluations array omits maxItems because Gemini rejects this schema
+ * when that bound is present. Request grouping and response parsing already
+ * enforce group size.
+ */
 export const MODEL_EVALUATION_JSON_SCHEMA = {
   type: 'object',
   additionalProperties: false,
   properties: {
     evaluations: {
       type: 'array',
-      maxItems: MODEL_EVALUATION_LIMITS.profilesPerRequest,
       items: {
         type: 'object',
         additionalProperties: false,
@@ -30,20 +36,44 @@ export const MODEL_EVALUATION_JSON_SCHEMA = {
             type: 'string',
             enum: Object.values(MODEL_EVALUATION_DECISION),
           },
-          estimatedSalary: {
+          estimatedTotalMonthlyCompensation: {
             type: 'object',
             additionalProperties: false,
             properties: {
-              minimumMonthlyIncome: {
-                type: 'integer',
-                minimum: MODEL_EVALUATION_LIMITS.monthlyIncomeMinimum,
+              status: {
+                type: 'string',
+                enum: ['estimated', 'insufficient_evidence'],
               },
-              maximumMonthlyIncome: {
+              currency: {
+                type: 'string',
+                enum: ['BRL'],
+              },
+              minimumMonthlyCompensation: {
                 type: 'integer',
-                minimum: MODEL_EVALUATION_LIMITS.monthlyIncomeMinimum,
+                minimum: MODEL_EVALUATION_LIMITS.monthlyCompensationMinimum,
+              },
+              maximumMonthlyCompensation: {
+                type: 'integer',
+                minimum: MODEL_EVALUATION_LIMITS.monthlyCompensationMinimum,
+              },
+              confidence: {
+                type: 'string',
+                enum: ['high', 'medium', 'low'],
+              },
+              basis: {
+                type: 'array',
+                minItems: 1,
+                maxItems: MODEL_EVALUATION_LIMITS.compensationBasisItems,
+                items: { type: 'string' },
+              },
+              reasons: {
+                type: 'array',
+                minItems: 1,
+                maxItems: MODEL_EVALUATION_LIMITS.compensationReasonItems,
+                items: { type: 'string' },
               },
             },
-            required: ['minimumMonthlyIncome', 'maximumMonthlyIncome'],
+            required: ['status'],
           },
           reasons: {
             type: 'array',
@@ -67,7 +97,7 @@ export const MODEL_EVALUATION_JSON_SCHEMA = {
           'profileId',
           'matchPercent',
           'decision',
-          'estimatedSalary',
+          'estimatedTotalMonthlyCompensation',
           'reasons',
           'evidence',
           'uncertainties',
@@ -154,46 +184,99 @@ function matchPercent(value: unknown): number {
   );
 }
 
-/** Parses one non-negative integer monthly-income bound. */
-function monthlyIncome(value: unknown, field: string): number {
+/** Parses one non-negative integer monthly-compensation bound. */
+function monthlyCompensation(value: unknown, field: string): number {
   if (
     typeof value === 'number' &&
     Number.isInteger(value) &&
-    value >= MODEL_EVALUATION_LIMITS.monthlyIncomeMinimum
+    value >= MODEL_EVALUATION_LIMITS.monthlyCompensationMinimum
   ) {
     return value;
   }
 
   throw new ModelEvaluationResponseError(
-    `Gemini returned an invalid ${field} monthly income.`,
+    `Gemini returned an invalid ${field} monthly compensation.`,
   );
 }
 
-/** Parses the estimated salary range and rejects inverted bounds. */
-function estimatedSalary(value: unknown): EstimatedSalaryRange {
+/** Parses an allowed confidence value for a supported estimate. */
+function compensationConfidence(
+  value: unknown,
+): CompensationEstimateConfidence {
+  const confidence = asString(value);
+  if (confidence === 'high' || confidence === 'medium' || confidence === 'low') {
+    return confidence;
+  }
+
+  throw new ModelEvaluationResponseError(
+    'Gemini returned an invalid compensation confidence.',
+  );
+}
+
+/** Parses either a supported compensation range or insufficient evidence. */
+function estimatedTotalMonthlyCompensation(
+  value: unknown,
+): EstimatedTotalMonthlyCompensation {
   const record = asRecord(value);
   if (!record) {
     throw new ModelEvaluationResponseError(
-      'Gemini evaluation field "estimatedSalary" must be an object.',
+      'Gemini evaluation field "estimatedTotalMonthlyCompensation" must be an object.',
     );
   }
 
-  const minimumMonthlyIncome = monthlyIncome(
-    record['minimumMonthlyIncome'],
-    'minimumMonthlyIncome',
-  );
-  const maximumMonthlyIncome = monthlyIncome(
-    record['maximumMonthlyIncome'],
-    'maximumMonthlyIncome',
-  );
+  const status = asString(record['status']);
+  if (status === 'insufficient_evidence') {
+    return {
+      status,
+      reasons: stringList(
+        record['reasons'],
+        'estimatedTotalMonthlyCompensation.reasons',
+        MODEL_EVALUATION_LIMITS.compensationReasonItems,
+        1,
+      ),
+    };
+  }
 
-  if (maximumMonthlyIncome < minimumMonthlyIncome) {
+  if (status !== 'estimated') {
     throw new ModelEvaluationResponseError(
-      'Gemini returned an inverted estimated salary range.',
+      'Gemini returned an unsupported compensation-estimate status.',
     );
   }
 
-  return { minimumMonthlyIncome, maximumMonthlyIncome };
+  if (record['currency'] !== 'BRL') {
+    throw new ModelEvaluationResponseError(
+      'Gemini compensation estimates must use BRL.',
+    );
+  }
+
+  const minimumMonthlyCompensation = monthlyCompensation(
+    record['minimumMonthlyCompensation'],
+    'minimumMonthlyCompensation',
+  );
+  const maximumMonthlyCompensation = monthlyCompensation(
+    record['maximumMonthlyCompensation'],
+    'maximumMonthlyCompensation',
+  );
+
+  if (maximumMonthlyCompensation < minimumMonthlyCompensation) {
+    throw new ModelEvaluationResponseError(
+      'Gemini returned an inverted estimated compensation range.',
+    );
+  }
+
+  return {
+    status,
+    currency: 'BRL',
+    minimumMonthlyCompensation,
+    maximumMonthlyCompensation,
+    confidence: compensationConfidence(record['confidence']),
+    basis: stringList(
+      record['basis'],
+      'estimatedTotalMonthlyCompensation.basis',
+      MODEL_EVALUATION_LIMITS.compensationBasisItems,
+      1,
+    ),
+  };
 }
 
 /** Ensures the returned decision respects the caller's approval configuration. */
@@ -236,7 +319,9 @@ function profileEvaluation(
     profileId: requiredString(record['profileId'], 'profileId'),
     matchPercent: matchPercent(record['matchPercent']),
     decision: modelDecision(record['decision']),
-    estimatedSalary: estimatedSalary(record['estimatedSalary']),
+    estimatedTotalMonthlyCompensation: estimatedTotalMonthlyCompensation(
+      record['estimatedTotalMonthlyCompensation'],
+    ),
     reasons: stringList(
       record['reasons'],
       'reasons',

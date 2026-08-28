@@ -15,8 +15,6 @@ interface ModelCampaignCriteria {
   location?: FullEvaluationCriteria['location'];
   keywordLists?: FullEvaluationCriteria['keywordLists'];
   age?: FullEvaluationCriteria['age'];
-  estimatedIncome?: FullEvaluationCriteria['estimatedIncome'];
-  ageIncomeBands?: FullEvaluationCriteria['ageIncomeBands'];
   requirePhoto?: boolean;
   openToWork?: boolean;
 }
@@ -57,12 +55,6 @@ function campaignCriteriaForModel(
   if (criteria.location) campaign.location = criteria.location;
   if (criteria.keywordLists) campaign.keywordLists = criteria.keywordLists;
   if (criteria.age) campaign.age = criteria.age;
-  if (criteria.estimatedIncome) {
-    campaign.estimatedIncome = criteria.estimatedIncome;
-  }
-  if (criteria.ageIncomeBands) {
-    campaign.ageIncomeBands = criteria.ageIncomeBands;
-  }
   if (criteria.requirePhoto !== undefined) {
     campaign.requirePhoto = criteria.requirePhoto;
   }

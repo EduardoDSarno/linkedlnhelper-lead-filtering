@@ -13,6 +13,7 @@ import {
   MODEL_EVALUATION_RETRY_POLICY,
   resolveModelEvaluationOptions,
 } from './config.js';
+import { attachCompensationRangeMatch } from './compensation.js';
 import { buildModelEvaluationPrompt } from './prompt.js';
 import {
   MODEL_EVALUATION_JSON_SCHEMA,
@@ -201,13 +202,22 @@ async function evaluateProfileGroup(
       });
       addTokenUsage(tokenUsage, mapGeminiTokenUsage(response));
 
+      const evaluations = parseModelEvaluationResponse(
+        responseText(response),
+        profileIds,
+        criteria.modelApproval,
+      );
+      const desiredCompensation = criteria.desiredMonthlyCompensation;
+      const evaluationsWithCompensation =
+        desiredCompensation === undefined
+          ? evaluations
+          : evaluations.map((evaluation) =>
+              attachCompensationRangeMatch(evaluation, desiredCompensation),
+            );
+
       return {
         status: 'fulfilled',
-        evaluations: parseModelEvaluationResponse(
-          responseText(response),
-          profileIds,
-          criteria.modelApproval,
-        ),
+        evaluations: evaluationsWithCompensation,
         tokenUsage,
       };
     } catch (error: unknown) {

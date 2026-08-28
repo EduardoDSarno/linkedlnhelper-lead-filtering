@@ -15,6 +15,12 @@ export {
 export type { ResolvedModelEvaluationOptions } from './config.js';
 
 export {
+  MINIMUM_COMPENSATION_OVERLAP_RATIO,
+  attachCompensationRangeMatch,
+  evaluateCompensationRangeMatch,
+} from './compensation.js';
+
+export {
   emptyModelEvaluationTokenUsage,
   evaluateProfilesWithModel,
   groupProfilesForModelEvaluation,
@@ -29,9 +35,16 @@ export {
   parseModelEvaluationResponse,
 } from './schema.js';
 
-export { MODEL_EVALUATION_DECISION } from './types.js';
+export {
+  COMPENSATION_RANGE_OUTCOME,
+  MODEL_EVALUATION_DECISION,
+} from './types.js';
 export type {
-  EstimatedSalaryRange,
+  CompensationEstimateConfidence,
+  CompensationRangeMatch,
+  EstimatedTotalMonthlyCompensation,
+  EstimatedTotalMonthlyCompensationRange,
+  InsufficientCompensationEvidence,
   ModelEvaluationDecision,
   ModelEvaluationFailure,
   ModelEvaluationOptions,

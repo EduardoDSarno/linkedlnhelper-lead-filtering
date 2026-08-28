@@ -34,7 +34,9 @@ export const MODEL_EVALUATION_LIMITS = {
   concurrency: 50,
   matchPercentMinimum: 0,
   matchPercentMaximum: 100,
-  monthlyIncomeMinimum: 0,
+  monthlyCompensationMinimum: 0,
+  compensationBasisItems: 6,
+  compensationReasonItems: 5,
   reasonsPerProfile: 5,
   evidencePerProfile: 6,
   uncertaintiesPerProfile: 5,
@@ -97,12 +99,17 @@ ${MODEL_EVALUATION_PROMPT_SLOTS.systemPrompt}
 - Apply the primary campaign instructions and the campaign criteria JSON
   consistently to every profile.
 - Use apparent age when it is present. Treat it as an estimate, not a fact.
-- Estimate a monthly salary range from education, job titles, seniority,
-  experience, location, and typical market pay for that combination. Look up
-  public compensation data when the estimate would otherwise be too uncertain.
-- Put that estimate in estimatedSalary as minimumMonthlyIncome and
-  maximumMonthlyIncome integers. When campaign estimatedIncome or
-  ageIncomeBands are present, compare the estimate against them.
+- Estimate total monthly professional compensation in Brazilian reais (BRL)
+  only when the supplied career evidence supports a defensible range. This can
+  include base pay and typical recurring variable compensation, but not wealth,
+  investment income, dividends, equity value, or household income.
+- Put a supported estimate in estimatedTotalMonthlyCompensation with status
+  "estimated", integer bounds, confidence, and a brief evidence basis.
+- When the supplied profile cannot support a range, return
+  estimatedTotalMonthlyCompensation with status "insufficient_evidence" and
+  explain why. Never invent a numeric range to satisfy the response shape.
+- Do not compare compensation with a desired campaign range. Application code
+  performs that comparison deterministically after validating the response.
 - Do not estimate or use net worth.
 - Do not invent missing career facts. Put missing or ambiguous information in
   uncertainties.
