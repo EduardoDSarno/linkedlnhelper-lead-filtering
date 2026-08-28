@@ -39,7 +39,8 @@ const LIVE_EVALUATION_TIMEOUT_MS =
   LIVE_EVALUATION_REQUEST_TIMEOUT_MS * LIVE_EVALUATION_MAXIMUM_ATTEMPTS +
   LIVE_EVALUATION_RETRY_ALLOWANCE_MS +
   LIVE_EVALUATION_CLEANUP_ALLOWANCE_MS;
-const LIVE_EVALUATION_MINIMUM_MATCH_PERCENT = 75;
+const LIVE_EVALUATION_MINIMUM_MANUAL_REVIEW_PERCENT = 50;
+const LIVE_EVALUATION_MINIMUM_APPROVAL_PERCENT = 75;
 const LIVE_EVALUATION_MINIMUM_AGE = 25;
 const LIVE_EVALUATION_MAXIMUM_AGE = 45;
 const LIVE_EVALUATION_MINIMUM_MONTHLY_COMPENSATION = 8_000;
@@ -69,7 +70,7 @@ function liveEvaluationSkipReason(): string | false {
   return false;
 }
 
-/** Builds campaign criteria that exercise first-pass cuts and Gemini approval. */
+/** Builds campaign criteria that exercise first-pass cuts and score decisions. */
 function liveSampleCampaignCriteria(): FullEvaluationCriteria {
   return {
     location: {
@@ -94,9 +95,11 @@ function liveSampleCampaignCriteria(): FullEvaluationCriteria {
         LIVE_EVALUATION_MAXIMUM_MONTHLY_COMPENSATION,
     },
     requirePhoto: true,
-    modelApproval: {
-      enabled: true,
-      minimumMatchPercent: LIVE_EVALUATION_MINIMUM_MATCH_PERCENT,
+    decisionPolicy: {
+      mode: 'automatic',
+      minimumManualReviewPercent:
+        LIVE_EVALUATION_MINIMUM_MANUAL_REVIEW_PERCENT,
+      minimumApprovalPercent: LIVE_EVALUATION_MINIMUM_APPROVAL_PERCENT,
     },
     systemPrompt: [
       'Você avalia leads do LinkedIn para uma campanha B2B de vendas',
@@ -107,9 +110,9 @@ function liveSampleCampaignCriteria(): FullEvaluationCriteria {
       'o cargo, a senioridade, a formação e o mercado sustentarem a faixa.',
     ].join(' '),
     userPrompt: [
-      'Aprove perfis com evidência comercial clara no mercado da campanha.',
-      'Use manual_review quando a trajetória for forte mas não comercial,',
-      'ou quando faltar evidência para uma decisão segura.',
+      'Atribua notas mais altas a perfis com evidência comercial clara no',
+      'mercado da campanha. Registre como incerteza qualquer lacuna que',
+      'reduza a segurança da nota.',
     ].join(' '),
   };
 }

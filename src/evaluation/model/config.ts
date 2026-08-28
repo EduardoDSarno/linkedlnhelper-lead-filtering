@@ -58,9 +58,7 @@ export const MODEL_EVALUATION_RETRY_POLICY = {
 /** Placeholder tokens interpolated into the model-evaluation prompt templates. */
 export const MODEL_EVALUATION_PROMPT_SLOTS = {
   systemPrompt: '{{systemPrompt}}',
-  minimumMatchPercent: '{{minimumMatchPercent}}',
   additionalGuidance: '{{additionalGuidance}}',
-  approvalPolicy: '{{approvalPolicy}}',
   campaignCriteria: '{{campaignCriteria}}',
   profilesJson: '{{profilesJson}}',
 } as const;
@@ -72,17 +70,6 @@ export const MODEL_EVALUATION_EMPTY_USER_PROMPT =
 /** Fallback text when no structured campaign cuts were configured. */
 export const MODEL_EVALUATION_EMPTY_CAMPAIGN_CRITERIA =
   'No additional structured campaign criteria were supplied.';
-
-/** Decision policy when the campaign keeps final approve/reject with the user. */
-export const MODEL_EVALUATION_APPROVAL_DISABLED =
-  'Model approval is disabled. Return "manual_review" for every decision.';
-
-/** Decision policy when the model may approve profiles at the configured threshold. */
-export const MODEL_EVALUATION_APPROVAL_ENABLED = [
-  'Model approval is enabled.',
-  `An "approved" decision requires a matchPercent of at least ${MODEL_EVALUATION_PROMPT_SLOTS.minimumMatchPercent}.`,
-  'Use "manual_review" when evidence is incomplete or ambiguous.',
-].join(' ');
 
 /** Protected system instruction sent with every evaluation request. */
 export const MODEL_EVALUATION_SYSTEM_INSTRUCTION = `
@@ -98,8 +85,12 @@ ${MODEL_EVALUATION_PROMPT_SLOTS.systemPrompt}
 === REQUIRED EVALUATION RULES ===
 - Apply the primary campaign instructions and the campaign criteria JSON
   consistently to every profile.
+- Grade campaign fit independently from application decision thresholds. Return
+  an integer matchPercent from the configured response range, where a higher
+  value means stronger campaign fit. Do not make approve, reject, or manual
+  review decisions; application code maps the validated score deterministically.
 - Treat keywordLists as current-role exclusions only. A keyword found solely
-  in historical experience must not reduce campaign fit or cause rejection.
+  in historical experience must not reduce the campaign-fit score.
 - Use apparent age when it is present. Treat it as an estimate, not a fact.
 - Estimate total monthly professional compensation in Brazilian reais (BRL)
   only when the supplied career evidence supports a defensible range. This can
@@ -123,9 +114,6 @@ ${MODEL_EVALUATION_PROMPT_SLOTS.systemPrompt}
 export const MODEL_EVALUATION_USER_CONTENT = `
 === ADDITIONAL USER GUIDANCE ===
 ${MODEL_EVALUATION_PROMPT_SLOTS.additionalGuidance}
-
-=== MODEL DECISION POLICY ===
-${MODEL_EVALUATION_PROMPT_SLOTS.approvalPolicy}
 
 === CAMPAIGN CRITERIA ===
 ${MODEL_EVALUATION_PROMPT_SLOTS.campaignCriteria}

@@ -49,23 +49,38 @@ export interface NetWorthCriteria {
   maximumNetWorth?: number;
 }
 
-/** Inclusive bounds for a user-configured model-approval match percent. */
-export const MODEL_APPROVAL_PERCENT = {
+/** Inclusive bounds for user-configured score-based decision percentages. */
+export const DECISION_POLICY_PERCENT = {
   minimum: 0,
   maximum: 100,
 } as const;
 
+/** Supported ways to convert Gemini scores into application decisions. */
+export const DECISION_POLICY_MODE = {
+  automatic: 'automatic',
+  manual: 'manual',
+} as const;
+
 /**
- * Lets the model approve profiles that are close enough to the campaign.
+ * Keeps every successfully scored profile available for human review.
  *
- * Omit this field, or set `enabled` to false, to keep final approve/reject
- * with the user. When enabled, the model may approve only at or above
- * `minimumMatchPercent`.
+ * Gemini still supplies the match percentage, evidence, and uncertainties.
  */
-export interface ModelApprovalCriteria {
-  enabled: boolean;
-  minimumMatchPercent: number;
+export interface ManualDecisionPolicyCriteria {
+  mode: typeof DECISION_POLICY_MODE.manual;
 }
+
+/** Converts validated match percentages into deterministic final decisions. */
+export interface AutomaticDecisionPolicyCriteria {
+  mode: typeof DECISION_POLICY_MODE.automatic;
+  minimumManualReviewPercent: number;
+  minimumApprovalPercent: number;
+}
+
+/** User-selected policy for handling successfully scored model assessments. */
+export type DecisionPolicyCriteria =
+  | ManualDecisionPolicyCriteria
+  | AutomaticDecisionPolicyCriteria;
 
 /**
  * Campaign settings for the first pass plus prompts and ranges for later AI.
@@ -80,7 +95,12 @@ export interface FullEvaluationCriteria {
   age?: AgeCriteria;
   desiredMonthlyCompensation?: DesiredMonthlyCompensationCriteria;
   netWorth?: NetWorthCriteria;
-  modelApproval?: ModelApprovalCriteria;
+  /**
+   * Controls deterministic score-to-decision mapping after Gemini responds.
+   *
+   * Omit this field to keep every successfully scored profile in manual review.
+   */
+  decisionPolicy?: DecisionPolicyCriteria;
   /**
    * When true, profiles without a photo are excluded before AI.
    * Omit this field when photo presence should not cut the first pass.

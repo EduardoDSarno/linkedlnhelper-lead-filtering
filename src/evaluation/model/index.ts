@@ -1,6 +1,4 @@
 export {
-  MODEL_EVALUATION_APPROVAL_DISABLED,
-  MODEL_EVALUATION_APPROVAL_ENABLED,
   MODEL_EVALUATION_DEFAULTS,
   MODEL_EVALUATION_EMPTY_CAMPAIGN_CRITERIA,
   MODEL_EVALUATION_EMPTY_USER_PROMPT,
@@ -13,6 +11,11 @@ export {
   resolveModelEvaluationOptions,
 } from './config.js';
 export type { ResolvedModelEvaluationOptions } from './config.js';
+
+export {
+  applyDecisionPolicy,
+  decisionForMatchPercent,
+} from './decision_policy.js';
 
 export {
   MINIMUM_COMPENSATION_OVERLAP_RATIO,
@@ -51,5 +54,6 @@ export type {
   ModelEvaluationOutcome,
   ModelEvaluationTokenUsage,
   ModelEvaluationWait,
+  ProfileModelAssessment,
   ProfileModelEvaluation,
 } from './types.js';

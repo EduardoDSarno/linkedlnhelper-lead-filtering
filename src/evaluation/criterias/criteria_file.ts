@@ -3,14 +3,15 @@ import { readFile } from 'node:fs/promises';
 import { asRecord, asString } from '../../helpers/index.js';
 import { CRITERIA_MATCH } from '../filters/constants.js';
 import {
-  MODEL_APPROVAL_PERCENT,
+  DECISION_POLICY_MODE,
+  DECISION_POLICY_PERCENT,
   type AgeCriteria,
+  type DecisionPolicyCriteria,
   type DesiredMonthlyCompensationCriteria,
   type FullEvaluationCriteria,
   type KeywordList,
   type LocationCriteria,
   type LocationField,
-  type ModelApprovalCriteria,
   type NetWorthCriteria,
 } from './user_criteria.js';
 
@@ -20,7 +21,7 @@ const FULL_CRITERIA_FIELDS = [
   'age',
   'desiredMonthlyCompensation',
   'netWorth',
-  'modelApproval',
+  'decisionPolicy',
   'requirePhoto',
   'openToWork',
   'systemPrompt',
@@ -41,7 +42,12 @@ const COMPENSATION_FIELDS = [
   'maximumMonthlyCompensation',
 ] as const;
 const NET_WORTH_FIELDS = ['minimumNetWorth', 'maximumNetWorth'] as const;
-const MODEL_APPROVAL_FIELDS = ['enabled', 'minimumMatchPercent'] as const;
+const AUTOMATIC_DECISION_POLICY_FIELDS = [
+  'mode',
+  'minimumManualReviewPercent',
+  'minimumApprovalPercent',
+] as const;
+const MANUAL_DECISION_POLICY_FIELDS = ['mode'] as const;
 const MINIMUM_RANGE_VALUE = 0;
 
 /** Identifies criteria JSON that cannot be trusted as application input. */
@@ -253,28 +259,72 @@ function netWorthCriteria(value: unknown): NetWorthCriteria {
   };
 }
 
-/** Parses whether the model may return final approval decisions. */
-function modelApprovalCriteria(value: unknown): ModelApprovalCriteria {
-  const record = criteriaRecord(value, 'modelApproval');
-  assertKnownFields(record, MODEL_APPROVAL_FIELDS, 'modelApproval');
-  const enabled = optionalBoolean(record['enabled'], 'modelApproval.enabled');
-  const minimumMatchPercent = optionalBoundary(
-    record['minimumMatchPercent'],
-    'modelApproval.minimumMatchPercent',
+/** Requires one bounded percentage used by automatic score routing. */
+function decisionPercent(
+  record: Record<string, unknown>,
+  field: 'minimumManualReviewPercent' | 'minimumApprovalPercent',
+): number {
+  const value = optionalBoundary(record[field], `decisionPolicy.${field}`);
+
+  if (value === undefined) {
+    throw new EvaluationCriteriaFileError(
+      `decisionPolicy.${field} is required in automatic mode.`,
+    );
+  }
+  if (value > DECISION_POLICY_PERCENT.maximum) {
+    throw new EvaluationCriteriaFileError(
+      `decisionPolicy.${field} must not exceed ${String(DECISION_POLICY_PERCENT.maximum)}.`,
+    );
+  }
+  return value;
+}
+
+/** Parses and orders the two thresholds required by automatic routing. */
+function automaticDecisionPolicy(
+  record: Record<string, unknown>,
+): DecisionPolicyCriteria {
+  assertKnownFields(
+    record,
+    AUTOMATIC_DECISION_POLICY_FIELDS,
+    'decisionPolicy',
+  );
+  const minimumManualReviewPercent = decisionPercent(
+    record,
+    'minimumManualReviewPercent',
+  );
+  const minimumApprovalPercent = decisionPercent(
+    record,
+    'minimumApprovalPercent',
   );
 
-  if (enabled === undefined || minimumMatchPercent === undefined) {
+  if (minimumApprovalPercent < minimumManualReviewPercent) {
     throw new EvaluationCriteriaFileError(
-      'modelApproval requires enabled and minimumMatchPercent.',
-    );
-  }
-  if (minimumMatchPercent > MODEL_APPROVAL_PERCENT.maximum) {
-    throw new EvaluationCriteriaFileError(
-      `modelApproval.minimumMatchPercent must not exceed ${String(MODEL_APPROVAL_PERCENT.maximum)}.`,
+      'decisionPolicy.minimumApprovalPercent must be greater than or equal to minimumManualReviewPercent.',
     );
   }
 
-  return { enabled, minimumMatchPercent };
+  return {
+    mode: DECISION_POLICY_MODE.automatic,
+    minimumManualReviewPercent,
+    minimumApprovalPercent,
+  };
+}
+
+/** Parses deterministic handling for successfully scored model assessments. */
+function decisionPolicyCriteria(value: unknown): DecisionPolicyCriteria {
+  const record = criteriaRecord(value, 'decisionPolicy');
+  const mode = requiredString(record['mode'], 'decisionPolicy.mode');
+
+  if (mode === DECISION_POLICY_MODE.manual) {
+    assertKnownFields(record, MANUAL_DECISION_POLICY_FIELDS, 'decisionPolicy');
+    return { mode };
+  }
+  if (mode === DECISION_POLICY_MODE.automatic) {
+    return automaticDecisionPolicy(record);
+  }
+  throw new EvaluationCriteriaFileError(
+    'decisionPolicy.mode must be "automatic" or "manual".',
+  );
 }
 
 /** Validates untrusted JSON as the criteria accepted by the review pipeline. */
@@ -309,9 +359,11 @@ export function parseFullEvaluationCriteria(
     ...(record['netWorth'] === undefined
       ? {}
       : { netWorth: netWorthCriteria(record['netWorth']) }),
-    ...(record['modelApproval'] === undefined
+    ...(record['decisionPolicy'] === undefined
       ? {}
-      : { modelApproval: modelApprovalCriteria(record['modelApproval']) }),
+      : {
+          decisionPolicy: decisionPolicyCriteria(record['decisionPolicy']),
+        }),
     ...(requirePhoto === undefined ? {} : { requirePhoto }),
     ...(openToWork === undefined ? {} : { openToWork }),
   };

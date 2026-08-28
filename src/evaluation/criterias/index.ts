@@ -1,5 +1,6 @@
 export {
-  MODEL_APPROVAL_PERCENT,
+  DECISION_POLICY_MODE,
+  DECISION_POLICY_PERCENT,
 } from './user_criteria.js';
 
 export {
@@ -10,12 +11,14 @@ export {
 
 export type {
   AgeCriteria,
+  AutomaticDecisionPolicyCriteria,
   CriteriaMatch,
+  DecisionPolicyCriteria,
   DesiredMonthlyCompensationCriteria,
   FullEvaluationCriteria,
   KeywordList,
   LocationCriteria,
   LocationField,
-  ModelApprovalCriteria,
+  ManualDecisionPolicyCriteria,
   NetWorthCriteria,
 } from './user_criteria.js';

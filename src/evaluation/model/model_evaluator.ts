@@ -14,6 +14,7 @@ import {
   resolveModelEvaluationOptions,
 } from './config.js';
 import { attachCompensationRangeMatch } from './compensation.js';
+import { applyDecisionPolicy } from './decision_policy.js';
 import { buildModelEvaluationPrompt } from './prompt.js';
 import {
   MODEL_EVALUATION_JSON_SCHEMA,
@@ -202,10 +203,12 @@ async function evaluateProfileGroup(
       });
       addTokenUsage(tokenUsage, mapGeminiTokenUsage(response));
 
-      const evaluations = parseModelEvaluationResponse(
+      const assessments = parseModelEvaluationResponse(
         responseText(response),
         profileIds,
-        criteria.modelApproval,
+      );
+      const evaluations = assessments.map((assessment) =>
+        applyDecisionPolicy(assessment, criteria.decisionPolicy),
       );
       const desiredCompensation = criteria.desiredMonthlyCompensation;
       const evaluationsWithCompensation =

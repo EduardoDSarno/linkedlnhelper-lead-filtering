@@ -1,8 +1,6 @@
 import type { FullEvaluationCriteria } from '../criterias/index.js';
 import type { EvaluationProfileData } from '../context.js';
 import {
-  MODEL_EVALUATION_APPROVAL_DISABLED,
-  MODEL_EVALUATION_APPROVAL_ENABLED,
   MODEL_EVALUATION_EMPTY_CAMPAIGN_CRITERIA,
   MODEL_EVALUATION_EMPTY_USER_PROMPT,
   MODEL_EVALUATION_PROMPT_SLOTS,
@@ -44,8 +42,7 @@ function fillPromptTemplate(
 /**
  * Collects the campaign cuts the model should apply, omitting net worth.
  *
- * Net worth stays out of this stage. Prompts and approval policy are supplied
- * in dedicated sections so they are not duplicated here.
+ * Net worth and application decision thresholds stay out of model grading.
  */
 function campaignCriteriaForModel(
   criteria: FullEvaluationCriteria,
@@ -63,18 +60,6 @@ function campaignCriteriaForModel(
   }
 
   return Object.keys(campaign).length > 0 ? campaign : undefined;
-}
-
-/** Describes the final-decision authority granted to the model. */
-function approvalInstructions(criteria: FullEvaluationCriteria): string {
-  const approval = criteria.modelApproval;
-  if (!approval?.enabled) return MODEL_EVALUATION_APPROVAL_DISABLED;
-
-  return fillPromptTemplate(MODEL_EVALUATION_APPROVAL_ENABLED, {
-    [MODEL_EVALUATION_PROMPT_SLOTS.minimumMatchPercent]: String(
-      approval.minimumMatchPercent,
-    ),
-  });
 }
 
 /**
@@ -103,8 +88,6 @@ function userContent(
 
   return fillPromptTemplate(MODEL_EVALUATION_USER_CONTENT, {
     [MODEL_EVALUATION_PROMPT_SLOTS.additionalGuidance]: additionalGuidance,
-    [MODEL_EVALUATION_PROMPT_SLOTS.approvalPolicy]:
-      approvalInstructions(criteria),
     [MODEL_EVALUATION_PROMPT_SLOTS.campaignCriteria]: campaignSection,
     [MODEL_EVALUATION_PROMPT_SLOTS.profilesJson]: JSON.stringify(profiles),
   });

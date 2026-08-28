@@ -26,3 +26,6 @@
   repository rule against duplicating configurable numeric values in comments.
 - Just add The '@' parameters when nescessary Because most of the time they are explicit
   in the function
+
+# Others
+- Consider a cyclomatic complexity lint pass before and after each change to avoid verbose code

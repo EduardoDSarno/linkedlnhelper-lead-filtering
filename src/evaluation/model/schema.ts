@@ -1,12 +1,9 @@
 import { asRecord, asString } from '../../helpers/index.js';
-import type { ModelApprovalCriteria } from '../criterias/index.js';
 import { MODEL_EVALUATION_LIMITS } from './config.js';
 import {
-  MODEL_EVALUATION_DECISION,
   type CompensationEstimateConfidence,
   type EstimatedTotalMonthlyCompensation,
-  type ModelEvaluationDecision,
-  type ProfileModelEvaluation,
+  type ProfileModelAssessment,
 } from './types.js';
 
 /**
@@ -31,10 +28,6 @@ export const MODEL_EVALUATION_JSON_SCHEMA = {
             type: 'integer',
             minimum: MODEL_EVALUATION_LIMITS.matchPercentMinimum,
             maximum: MODEL_EVALUATION_LIMITS.matchPercentMaximum,
-          },
-          decision: {
-            type: 'string',
-            enum: Object.values(MODEL_EVALUATION_DECISION),
           },
           estimatedTotalMonthlyCompensation: {
             type: 'object',
@@ -96,7 +89,6 @@ export const MODEL_EVALUATION_JSON_SCHEMA = {
         required: [
           'profileId',
           'matchPercent',
-          'decision',
           'estimatedTotalMonthlyCompensation',
           'reasons',
           'evidence',
@@ -148,23 +140,6 @@ function stringList(
 
   return value.map((item, index) =>
     requiredString(item, `${field}[${String(index)}]`),
-  );
-}
-
-/** Parses the model decision without accepting unknown response values. */
-function modelDecision(value: unknown): ModelEvaluationDecision {
-  const decision = asString(value);
-  const allowedDecisions = Object.values(MODEL_EVALUATION_DECISION);
-
-  if (
-    decision &&
-    allowedDecisions.includes(decision as ModelEvaluationDecision)
-  ) {
-    return decision as ModelEvaluationDecision;
-  }
-
-  throw new ModelEvaluationResponseError(
-    'Gemini returned an unsupported evaluation decision.',
   );
 }
 
@@ -279,35 +254,8 @@ function estimatedTotalMonthlyCompensation(
   };
 }
 
-/** Ensures the returned decision respects the caller's approval configuration. */
-function validateApprovalPolicy(
-  evaluation: ProfileModelEvaluation,
-  approval: ModelApprovalCriteria | undefined,
-): void {
-  if (!approval?.enabled) {
-    if (evaluation.decision !== MODEL_EVALUATION_DECISION.manualReview) {
-      throw new ModelEvaluationResponseError(
-        'Gemini made a final decision while model approval is disabled.',
-      );
-    }
-    return;
-  }
-
-  if (
-    evaluation.decision === MODEL_EVALUATION_DECISION.approved &&
-    evaluation.matchPercent < approval.minimumMatchPercent
-  ) {
-    throw new ModelEvaluationResponseError(
-      'Gemini approved a profile below the configured match threshold.',
-    );
-  }
-}
-
 /** Parses one profile result before batch-level identity checks run. */
-function profileEvaluation(
-  value: unknown,
-  approval: ModelApprovalCriteria | undefined,
-): ProfileModelEvaluation {
+function profileEvaluation(value: unknown): ProfileModelAssessment {
   const record = asRecord(value);
   if (!record) {
     throw new ModelEvaluationResponseError(
@@ -315,10 +263,9 @@ function profileEvaluation(
     );
   }
 
-  const evaluation: ProfileModelEvaluation = {
+  return {
     profileId: requiredString(record['profileId'], 'profileId'),
     matchPercent: matchPercent(record['matchPercent']),
-    decision: modelDecision(record['decision']),
     estimatedTotalMonthlyCompensation: estimatedTotalMonthlyCompensation(
       record['estimatedTotalMonthlyCompensation'],
     ),
@@ -341,9 +288,6 @@ function profileEvaluation(
       0,
     ),
   };
-
-  validateApprovalPolicy(evaluation, approval);
-  return evaluation;
 }
 
 /** Parses response JSON and reports malformed text as a permanent failure. */
@@ -366,8 +310,7 @@ function responseJson(text: string): unknown {
 export function parseModelEvaluationResponse(
   text: string,
   expectedProfileIds: readonly string[],
-  approval?: ModelApprovalCriteria,
-): readonly ProfileModelEvaluation[] {
+): readonly ProfileModelAssessment[] {
   const response = asRecord(responseJson(text));
   const values = response?.['evaluations'];
 
@@ -377,9 +320,7 @@ export function parseModelEvaluationResponse(
     );
   }
 
-  const evaluations = values.map((value) =>
-    profileEvaluation(value, approval),
-  );
+  const evaluations = values.map(profileEvaluation);
   const expectedIds = new Set(expectedProfileIds);
   const returnedIds = new Set<string>();
 

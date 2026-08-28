@@ -8,3 +8,5 @@ markdown/
 scripts/
 opencode.json
 .claude
+AGENTS.md
+criteria.json

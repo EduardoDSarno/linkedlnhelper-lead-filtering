@@ -30,6 +30,9 @@ const PROFILE_WITH_PHOTO_ID = 'stable-profile-with-photo';
 const PROFILE_WITHOUT_PHOTO_ID = 'stable-profile-without-photo';
 const REVIEW_RUN_ID = 'review-run-id';
 const REVIEW_RUN_TIME = '2026-08-27T12:00:00.000Z';
+const REVIEW_MINIMUM_MANUAL_REVIEW_PERCENT = 50;
+const REVIEW_MINIMUM_APPROVAL_PERCENT = 75;
+const REVIEW_MODEL_MATCH_PERCENT = 85;
 
 /** Reads object payloads recorded for one exact log message. */
 function payloadsFor(
@@ -41,7 +44,7 @@ function payloadsFor(
     .map((entry) => entry.payload as Record<string, unknown>);
 }
 
-/** Builds campaign criteria that exercise broad filtering and model approval. */
+/** Builds campaign criteria that exercise broad filtering and score decisions. */
 function criteria(): FullEvaluationCriteria {
   return {
     requirePhoto: true,
@@ -49,11 +52,12 @@ function criteria(): FullEvaluationCriteria {
       minimumMonthlyCompensation: 7_000,
       maximumMonthlyCompensation: 15_000,
     },
-    modelApproval: {
-      enabled: true,
-      minimumMatchPercent: 75,
+    decisionPolicy: {
+      mode: 'automatic',
+      minimumManualReviewPercent: REVIEW_MINIMUM_MANUAL_REVIEW_PERCENT,
+      minimumApprovalPercent: REVIEW_MINIMUM_APPROVAL_PERCENT,
     },
-    systemPrompt: 'Approve experienced commercial profiles for this campaign.',
+    systemPrompt: 'Grade experienced commercial profiles for this campaign.',
   };
 }
 
@@ -104,8 +108,7 @@ function successfulModelResponse(): GenerateContentResponse {
       evaluations: [
         {
           profileId: PROFILE_WITH_PHOTO_ID,
-          matchPercent: 85,
-          decision: 'approved',
+          matchPercent: REVIEW_MODEL_MATCH_PERCENT,
           estimatedTotalMonthlyCompensation: {
             status: 'estimated',
             currency: 'BRL',

@@ -18,8 +18,8 @@ import {
   evaluateProfilesWithModel,
   parseModelEvaluationResponse,
 } from '../model/index.js';
-import type { ModelEvaluationDecision } from '../model/index.js';
 
+const TEST_MANUAL_REVIEW_PERCENT = 50;
 const TEST_APPROVAL_PERCENT = 75;
 const TEST_MATCH_PERCENT = 85;
 const TEST_MONTHLY_COMPENSATION_MINIMUM = 8_000;
@@ -35,16 +35,17 @@ const TEST_TOKEN_USAGE = {
 const PROFILE_JSON_MARKER = '=== PROFILES TO EVALUATE ===\n';
 const PROFILE_JSON_END_MARKER = '\n\nReturn only';
 
-/** Builds criteria that permit the fake model to return final approvals. */
+/** Builds criteria that deterministically approve strong model scores. */
 function criteria(): FullEvaluationCriteria {
   return {
     desiredMonthlyCompensation: {
       minimumMonthlyCompensation: TEST_DESIRED_COMPENSATION_MINIMUM,
       maximumMonthlyCompensation: TEST_DESIRED_COMPENSATION_MAXIMUM,
     },
-    modelApproval: {
-      enabled: true,
-      minimumMatchPercent: TEST_APPROVAL_PERCENT,
+    decisionPolicy: {
+      mode: 'automatic',
+      minimumManualReviewPercent: TEST_MANUAL_REVIEW_PERCENT,
+      minimumApprovalPercent: TEST_APPROVAL_PERCENT,
     },
     systemPrompt: 'Evaluate professional fit for the campaign.',
     userPrompt: 'Prefer clear commercial experience.',
@@ -69,14 +70,10 @@ function profiles(count: number): EvaluationProfileData[] {
 }
 
 /** Builds one structurally valid evaluation for a requested profile ID. */
-function evaluation(
-  profileId: string,
-  decision: ModelEvaluationDecision = MODEL_EVALUATION_DECISION.approved,
-) {
+function evaluation(profileId: string, matchPercent = TEST_MATCH_PERCENT) {
   return {
     profileId,
-    matchPercent: TEST_MATCH_PERCENT,
-    decision,
+    matchPercent,
     estimatedTotalMonthlyCompensation: {
       status: 'estimated',
       currency: 'BRL',
@@ -170,11 +167,39 @@ test('groups profiles by the configured request size and keeps the final partial
   );
   assert.ok(
     result.evaluations.every(
+      (item) => item.decision === MODEL_EVALUATION_DECISION.approved,
+    ),
+  );
+  assert.ok(
+    result.evaluations.every(
       (item) =>
         item.compensationRangeMatch?.outcome ===
           COMPENSATION_RANGE_OUTCOME.matched &&
         item.compensationRangeMatch.overlapRatio === 1,
     ),
+  );
+});
+
+test('retains model scores while routing every result to manual review', async () => {
+  const candidate = profile('manual-profile');
+  const manualMatchPercent = TEST_MANUAL_REVIEW_PERCENT - 1;
+  const manualCriteria: FullEvaluationCriteria = {
+    systemPrompt: 'Grade professional fit for the campaign.',
+    decisionPolicy: { mode: 'manual' },
+  };
+
+  const result = await evaluateProfilesWithModel([candidate], manualCriteria, {
+    generateContent: async () => ({
+      text: JSON.stringify({
+        evaluations: [evaluation(candidate.profileId, manualMatchPercent)],
+      }),
+    }) as GenerateContentResponse,
+  });
+
+  assert.equal(result.evaluations[0]?.matchPercent, manualMatchPercent);
+  assert.equal(
+    result.evaluations[0]?.decision,
+    MODEL_EVALUATION_DECISION.manualReview,
   );
 });
 
@@ -281,13 +306,11 @@ test('does not retry an invalid response and retains successful groups', async (
 
 test('rejects missing, duplicated, and unexpected response profile IDs', () => {
   const expectedProfileIds = ['profile-1', 'profile-2'];
-  const manualEvaluation = (profileId: string) =>
-    evaluation(profileId, MODEL_EVALUATION_DECISION.manualReview);
 
   assert.throws(
     () =>
       parseModelEvaluationResponse(
-        JSON.stringify({ evaluations: [manualEvaluation('profile-1')] }),
+        JSON.stringify({ evaluations: [evaluation('profile-1')] }),
         expectedProfileIds,
       ),
     ModelEvaluationResponseError,
@@ -297,8 +320,8 @@ test('rejects missing, duplicated, and unexpected response profile IDs', () => {
       parseModelEvaluationResponse(
         JSON.stringify({
           evaluations: [
-            manualEvaluation('profile-1'),
-            manualEvaluation('profile-1'),
+            evaluation('profile-1'),
+            evaluation('profile-1'),
           ],
         }),
         expectedProfileIds,
@@ -310,8 +333,8 @@ test('rejects missing, duplicated, and unexpected response profile IDs', () => {
       parseModelEvaluationResponse(
         JSON.stringify({
           evaluations: [
-            manualEvaluation('profile-1'),
-            manualEvaluation('unexpected-profile'),
+            evaluation('profile-1'),
+            evaluation('unexpected-profile'),
           ],
         }),
         expectedProfileIds,

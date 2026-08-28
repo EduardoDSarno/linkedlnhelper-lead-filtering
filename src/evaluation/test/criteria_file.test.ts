@@ -10,7 +10,9 @@ import {
   parseFullEvaluationCriteria,
 } from '../criterias/index.js';
 
-const MAXIMUM_APPROVAL_PERCENT = 100;
+const MAXIMUM_DECISION_PERCENT = 100;
+const TEST_MINIMUM_MANUAL_REVIEW_PERCENT = 50;
+const TEST_MINIMUM_APPROVAL_PERCENT = 75;
 
 /** Runs one criteria-file assertion in an automatically removed directory. */
 async function withCriteriaFile(
@@ -44,7 +46,11 @@ test('parses every currently supported evaluation criterion', () => {
       maximumMonthlyCompensation: 30_000,
     },
     netWorth: { minimumNetWorth: 0, maximumNetWorth: 1_000_000 },
-    modelApproval: { enabled: true, minimumMatchPercent: 75 },
+    decisionPolicy: {
+      mode: 'automatic',
+      minimumManualReviewPercent: TEST_MINIMUM_MANUAL_REVIEW_PERCENT,
+      minimumApprovalPercent: TEST_MINIMUM_APPROVAL_PERCENT,
+    },
     requirePhoto: true,
     openToWork: false,
   });
@@ -56,10 +62,20 @@ test('parses every currently supported evaluation criterion', () => {
     parsed.desiredMonthlyCompensation?.minimumMonthlyCompensation,
     8_000,
   );
-  assert.deepEqual(parsed.modelApproval, {
-    enabled: true,
-    minimumMatchPercent: 75,
+  assert.deepEqual(parsed.decisionPolicy, {
+    mode: 'automatic',
+    minimumManualReviewPercent: TEST_MINIMUM_MANUAL_REVIEW_PERCENT,
+    minimumApprovalPercent: TEST_MINIMUM_APPROVAL_PERCENT,
   });
+});
+
+test('parses an explicit manual decision policy without score thresholds', () => {
+  const parsed = parseFullEvaluationCriteria({
+    systemPrompt: 'Evaluate this campaign.',
+    decisionPolicy: { mode: 'manual' },
+  });
+
+  assert.deepEqual(parsed.decisionPolicy, { mode: 'manual' });
 });
 
 test('loads valid criteria from JSON on disk', async () => {
@@ -109,9 +125,26 @@ test('rejects missing prompts, unknown fields, invalid types, and ranges', () =>
     },
     {
       systemPrompt: 'Valid prompt.',
-      modelApproval: {
-        enabled: true,
-        minimumMatchPercent: MAXIMUM_APPROVAL_PERCENT + 1,
+      decisionPolicy: {
+        mode: 'automatic',
+        minimumManualReviewPercent: TEST_MINIMUM_MANUAL_REVIEW_PERCENT,
+        minimumApprovalPercent: MAXIMUM_DECISION_PERCENT + 1,
+      },
+    },
+    {
+      systemPrompt: 'Valid prompt.',
+      decisionPolicy: {
+        mode: 'automatic',
+        minimumManualReviewPercent: TEST_MINIMUM_APPROVAL_PERCENT,
+        minimumApprovalPercent: TEST_MINIMUM_MANUAL_REVIEW_PERCENT,
+      },
+    },
+    { systemPrompt: 'Valid prompt.', decisionPolicy: { mode: 'automatic' } },
+    {
+      systemPrompt: 'Valid prompt.',
+      decisionPolicy: {
+        mode: 'manual',
+        minimumManualReviewPercent: TEST_MINIMUM_MANUAL_REVIEW_PERCENT,
       },
     },
   ];

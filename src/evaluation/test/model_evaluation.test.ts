@@ -6,11 +6,14 @@ import type { FullEvaluationCriteria } from '../criterias/index.js';
 import type { EvaluationProfileData } from '../context.js';
 import { buildModelEvaluationPrompt } from '../model/prompt.js';
 import {
-  MODEL_EVALUATION_DECISION,
+  MODEL_EVALUATION_JSON_SCHEMA,
   parseModelEvaluationResponse,
   ModelEvaluationResponseError,
 } from '../model/index.js';
 import { validImageAssessment } from '../../test_support/image_assessment_fixtures.js';
+
+const TEST_MINIMUM_MANUAL_REVIEW_PERCENT = 50;
+const TEST_MINIMUM_APPROVAL_PERCENT = 75;
 
 /** Creates the required prompts for a small criteria fixture. */
 function prompts(): Pick<FullEvaluationCriteria, 'systemPrompt' | 'userPrompt'> {
@@ -54,6 +57,18 @@ function profile(): EvaluationProfileData {
   };
 }
 
+test('requests a score without asking Gemini for a final decision', () => {
+  const properties =
+    MODEL_EVALUATION_JSON_SCHEMA.properties.evaluations.items.properties;
+
+  assert.equal('decision' in properties, false);
+  assert.ok(
+    MODEL_EVALUATION_JSON_SCHEMA.properties.evaluations.items.required.includes(
+      'matchPercent',
+    ),
+  );
+});
+
 test('sends profile evidence while keeping desired compensation out of the prompt', () => {
   const criteria: FullEvaluationCriteria = {
     age: { minimumAge: 30, maximumAge: 40 },
@@ -68,6 +83,11 @@ test('sends profile evidence while keeping desired compensation out of the promp
     },
     keywordLists: [{ list: ['intern'], match: CRITERIA_MATCH.any }],
     netWorth: { minimumNetWorth: 1_000_000 },
+    decisionPolicy: {
+      mode: 'automatic',
+      minimumManualReviewPercent: TEST_MINIMUM_MANUAL_REVIEW_PERCENT,
+      minimumApprovalPercent: TEST_MINIMUM_APPROVAL_PERCENT,
+    },
     ...prompts(),
   };
 
@@ -87,7 +107,9 @@ test('sends profile evidence while keeping desired compensation out of the promp
   assert.match(prompt.userContent, /"list":\["intern"\]/);
   assert.doesNotMatch(prompt.userContent, /minimumMonthlyCompensation/);
   assert.match(prompt.systemInstruction, /Do not estimate or use net worth/);
+  assert.match(prompt.systemInstruction, /Do not make approve, reject/);
   assert.doesNotMatch(prompt.userContent, /minimumNetWorth/);
+  assert.doesNotMatch(prompt.userContent, /minimumApprovalPercent/);
 });
 
 test('parses a supported total monthly compensation range', () => {
@@ -97,7 +119,6 @@ test('parses a supported total monthly compensation range', () => {
         {
           profileId: 'profile-1',
           matchPercent: 82,
-          decision: MODEL_EVALUATION_DECISION.manualReview,
           estimatedTotalMonthlyCompensation: {
             status: 'estimated',
             currency: 'BRL',
@@ -132,7 +153,6 @@ test('parses an explicit insufficient-evidence compensation result', () => {
         {
           profileId: 'profile-1',
           matchPercent: 55,
-          decision: MODEL_EVALUATION_DECISION.manualReview,
           estimatedTotalMonthlyCompensation: {
             status: 'insufficient_evidence',
             reasons: ['The supplied profile has no role or seniority details.'],
@@ -161,7 +181,6 @@ test('rejects an inverted estimated compensation range', () => {
             {
               profileId: 'profile-1',
               matchPercent: 50,
-              decision: MODEL_EVALUATION_DECISION.manualReview,
               estimatedTotalMonthlyCompensation: {
                 status: 'estimated',
                 currency: 'BRL',

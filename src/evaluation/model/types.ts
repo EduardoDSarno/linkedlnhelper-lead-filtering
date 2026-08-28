@@ -53,16 +53,20 @@ export interface CompensationRangeMatch {
   readonly explanation: string;
 }
 
-/** One validated professional-fit assessment returned by Gemini. */
-export interface ProfileModelEvaluation {
+/** One validated professional-fit assessment returned directly by Gemini. */
+export interface ProfileModelAssessment {
   readonly profileId: string;
   readonly matchPercent: number;
-  readonly decision: ModelEvaluationDecision;
   readonly estimatedTotalMonthlyCompensation: EstimatedTotalMonthlyCompensation;
-  readonly compensationRangeMatch?: CompensationRangeMatch;
   readonly reasons: readonly string[];
   readonly evidence: readonly string[];
   readonly uncertainties: readonly string[];
+}
+
+/** A model assessment enriched with the application's deterministic decision. */
+export interface ProfileModelEvaluation extends ProfileModelAssessment {
+  readonly decision: ModelEvaluationDecision;
+  readonly compensationRangeMatch?: CompensationRangeMatch;
 }
 
 /** Tokens consumed by all successful and failed model-evaluation attempts. */
