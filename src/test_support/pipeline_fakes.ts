@@ -2,7 +2,7 @@ import type {
   ApifyCollectionResult,
   RawApifyProfile,
 } from '../dataCollector/apify_profile_collector/index.js';
-import type { ImportedCsvData } from '../dataCollector/csvdata.js';
+import type { ImportedCsvData } from '../dataCollector/csv/csvdata.js';
 import type {
   ProfileImageExtractionResult,
   ProfileImageJob,

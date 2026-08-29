@@ -1,9 +1,9 @@
 import { readFile } from 'node:fs/promises';
 import { parse } from 'csv-parse/sync';
 
-import { deduplicateBy } from '../helpers/index.js';
-import { toImportedCsvProfile } from '../profile/index.js';
-import type { ImportedCsvProfile } from '../profile/index.js';
+import { deduplicateBy } from '../../helpers/index.js';
+import { toImportedCsvProfile } from '../../profile/index.js';
+import type { ImportedCsvProfile } from '../../profile/index.js';
 
 export const TEXT_ENCODING = 'utf-8';
 

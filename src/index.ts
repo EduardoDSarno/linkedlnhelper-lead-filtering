@@ -2,15 +2,14 @@
 import 'dotenv/config';
 
 import { randomUUID } from 'node:crypto';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 
 import {
   APPLICATION_MODE,
   APPLICATION_USAGE,
   parseApplicationArguments,
 } from './cli/arguments.js';
-import { loadProfilesFromCsv } from './dataCollector/csvdata.js';
-import type { ImportedCsvData } from './dataCollector/csvdata.js';
+import { loadProfilesFromCsv } from './dataCollector/csv/csvdata.js';
 import { loadFullEvaluationCriteria } from './evaluation/index.js';
 import { createFileLogger } from './logging/index.js';
 import type { Logger } from './logging/index.js';
@@ -18,24 +17,14 @@ import {
   runFullProfilePipeline,
   runReviewPipeline,
 } from './pipeline/index.js';
+import { saveOriginalCsv } from './dataCollector/processing/processing.js';
 
 // Resolved at startup, after dotenv has loaded; blank means absent.
 const LOG_PATH = process.env['LOG_PATH']?.trim() || 'output/pipeline.log';
-const IMPORTED_CSV_OUTPUT_PATH = 'output/imported-csv-profiles.json';
 
 /** Converts an unknown application failure into a log-safe message. */
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
-}
-
-/** Writes the normalized CSV-only import for the non-provider CLI mode. */
-async function saveImportedCsvData(importedData: ImportedCsvData): Promise<void> {
-  await mkdir('output', { recursive: true });
-  await writeFile(
-    IMPORTED_CSV_OUTPUT_PATH,
-    JSON.stringify(Object.values(importedData.records), null, 2),
-    'utf8',
-  );
 }
 
 /**
@@ -67,9 +56,17 @@ export async function main(logger: Logger): Promise<void> {
     return;
   }
 
+  // Adding temp storage for the original CSV file 
+  // while running the pipeline
+  // so we can use it for submission later
+  const id = randomUUID();
   const { csvPath } = applicationArguments;
+  const bytes = await readFile(csvPath);
+  const { originalPath } = await saveOriginalCsv(id, bytes);
+
+  logger.info({ originalPath }, 'Saved original CSV.');
   logger.info({ csvPath }, 'Loading Linked Helper CSV.');
-  const importedData = await loadProfilesFromCsv(csvPath);
+  const importedData = await loadProfilesFromCsv(originalPath);
 
   logger.info(
     {
@@ -81,11 +78,10 @@ export async function main(logger: Logger): Promise<void> {
   );
 
   if (applicationArguments.mode === APPLICATION_MODE.importCsv) {
-    await saveImportedCsvData(importedData);
     logger.info(
       {
-        outputPath: IMPORTED_CSV_OUTPUT_PATH,
-        profilesWritten: importedData.total_profiles,
+        originalPath,
+        profilesImported: importedData.total_profiles,
       },
       'Completed CSV-only import.',
     );

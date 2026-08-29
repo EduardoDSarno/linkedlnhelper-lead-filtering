@@ -12,7 +12,7 @@ import {
   linkedHelperCsv,
   linkedHelperRow,
   sparseLinkedHelperRow,
-} from '../../test_support/linked_helper_csv_fixtures.js';
+} from '../../../test_support/linked_helper_csv_fixtures.js';
 
 /** Writes one CSV into a temporary directory and loads it, then cleans up. */
 async function withCsv<T>(
