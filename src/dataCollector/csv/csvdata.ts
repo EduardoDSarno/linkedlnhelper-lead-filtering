@@ -7,6 +7,72 @@ import type { ImportedCsvProfile } from '../../profile/index.js';
 
 export const TEXT_ENCODING = 'utf-8';
 
+/** Field separator Linked Helper writes between CSV columns. */
+const LINKED_HELPER_DELIMITER = ';';
+
+/** Header column whose value keys each row to its evaluation decision. */
+const PUBLIC_ID_COLUMN = 'public_id';
+
+/** One CSV data row kept as its exact original bytes. */
+export interface RawCsvRecord {
+  // Decoded only to match evaluation decisions; the bytes stay untouched.
+  publicId: string;
+
+  // The row's verbatim bytes, including quoting and its line terminator.
+  bytes: Buffer;
+}
+
+/** A Linked Helper CSV split into its header and per-row original bytes. */
+export interface RawCsvFile {
+  // Exact bytes of the header line, including any BOM and its terminator.
+  header: Buffer;
+
+  // Every data row in original file order.
+  records: RawCsvRecord[];
+}
+
+/**
+ * Reads a Linked Helper CSV into its exact header and per-row bytes so an
+ * approved subset can be rebuilt without disturbing the vendor checksums.
+ *
+ * Only the public_id is decoded, to key each row to its decision; the row
+ * bytes are never re-encoded. Concatenating the header with every record's
+ * bytes reproduces the original file exactly, which the tests assert.
+ */
+export function readRawRecords(file: Buffer): RawCsvFile {
+  // `info: true` attaches each record's cumulative end offset in `file`;
+  // `columns: false` keeps the header as the first emitted record so its
+  // boundary is known. `bom: true` strips the BOM from decoded values while
+  // the byte offsets still span it.
+  const rows = parse(file, {
+    columns: false,
+    info: true,
+    delimiter: LINKED_HELPER_DELIMITER,
+    bom: true,
+  }) as unknown as Array<{ record: string[]; info: { bytes: number } }>;
+
+  const [headerRow, ...dataRows] = rows;
+
+  if (!headerRow) {
+    return { header: Buffer.alloc(0), records: [] };
+  }
+  const header = file.subarray(0, headerRow.info.bytes);
+  const publicIdIndex = headerRow.record.indexOf(PUBLIC_ID_COLUMN);
+
+  const records: RawCsvRecord[] = [];
+  let start = headerRow.info.bytes;
+
+  for (const { record, info } of dataRows) {
+    records.push({
+      publicId: publicIdIndex >= 0 ? record[publicIdIndex] ?? '' : '',
+      bytes: file.subarray(start, info.bytes),
+    });
+    start = info.bytes;
+  }
+
+  return { header, records };
+}
+
 /** The complete result of importing and deduplicating one CSV file. */
 export interface ImportedCsvData {
   // Total number of data rows read before validation or deduplication.
@@ -81,3 +147,4 @@ export function getLinkedlnProfileDataFromExternalProvidor(profiles: Record<stri
 
   return profile_url_list;
 }
+

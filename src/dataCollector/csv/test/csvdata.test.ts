@@ -7,6 +7,7 @@ import test from 'node:test';
 import {
   getLinkedlnProfileDataFromExternalProvidor,
   loadProfilesFromCsv,
+  readRawRecords,
 } from '../csvdata.js';
 import {
   linkedHelperCsv,
@@ -324,4 +325,43 @@ test('exposes only URLs, never the raw rows', async () => {
   // them.
   assert.ok(urls.every((url) => typeof url === 'string'));
   assert.equal(urls.length, 1);
+});
+
+test('readRawRecords reproduces the original file byte-for-byte', () => {
+  // BOM + CRLF endings + a quoted field with an embedded delimiter and newline.
+  const file = Buffer.from(
+    '﻿public_id;full_name\r\nabc;"Ada;\nLovelace"\r\ndef;Bob\r\n',
+    'utf-8',
+  );
+
+  const { header, records } = readRawRecords(file);
+  const rebuilt = Buffer.concat([header, ...records.map((record) => record.bytes)]);
+
+  assert.deepStrictEqual(rebuilt, file);
+});
+
+test('readRawRecords keys each row by its public_id in original order', () => {
+  const file = Buffer.from(
+    '﻿public_id;full_name\r\nabc;Ada\r\ndef;Bob\r\n',
+    'utf-8',
+  );
+
+  const { records } = readRawRecords(file);
+
+  assert.deepStrictEqual(
+    records.map((record) => record.publicId),
+    ['abc', 'def'],
+  );
+});
+
+test('readRawRecords keeps a quoted field with an embedded delimiter and newline intact', () => {
+  const file = Buffer.from(
+    '﻿public_id;full_name\r\nabc;"Ada;\nLovelace"\r\n',
+    'utf-8',
+  );
+
+  const { records } = readRawRecords(file);
+
+  assert.equal(records.length, 1);
+  assert.equal(records[0]?.bytes.toString('utf-8'), 'abc;"Ada;\nLovelace"\r\n');
 });
