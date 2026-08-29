@@ -1,10 +1,12 @@
 import { mkdir, writeFile } from "node:fs/promises";
 
+/** Root folder that holds all runtime data written to disk. */
+const DATA_STORAGE_DIR = "src/dataStorage";
 
 /** Get the paths for the processing directory */
-export function processingPaths(id: string) 
+export function processingPaths(id: string)
 {
-    const dir = `data/processing/${id}`;
+    const dir = `${DATA_STORAGE_DIR}/processing/${id}`;
     return { dir, original: `${dir}/original.csv` };
 }
 
@@ -16,5 +18,5 @@ export async function saveOriginalCsv(id: string, bytes: Buffer)
     await mkdir(paths.dir, { recursive: true });
     await writeFile(paths.original, bytes);
 
-    return { processingId: id, originalPath: paths.original };
+    return { processingId: id, originalPath: paths.original, dir: paths.dir };
 }

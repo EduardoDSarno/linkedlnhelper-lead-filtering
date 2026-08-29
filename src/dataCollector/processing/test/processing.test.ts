@@ -17,6 +17,6 @@ test('saveOriginalCsv', async () => {
     const written = await readFile(result.originalPath); // no encoding → Buffer
     assert.deepStrictEqual(written, buf);
 
-    await rm(`data/processing/${id}`, { recursive: true, force: true });
+    await rm(result.dir, { recursive: true, force: true });
 });
 

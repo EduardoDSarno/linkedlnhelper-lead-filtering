@@ -8,7 +8,7 @@ import type { StoredEvaluationRun } from './types.js';
 
 export type { StoredEvaluationRun } from './types.js';
 
-const DEFAULT_DATABASE_PATH = 'data/application.sqlite';
+const DEFAULT_DATABASE_PATH = 'src/dataStorage/db/application.sqlite';
 const DATABASE_PATH_ENVIRONMENT_KEY = 'DATABASE_PATH';
 
 /**

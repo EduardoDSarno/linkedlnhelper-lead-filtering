@@ -11,3 +11,7 @@ opencode.json
 AGENTS.md
 criteria.json
 agents.md
+
+# Runtime data written to disk (SQLite db + processing CSVs)
+src/dataStorage/
+*.sqlite
