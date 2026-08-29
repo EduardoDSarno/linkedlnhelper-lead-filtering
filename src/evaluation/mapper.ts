@@ -4,7 +4,7 @@
  */
 
 import { asRecord, asString } from '../helpers/index.js';
-import type { ProfileImageAssessment } from '../image_extractor/index.js';
+import type { ProfileImageAssessment } from '../imageExtractor/index.js';
 import type {
   FullProfile,
   ProfileEducation,

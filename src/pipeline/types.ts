@@ -4,7 +4,7 @@ import type {
   ApifyCollectionResult,
   ApifyCollectionStats,
   ApifyProfileFailure,
-} from '../data/apify_profile_collector/index.js';
+} from '../dataCollector/apify_profile_collector/index.js';
 import type { StoredEvaluationRun } from '../database/types.js';
 import type { ModelEvaluationOptions } from '../evaluation/index.js';
 import type {
@@ -12,7 +12,7 @@ import type {
   ProfileImageBatchOptions,
   ProfileImageJob,
   ProfileImageJobResult,
-} from '../image_extractor/index.js';
+} from '../imageExtractor/index.js';
 import type { Logger } from '../logging/index.js';
 import type { FullProfile } from '../profile/index.js';
 

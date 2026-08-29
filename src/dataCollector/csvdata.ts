@@ -23,7 +23,8 @@ export interface ImportedCsvData {
 }
 
 /** Reads a Linked Helper CSV and converts it into normalized profile records. */
-export async function loadProfilesFromCsv(path: string): Promise<ImportedCsvData> {
+export async function loadProfilesFromCsv(path: string): Promise<ImportedCsvData> 
+{
   // readFile is asynchronous, so it does not block Node while the file is opened.
   const csvFile = await readFile(path, TEXT_ENCODING);
 

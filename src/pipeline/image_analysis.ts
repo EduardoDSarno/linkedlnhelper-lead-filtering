@@ -1,8 +1,8 @@
 import {
   resolveProfileImageBatchConcurrency,
   resolveProfileImageResolution,
-} from '../image_extractor/index.js';
-import type { ProfileImageJobResult } from '../image_extractor/index.js';
+} from '../imageExtractor/index.js';
+import type { ProfileImageJobResult } from '../imageExtractor/index.js';
 import type { Logger } from '../logging/index.js';
 import { attachProfileImageAnalysis } from '../profile/index.js';
 import type { FullProfile, Profile } from '../profile/index.js';

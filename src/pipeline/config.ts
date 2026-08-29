@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import { collectApifyProfiles } from '../data/apify_profile_collector/index.js';
+import { collectApifyProfiles } from '../dataCollector/apify_profile_collector/index.js';
 import {
   dbInsertEvaluationRun,
   dbInsertProfile,
@@ -11,7 +11,7 @@ import {
   resolveConfigNumber,
   writeJsonAtomically,
 } from '../helpers/index.js';
-import { extractProfileImages } from '../image_extractor/index.js';
+import { extractProfileImages } from '../imageExtractor/index.js';
 
 /** Environment variables understood by the full-profile pipeline. */
 export const PIPELINE_ENVIRONMENT_KEYS = {

@@ -1,13 +1,13 @@
 import type {
   ApifyCollectionResult,
   RawApifyProfile,
-} from '../data/apify_profile_collector/index.js';
-import type { ImportedCsvData } from '../data/csvdata.js';
+} from '../dataCollector/apify_profile_collector/index.js';
+import type { ImportedCsvData } from '../dataCollector/csvdata.js';
 import type {
   ProfileImageExtractionResult,
   ProfileImageJob,
   ProfileImageJobResult,
-} from '../image_extractor/index.js';
+} from '../imageExtractor/index.js';
 import type { Logger } from '../logging/index.js';
 import type { ImportedCsvProfile } from '../profile/index.js';
 import { validImageAssessment } from './image_assessment_fixtures.js';

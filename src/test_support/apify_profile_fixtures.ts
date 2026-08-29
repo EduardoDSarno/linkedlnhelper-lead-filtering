@@ -1,4 +1,4 @@
-import type { RawApifyProfile } from '../data/apify_profile_collector/index.js';
+import type { RawApifyProfile } from '../dataCollector/apify_profile_collector/index.js';
 
 /**
  * Anonymized provider-shaped Apify payloads for deterministic tests.

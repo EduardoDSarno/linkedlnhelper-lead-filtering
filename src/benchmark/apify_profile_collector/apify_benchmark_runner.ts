@@ -3,11 +3,11 @@ import { join } from 'node:path';
 import {
   collectApifyProfiles,
   resolveApifyCollectorConfig,
-} from '../../data/apify_profile_collector/index.js';
+} from '../../dataCollector/apify_profile_collector/index.js';
 import type {
   ApifyCollectionResult,
   RawApifyProfile,
-} from '../../data/apify_profile_collector/index.js';
+} from '../../dataCollector/apify_profile_collector/index.js';
 import { deduplicateBy, writeJsonAtomically } from '../../helpers/index.js';
 import { normalizeLinkedinUrl } from '../../linkedin/index.js';
 import type { Logger } from '../../logging/index.js';

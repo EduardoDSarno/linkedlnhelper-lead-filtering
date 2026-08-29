@@ -9,8 +9,8 @@ import {
   APPLICATION_USAGE,
   parseApplicationArguments,
 } from './cli/arguments.js';
-import { loadProfilesFromCsv } from './data/csvdata.js';
-import type { ImportedCsvData } from './data/csvdata.js';
+import { loadProfilesFromCsv } from './dataCollector/csvdata.js';
+import type { ImportedCsvData } from './dataCollector/csvdata.js';
 import { loadFullEvaluationCriteria } from './evaluation/index.js';
 import { createFileLogger } from './logging/index.js';
 import type { Logger } from './logging/index.js';

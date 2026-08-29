@@ -5,7 +5,7 @@ import type {
   ApifyProfileFailure,
   RawApifyProfile,
   ResolvedApifyCollectorConfig,
-} from '../../data/apify_profile_collector/index.js';
+} from '../../dataCollector/apify_profile_collector/index.js';
 import type { Logger } from '../../logging/index.js';
 
 export type ApifyBenchmarkStatus =

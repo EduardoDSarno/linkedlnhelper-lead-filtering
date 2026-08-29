@@ -1,5 +1,5 @@
-import { getLinkedlnProfileDataFromExternalProvidor } from '../data/csvdata.js';
-import type { ImportedCsvData } from '../data/csvdata.js';
+import { getLinkedlnProfileDataFromExternalProvidor } from '../dataCollector/csvdata.js';
+import type { ImportedCsvData } from '../dataCollector/csvdata.js';
 import { linkedinProfileKey } from '../linkedin/index.js';
 import type { Logger } from '../logging/index.js';
 import { mapApifyProfile } from '../mapper/index.js';

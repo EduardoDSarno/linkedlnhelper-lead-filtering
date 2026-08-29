@@ -1,4 +1,4 @@
-import type { ImportedCsvData } from '../data/csvdata.js';
+import type { ImportedCsvData } from '../dataCollector/csvdata.js';
 import type { FullEvaluationCriteria } from '../evaluation/criterias/index.js';
 import {
   createEvaluationBatchContext,

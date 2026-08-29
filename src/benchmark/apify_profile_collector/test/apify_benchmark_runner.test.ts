@@ -10,7 +10,7 @@ import type {
   ApifyCollectionStats,
   ApifyProfileFailure,
   RawApifyProfile,
-} from '../../../data/apify_profile_collector/index.js';
+} from '../../../dataCollector/apify_profile_collector/index.js';
 import {
   runApifyBenchmark,
   validateApifyBenchmarkCollection,

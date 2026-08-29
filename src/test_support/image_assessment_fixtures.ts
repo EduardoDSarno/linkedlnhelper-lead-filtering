@@ -1,4 +1,4 @@
-import type { ProfileImageAssessment } from '../image_extractor/index.js';
+import type { ProfileImageAssessment } from '../imageExtractor/index.js';
 
 /**
  * Assessment payloads shaped like Gemini structured output, for tests that

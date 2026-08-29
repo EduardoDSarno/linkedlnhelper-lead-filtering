@@ -16,7 +16,7 @@ import type {
 import type {
   ApparentAgeBracket,
   ApparentAgeConfidence,
-} from '../../image_extractor/index.js';
+} from '../../imageExtractor/index.js';
 import { validImageAssessment } from '../../test_support/image_assessment_fixtures.js';
 
 /** Creates the required prompts for a small criteria fixture. */

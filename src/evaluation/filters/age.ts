@@ -1,6 +1,6 @@
 import { type AgeCriteria } from '../criterias/index.js';
 import type { EvaluationProfileData } from '../context.js';
-import type { ApparentAgeBracket, ApparentAgeConfidence } from '../../image_extractor/index.js';
+import type { ApparentAgeBracket, ApparentAgeConfidence } from '../../imageExtractor/index.js';
 import { BROAD_FILTER_AGE_MARGIN_YEARS, BROAD_OUTCOME } from './constants.js';
 import { criterionOutcome } from './helpers.js';
 import type { BroadCriterionResult } from './types.js';

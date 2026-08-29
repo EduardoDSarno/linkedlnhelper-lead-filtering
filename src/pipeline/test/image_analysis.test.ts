@@ -8,8 +8,8 @@ import {
   totalImageTokenUsage,
 } from '../image_analysis.js';
 import type { ProfileImageAnalyzer } from '../image_analysis.js';
-import { PROFILE_IMAGE_DEFAULTS } from '../../image_extractor/index.js';
-import type { ProfileImageJobResult } from '../../image_extractor/index.js';
+import { PROFILE_IMAGE_DEFAULTS } from '../../imageExtractor/index.js';
+import type { ProfileImageJobResult } from '../../imageExtractor/index.js';
 import type { Profile } from '../../profile/index.js';
 import {
   imageExtractionResult,

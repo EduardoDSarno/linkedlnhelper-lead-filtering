@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import type { RawApifyProfile } from '../data/apify_profile_collector/index.js';
+import type { RawApifyProfile } from '../dataCollector/apify_profile_collector/index.js';
 import { asRecord, asString, deduplicateBy } from '../helpers/index.js';
 import type {
   Profile,

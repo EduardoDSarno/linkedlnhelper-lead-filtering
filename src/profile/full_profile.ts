@@ -1,4 +1,4 @@
-import type { ProfileImageExtractionResult } from '../image_extractor/index.js';
+import type { ProfileImageExtractionResult } from '../imageExtractor/index.js';
 import type { Profile } from './apify_profile.js';
 
 /**
