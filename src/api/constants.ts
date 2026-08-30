@@ -2,12 +2,21 @@
 export const HTTP_STATUS = {
   created: 201,
   badRequest: 400,
+  notFound: 404,
+  ok: 200,
   internalError: 500,
 } as const;
 
 /** Route paths the API exposes. */
 export const API_ROUTES = {
   import: '/import',
+  review: '/run_filter',
+} as const;
+
+/** Field names shared by the API request and response bodies. */
+export const API_FIELD = {
+  processingId: 'processingId',
+  criteria: 'criteria',
 } as const;
 
 /** Content type accepted for a raw Linked Helper CSV upload. */
