@@ -72,3 +72,4 @@ async function registerCsvParser(server: FastifyInstance)
         },
     );
 }
+

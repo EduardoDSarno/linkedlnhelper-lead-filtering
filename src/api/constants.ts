@@ -15,3 +15,6 @@ export const CSV_CONTENT_TYPE = 'text/csv';
 
 /** Fastify body-parser mode that yields the upload as raw, undecoded bytes. */
 export const PARSE_AS_BUFFER = 'buffer';
+
+/** Default port the API listens on. */
+export const DEFAULT_PORT = 3000;
