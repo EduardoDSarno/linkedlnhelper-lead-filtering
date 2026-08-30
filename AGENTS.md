@@ -29,3 +29,4 @@
 
 # Others
 - Consider a cyclomatic complexity lint pass before and after each change to avoid verbose code
+- When writing a file write the most important functions close to the top, and the helpers on the bottom (decreasing order of importance)
