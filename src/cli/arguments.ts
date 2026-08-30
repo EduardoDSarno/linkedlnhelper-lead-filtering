@@ -1,3 +1,6 @@
+import { errorMessage } from '../helpers/index.js';
+import type { Logger } from '../logging/index.js';
+
 /** Supported execution modes exposed by the current terminal entry point. */
 export const APPLICATION_MODE = {
   importCsv: 'import_csv',
@@ -124,4 +127,27 @@ export function parseApplicationArguments(
   }
 
   return { mode, csvPath };
+}
+
+/**
+ * Parses the process arguments for the terminal entry point, logging usage and
+ * flagging a failed exit instead of throwing, so the caller stops simply by
+ * checking for a missing result.
+ */
+export function parseCliArguments(
+  logger: Logger,
+): ApplicationArguments | undefined {
+  try {
+    return parseApplicationArguments(process.argv.slice(2));
+  } catch (error: unknown) {
+    logger.error(
+      {
+        error: errorMessage(error),
+        usage: Object.values(APPLICATION_USAGE),
+      },
+      'Invalid command-line arguments.',
+    );
+    process.exitCode = 1;
+    return undefined;
+  }
 }
