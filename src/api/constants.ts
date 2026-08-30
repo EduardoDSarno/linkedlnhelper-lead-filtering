@@ -1,9 +1,10 @@
 /** HTTP status codes the API routes return. */
 export const HTTP_STATUS = {
+  ok: 200,
   created: 201,
+  accepted: 202,
   badRequest: 400,
   notFound: 404,
-  ok: 200,
   internalError: 500,
 } as const;
 
@@ -11,6 +12,7 @@ export const HTTP_STATUS = {
 export const API_ROUTES = {
   import: '/import',
   review: '/run_filter',
+  getProccessById: '/run_filter/:processingId',
 } as const;
 
 /** Field names shared by the API request and response bodies. */

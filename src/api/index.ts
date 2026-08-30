@@ -20,7 +20,43 @@ export async function buildServer()
     const server = Fastify({logger:true});
     await registerCsvParser(server);
     registerImportRoute(server);
+    registerFilterRoute(server);
+    registerGetProccessByIdRoute(server);
     return server;
+}
+
+
+function registerGetProccessByIdRoute(server: FastifyInstance)
+{
+    server.get(API_ROUTES.getProccessById, async (request, reply) =>
+    {
+        const params = asRecord(request.params);
+        if (!params) return reply.status(HTTP_STATUS.badRequest).send({ error: 'Invalid params' });
+
+       const processingId = asString(params[API_FIELD.processingId]);
+       if (!processingId) return reply.status(HTTP_STATUS.badRequest).send({ error: 'Missing processingId' });
+
+       const db = openDatabase();
+       try
+       {
+            const run = dbGetProcessingRunById(processingId, db);
+            if (!run) {
+                return reply.status(HTTP_STATUS.notFound).send({ error: 'Processing run not found' });
+            }
+
+            return reply.status(HTTP_STATUS.ok).send({
+                processingId: run.id,
+                status: run.status,
+                ...(run.evaluationRunId ? { evaluationRunId: run.evaluationRunId } : {}),
+                ...(run.error ? { error: run.error } : {}),
+                ...(run.completedAt ? { completedAt: run.completedAt } : {}),
+            });
+       }
+       finally
+       {
+            db.close();
+       }
+    });
 }
 
 /** This function receives a server instance and it's responsible
@@ -74,11 +110,16 @@ function registerFilterRoute(server: FastifyInstance)
         const paths = processingPaths(processingId);
         // Run the pipeline
 
-        // Run the pipeline
-        const result = await runPipeline(processingId, paths, validCriteria, request.log as Logger);
-        // Return the result
+        // Start the pipeline in the background; the response is already sent, so
+        // the failure is only logged. The run is marked failed in the database
+        // and the client learns the outcome by polling the status route.
+        void runPipeline(processingId, paths, validCriteria, request.log as Logger)
+        .catch((error) =>
+        {
+            request.log.error({ err: error }, 'Review run failed');
+        });
 
-        return reply.status(HTTP_STATUS.ok).send(result);
+        return reply.status(HTTP_STATUS.accepted).send({ processingId }); // Accepted; running in the background
     });
 }
 
