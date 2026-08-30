@@ -2,7 +2,7 @@
 import 'dotenv/config';
 
 import { randomUUID } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
+import { readFile, rm } from 'node:fs/promises';
 
 import {
   APPLICATION_MODE,
@@ -10,6 +10,13 @@ import {
   parseApplicationArguments,
 } from './cli/arguments.js';
 import { loadProfilesFromCsv } from './dataCollector/csv/csvdata.js';
+import type { ImportedCsvData } from './dataCollector/csv/csvdata.js';
+import {
+  dbInsertProcessingRun,
+  dbUpdateProcessingRun,
+  openDatabase,
+  PROCESSING_STATUS,
+} from './database/index.js';
 import { loadFullEvaluationCriteria } from './evaluation/index.js';
 import { createFileLogger } from './logging/index.js';
 import type { Logger } from './logging/index.js';
@@ -17,7 +24,12 @@ import {
   runFullProfilePipeline,
   runReviewPipeline,
 } from './pipeline/index.js';
-import { saveOriginalCsv } from './dataCollector/processing/processing.js';
+import {
+  processingPaths,
+  saveOriginalCsv,
+} from './dataCollector/processing/processing.js';
+import type { ProcessingPaths } from './dataCollector/processing/processing.js';
+import { writeReviewArtifacts } from './dataCollector/processing/review_artifacts.js';
 
 // Resolved at startup, after dotenv has loaded; blank means absent.
 const LOG_PATH = process.env['LOG_PATH']?.trim() || 'output/pipeline.log';
@@ -56,10 +68,10 @@ export async function main(logger: Logger): Promise<void> {
     return;
   }
 
-  // Adding temp storage for the original CSV file 
-  // while running the pipeline
-  // so we can use it for submission later
+  // Save the uploaded CSV verbatim under a processing id so the approved output
+  // can later be rebuilt from its exact bytes without breaking vendor checksums.
   const id = randomUUID();
+  const paths = processingPaths(id);
   const { csvPath } = applicationArguments;
   const bytes = await readFile(csvPath);
   const { originalPath } = await saveOriginalCsv(id, bytes);
@@ -93,18 +105,98 @@ export async function main(logger: Logger): Promise<void> {
     return;
   }
 
-  const criteria = await loadFullEvaluationCriteria(
+  await runReviewMode(
+    id,
+    paths,
+    importedData,
     applicationArguments.criteriaPath,
+    logger,
   );
-  const result = await runReviewPipeline(importedData, criteria, logger);
-  logger.info(
-    {
-      evaluationRunId: result.evaluationRun.id,
-      evaluatedProfiles:
-        result.evaluationRun.evaluation.broadFilter.evaluations.length,
-    },
-    'Review results are available in SQLite.',
+}
+
+/**
+ * Runs the review pipeline, writes both output artifacts, and tracks the
+ * processing run's status in SQLite.
+ *
+ * The original CSV is deleted only after both artifacts are written and the
+ * completed status is recorded. A failure leaves the original in place so the
+ * run can be inspected or retried, and is re-thrown for the top-level handler.
+ */
+async function runReviewMode(
+  id: string,
+  paths: ProcessingPaths,
+  importedData: ImportedCsvData,
+  criteriaPath: string,
+  logger: Logger,
+): Promise<void> {
+  const createdAt = new Date().toISOString();
+  const baseRun = { id, originalCsvPath: paths.original, createdAt };
+
+  recordProcessingRun(
+    (db) =>
+      dbInsertProcessingRun(
+        { ...baseRun, status: PROCESSING_STATUS.running },
+        db,
+      ),
   );
+
+  try {
+    const criteria = await loadFullEvaluationCriteria(criteriaPath);
+    const result = await runReviewPipeline(importedData, criteria, logger);
+    const artifacts = await writeReviewArtifacts(paths.original, paths, result);
+
+    recordProcessingRun((db) =>
+      dbUpdateProcessingRun(
+        {
+          ...baseRun,
+          status: PROCESSING_STATUS.completed,
+          approvedCsvPath: artifacts.approvedCsvPath,
+          evaluationReportPath: artifacts.evaluationReportPath,
+          evaluationRunId: result.evaluationRun.id,
+          completedAt: new Date().toISOString(),
+        },
+        db,
+      ),
+    );
+
+    // Both artifacts are written and recorded, so the original is safe to drop.
+    await rm(paths.original, { force: true });
+
+    logger.info(
+      {
+        processingId: id,
+        approvedCsvPath: artifacts.approvedCsvPath,
+        evaluationReportPath: artifacts.evaluationReportPath,
+        evaluationRunId: result.evaluationRun.id,
+      },
+      'Completed review and wrote output artifacts.',
+    );
+  } catch (error: unknown) {
+    recordProcessingRun((db) =>
+      dbUpdateProcessingRun(
+        {
+          ...baseRun,
+          status: PROCESSING_STATUS.failed,
+          error: errorMessage(error),
+          completedAt: new Date().toISOString(),
+        },
+        db,
+      ),
+    );
+    throw error;
+  }
+}
+
+/** Opens the database for one short status write and always closes it. */
+function recordProcessingRun(
+  write: (db: ReturnType<typeof openDatabase>) => unknown,
+): void {
+  const db = openDatabase();
+  try {
+    write(db);
+  } finally {
+    db.close();
+  }
 }
 
 /** Creates the run logger and guarantees its transport is closed on shutdown. */

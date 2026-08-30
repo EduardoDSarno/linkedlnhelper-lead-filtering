@@ -4,9 +4,14 @@ import { DatabaseSync } from 'node:sqlite';
 
 import { linkedinProfileKey } from '../linkedin/index.js';
 import type { FullProfile } from '../profile/index.js';
-import type { StoredEvaluationRun } from './types.js';
+import type { ProcessingRun, StoredEvaluationRun } from './types.js';
 
-export type { StoredEvaluationRun } from './types.js';
+export { PROCESSING_STATUS } from './types.js';
+export type {
+  ProcessingRun,
+  ProcessingStatus,
+  StoredEvaluationRun,
+} from './types.js';
 
 const DEFAULT_DATABASE_PATH = 'src/dataStorage/db/application.sqlite';
 const DATABASE_PATH_ENVIRONMENT_KEY = 'DATABASE_PATH';
@@ -26,6 +31,7 @@ export function defaultDatabasePath(
 }
 const PROFILE_TABLE_NAME = 'profiles';
 const EVALUATION_RUN_TABLE_NAME = 'evaluation_runs';
+const PROCESSING_RUN_TABLE_NAME = 'processing_runs';
 
 /** Creates the tables required by the current MVP. */
 export function initializeDatabase(db: DatabaseSync): void {
@@ -45,7 +51,143 @@ export function initializeDatabase(db: DatabaseSync): void {
       evaluation_json TEXT NOT NULL CHECK (json_valid(evaluation_json)),
       created_at TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS ${PROCESSING_RUN_TABLE_NAME} (
+      id TEXT PRIMARY KEY NOT NULL,
+      status TEXT NOT NULL,
+      original_csv_path TEXT NOT NULL,
+      approved_csv_path TEXT,
+      evaluation_report_path TEXT,
+      evaluation_run_id TEXT,
+      error TEXT,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      completed_at TEXT
+    );
   `);
+}
+
+/** Converts one database row into the application processing-run shape. */
+function processingRunFromRow(row: {
+  id: string;
+  status: string;
+  original_csv_path: string;
+  approved_csv_path: string | null;
+  evaluation_report_path: string | null;
+  evaluation_run_id: string | null;
+  error: string | null;
+  created_at: string;
+  completed_at: string | null;
+}): ProcessingRun {
+  return {
+    id: row.id,
+    status: row.status as ProcessingRun['status'],
+    originalCsvPath: row.original_csv_path,
+    createdAt: row.created_at,
+    ...(row.approved_csv_path ? { approvedCsvPath: row.approved_csv_path } : {}),
+    ...(row.evaluation_report_path
+      ? { evaluationReportPath: row.evaluation_report_path }
+      : {}),
+    ...(row.evaluation_run_id
+      ? { evaluationRunId: row.evaluation_run_id }
+      : {}),
+    ...(row.error ? { error: row.error } : {}),
+    ...(row.completed_at ? { completedAt: row.completed_at } : {}),
+  };
+}
+
+/** Inserts one processing run, typically in the queued or running state. */
+export function dbInsertProcessingRun(
+  run: ProcessingRun,
+  db: DatabaseSync,
+): ProcessingRun {
+  db.prepare(`
+    INSERT INTO ${PROCESSING_RUN_TABLE_NAME} (
+      id,
+      status,
+      original_csv_path,
+      approved_csv_path,
+      evaluation_report_path,
+      evaluation_run_id,
+      error,
+      created_at,
+      completed_at
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    run.id,
+    run.status,
+    run.originalCsvPath,
+    run.approvedCsvPath ?? null,
+    run.evaluationReportPath ?? null,
+    run.evaluationRunId ?? null,
+    run.error ?? null,
+    run.createdAt,
+    run.completedAt ?? null,
+  );
+
+  return run;
+}
+
+/**
+ * Replaces one processing run's mutable columns after a status change.
+ *
+ * The full record is rewritten so a completed run records its artifact paths
+ * and a failed run records its error in a single call.
+ */
+export function dbUpdateProcessingRun(
+  run: ProcessingRun,
+  db: DatabaseSync,
+): ProcessingRun {
+  db.prepare(`
+    UPDATE ${PROCESSING_RUN_TABLE_NAME}
+    SET
+      status = ?,
+      original_csv_path = ?,
+      approved_csv_path = ?,
+      evaluation_report_path = ?,
+      evaluation_run_id = ?,
+      error = ?,
+      completed_at = ?
+    WHERE id = ?
+  `).run(
+    run.status,
+    run.originalCsvPath,
+    run.approvedCsvPath ?? null,
+    run.evaluationReportPath ?? null,
+    run.evaluationRunId ?? null,
+    run.error ?? null,
+    run.completedAt ?? null,
+    run.id,
+  );
+
+  return run;
+}
+
+/** Retrieves one processing run by its application-owned ID. */
+export function dbGetProcessingRunById(
+  id: string,
+  db: DatabaseSync,
+): ProcessingRun | undefined {
+  const row = db
+    .prepare(`
+      SELECT
+        id,
+        status,
+        original_csv_path,
+        approved_csv_path,
+        evaluation_report_path,
+        evaluation_run_id,
+        error,
+        created_at,
+        completed_at
+      FROM ${PROCESSING_RUN_TABLE_NAME}
+      WHERE id = ?
+    `)
+    .get(id) as
+    | Parameters<typeof processingRunFromRow>[0]
+    | undefined;
+
+  return row ? processingRunFromRow(row) : undefined;
 }
 
 /** Opens a SQLite file and ensures the MVP schema exists before returning it. */

@@ -4,14 +4,18 @@ import test from 'node:test';
 import {
   dbDeleteProfile,
   dbGetEvaluationRunById,
+  dbGetProcessingRunById,
   dbGetProfileById,
   dbInsertEvaluationRun,
+  dbInsertProcessingRun,
   dbInsertProfile,
   dbListEvaluationRuns,
   dbListProfiles,
+  dbUpdateProcessingRun,
   openDatabase,
+  PROCESSING_STATUS,
 } from '../index.js';
-import type { StoredEvaluationRun } from '../index.js';
+import type { ProcessingRun, StoredEvaluationRun } from '../index.js';
 import type { FullProfile } from '../../profile/index.js';
 
 /** Builds the minimum complete profile needed by database tests. */
@@ -228,6 +232,90 @@ test('preserves evaluation history and lists the newest run first', () => {
     dbInsertEvaluationRun(newer, db);
 
     assert.deepEqual(dbListEvaluationRuns(db), [newer, older]);
+  } finally {
+    db.close();
+  }
+});
+
+test('inserts a running processing run and reads it back', () => {
+  const db = openDatabase(':memory:');
+
+  try {
+    const run: ProcessingRun = {
+      id: 'proc-1',
+      status: PROCESSING_STATUS.running,
+      originalCsvPath: 'data/processing/proc-1/original.csv',
+      createdAt: '2026-01-01T00:00:00.000Z',
+    };
+    dbInsertProcessingRun(run, db);
+
+    assert.deepEqual(dbGetProcessingRunById('proc-1', db), run);
+  } finally {
+    db.close();
+  }
+});
+
+test('updates a processing run to completed with its artifact paths', () => {
+  const db = openDatabase(':memory:');
+
+  try {
+    dbInsertProcessingRun(
+      {
+        id: 'proc-2',
+        status: PROCESSING_STATUS.running,
+        originalCsvPath: 'data/processing/proc-2/original.csv',
+        createdAt: '2026-01-01T00:00:00.000Z',
+      },
+      db,
+    );
+
+    const completed: ProcessingRun = {
+      id: 'proc-2',
+      status: PROCESSING_STATUS.completed,
+      originalCsvPath: 'data/processing/proc-2/original.csv',
+      approvedCsvPath: 'data/processing/proc-2/approved-linked-helper.csv',
+      evaluationReportPath: 'data/processing/proc-2/evaluation-report.csv',
+      evaluationRunId: 'run-2',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      completedAt: '2026-01-01T00:05:00.000Z',
+    };
+    dbUpdateProcessingRun(completed, db);
+
+    assert.deepEqual(dbGetProcessingRunById('proc-2', db), completed);
+  } finally {
+    db.close();
+  }
+});
+
+test('records a failed processing run with its error', () => {
+  const db = openDatabase(':memory:');
+
+  try {
+    dbInsertProcessingRun(
+      {
+        id: 'proc-3',
+        status: PROCESSING_STATUS.running,
+        originalCsvPath: 'data/processing/proc-3/original.csv',
+        createdAt: '2026-01-01T00:00:00.000Z',
+      },
+      db,
+    );
+
+    dbUpdateProcessingRun(
+      {
+        id: 'proc-3',
+        status: PROCESSING_STATUS.failed,
+        originalCsvPath: 'data/processing/proc-3/original.csv',
+        error: 'pipeline crashed',
+        createdAt: '2026-01-01T00:00:00.000Z',
+        completedAt: '2026-01-01T00:02:00.000Z',
+      },
+      db,
+    );
+
+    const stored = dbGetProcessingRunById('proc-3', db);
+    assert.equal(stored?.status, PROCESSING_STATUS.failed);
+    assert.equal(stored?.error, 'pipeline crashed');
   } finally {
     db.close();
   }

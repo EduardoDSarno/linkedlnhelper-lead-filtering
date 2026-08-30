@@ -10,3 +10,5 @@ export type { ConfigNumberOptions } from './config_number.js';
 export { asHttpStatus, asRecord, asString } from './type_guards.js';
 
 export { writeJsonAtomically } from './write_json_atomically.js';
+
+export { writeFileAtomically } from './write_file_atomically.js';
