@@ -12,3 +12,5 @@ export { asHttpStatus, asRecord, asString } from './type_guards.js';
 export { writeJsonAtomically } from './write_json_atomically.js';
 
 export { writeFileAtomically } from './write_file_atomically.js';
+
+export { errorMessage } from './error_message.js';
