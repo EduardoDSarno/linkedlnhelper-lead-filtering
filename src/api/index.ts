@@ -66,7 +66,7 @@ async function registerCsvParser(server: FastifyInstance)
         {
             parseAs: PARSE_AS_BUFFER
         },
-        (request, payload, done) => 
+        (_request, payload, done) => 
         {
             done(null, payload);
         },
