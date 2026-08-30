@@ -17,9 +17,9 @@ async function startServer(): Promise<void> {
         app.log.info(`Server is running on ${address}`);
       },
     );
-  }
+}
   
-  void startServer();
+void startServer();
 
   
 /** Reads the port from the environment, falling back to the default. */
