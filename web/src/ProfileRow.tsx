@@ -155,7 +155,7 @@ export function ProfileRow({ row, selected, onSelect, onApprove, onReject }: Pro
         </span>
       </span>
 
-      <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
+      <span style={{ display: 'flex', justifyContent: 'flex-end' }}>
         <span
           style={{
             display: 'inline-flex',
@@ -176,40 +176,41 @@ export function ProfileRow({ row, selected, onSelect, onApprove, onReject }: Pro
             <span style={{ fontWeight: 500, opacity: 0.72 }}>{row.statusBy}</span>
           )}
         </span>
-        <span className="lead-acts">
-          <button
-            type="button"
-            title="Aprovar (A)"
-            className="lead-act"
-            onClick={(event) => {
-              event.stopPropagation();
-              onApprove();
-            }}
-            style={{
-              color: approved ? '#fff' : '#047857',
-              background: approved ? '#059669' : '#fff',
-              border: `1px solid ${approved ? '#059669' : '#a7f3d0'}`,
-            }}
-          >
-            Aprovar
-          </button>
-          <button
-            type="button"
-            title="Reprovar (R)"
-            className="lead-act"
-            onClick={(event) => {
-              event.stopPropagation();
-              onReject();
-            }}
-            style={{
-              color: rejected ? '#fff' : '#be123c',
-              background: rejected ? '#e11d48' : '#fff',
-              border: `1px solid ${rejected ? '#e11d48' : '#fecdd3'}`,
-            }}
-          >
-            Reprovar
-          </button>
-        </span>
+      </span>
+
+      <span className="lead-acts">
+        <button
+          type="button"
+          title="Aprovar (A)"
+          className="lead-act"
+          onClick={(event) => {
+            event.stopPropagation();
+            onApprove();
+          }}
+          style={{
+            color: approved ? '#fff' : '#047857',
+            background: approved ? '#059669' : '#fff',
+            border: `1px solid ${approved ? '#059669' : '#a7f3d0'}`,
+          }}
+        >
+          Aprovar
+        </button>
+        <button
+          type="button"
+          title="Reprovar (R)"
+          className="lead-act"
+          onClick={(event) => {
+            event.stopPropagation();
+            onReject();
+          }}
+          style={{
+            color: rejected ? '#fff' : '#be123c',
+            background: rejected ? '#e11d48' : '#fff',
+            border: `1px solid ${rejected ? '#e11d48' : '#fecdd3'}`,
+          }}
+        >
+          Reprovar
+        </button>
       </span>
     </div>
   );

@@ -333,12 +333,9 @@ function compensationSortValue(profile: ProfileResult): number {
   return compensation.maximumMonthlyCompensation;
 }
 
-/** Subtitle: role · company · location — first model reason (or the filter message). */
+/** Keeps the compact identity line limited to role, company, and location. */
 function subtitleOf(profile: ProfileResult): string {
-  const where = [profile.position, profile.company, profile.location].filter(Boolean).join(' · ');
-  const reason = profile.reasons?.[0] ?? (isGraded(profile) ? undefined : profile.broadDecisionMessage);
-  if (!where) return reason ?? '';
-  return reason ? `${where} — ${reason}` : where;
+  return [profile.position, profile.company, profile.location].filter(Boolean).join(' · ');
 }
 
 /** Warning chips derived from photo, compensation fit, filter, and uncertainties. */
