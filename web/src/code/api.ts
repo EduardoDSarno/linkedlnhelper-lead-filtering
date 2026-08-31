@@ -115,6 +115,52 @@ export interface CompensationMatch {
     explanation: string;
 }
 
+/** A partially known month/year value from LinkedIn. */
+export interface ProfileDate {
+    year?: number;
+    month?: number;
+    text?: string;
+}
+
+/** One role in the profile's professional history. */
+export interface ProfileExperience {
+    position: string;
+    companyName: string;
+    location?: string;
+    startDate?: ProfileDate;
+    endDate?: ProfileDate;
+    description?: string;
+}
+
+/** One item in the profile's education history. */
+export interface ProfileEducation {
+    schoolName: string;
+    degree?: string;
+    fieldOfStudy?: string;
+    startDate?: ProfileDate;
+    endDate?: ProfileDate;
+}
+
+/**
+ * Extra profile information used only by the expanded review view.
+ *
+ * These fields are optional until the real results endpoint starts returning
+ * them; mock mode defines the visual contract first.
+ */
+export interface ProfileDetails {
+    about?: string;
+    openToWork?: boolean;
+    experience: ProfileExperience[];
+    education: ProfileEducation[];
+    photoSummary?: string;
+}
+
+/** Apparent-age shape returned by the real image-analysis pipeline. */
+export interface ApparentAgeEstimate {
+    bracket: string;
+    confidence: 'high' | 'medium' | 'low' | 'unassessable';
+}
+
 /** Everything the review list knows about one evaluated profile. */
 export interface ProfileResult {
     publicId: string;
@@ -130,7 +176,8 @@ export interface ProfileResult {
     company?: string;
     location?: string;
     photo?: string;
-    apparentAge?: string;
+    apparentAge?: string | ApparentAgeEstimate;
+    details?: ProfileDetails;
 
     /** Absent when the profile never reached the model or its request failed. */
     modelDecision?: ModelDecision;

@@ -10,6 +10,7 @@
 import type {
   CompensationMatch,
   ImportResult,
+  ProfileDetails,
   ProfileResult,
   RunResults,
   RunStatus,
@@ -72,6 +73,44 @@ const MOCK_REASONS = [
   'Progressão rápida de analista a coordenação, com forte aderência de área e região.',
 ];
 
+/** Previous employers cycled through the fabricated career histories. */
+const MOCK_PRIOR_COMPANIES = [
+  'RD Station',
+  'Conta Azul',
+  'Stone',
+  'Loft',
+  'Mercado Livre',
+  'Neon',
+] as const;
+
+/** Schools cycled through the fabricated education histories. */
+const MOCK_SCHOOLS = [
+  'Fundação Getulio Vargas',
+  'Universidade de São Paulo',
+  'PUC Minas',
+  'Universidade Federal do Paraná',
+] as const;
+
+/** Degrees cycled through the fabricated education histories. */
+const MOCK_DEGREES = [
+  'Administração de Empresas',
+  'Gestão Comercial',
+  'Economia',
+  'Marketing',
+] as const;
+
+/** Current calendar year represented by the fixed mock career data. */
+const MOCK_CURRENT_YEAR = 2026;
+
+/** Typical duration of the current role in the fabricated histories. */
+const MOCK_CURRENT_ROLE_YEARS = 2;
+
+/** Typical duration of a previous role in the fabricated histories. */
+const MOCK_PREVIOUS_ROLE_YEARS = 4;
+
+/** Background colours for generated, offline-safe mock profile photos. */
+const MOCK_PHOTO_BACKGROUNDS = ['#dbeafe', '#dcfce7', '#f3e8ff', '#ffedd5'] as const;
+
 /** Index of the row that imitates a keyword-filter exclusion. */
 const FILTERED_INDEX = 25;
 
@@ -126,7 +165,10 @@ function mockProfile(row: (typeof SAMPLE)[number], index: number): ProfileResult
     company,
     location,
     apparentAge: `${ageLo}–${ageLo + 5}`,
-    ...(hasPhoto ? { photo: `https://example.invalid/photo/${publicId}` } : {}),
+    ...(hasPhoto ? { photo: mockPhoto(name, index) } : {}),
+    ...(failed
+      ? {}
+      : { details: mockDetails(name, position, company, location, index, hasPhoto) }),
   };
 
   if (filtered || failed) return base;
@@ -163,6 +205,77 @@ function mockProfile(row: (typeof SAMPLE)[number], index: number): ProfileResult
       ? {}
       : { compensationMatch: mockCompensationMatch(mismatched, estimatedLo, estimatedHi) }),
   };
+}
+
+/** Builds the career, education, and About fields used by the expanded mock view. */
+function mockDetails(
+  name: string,
+  position: string,
+  company: string,
+  location: string,
+  index: number,
+  hasPhoto: boolean,
+): ProfileDetails {
+  const currentStartYear = MOCK_CURRENT_YEAR - MOCK_CURRENT_ROLE_YEARS - (index % 3);
+  const previousStartYear = currentStartYear - MOCK_PREVIOUS_ROLE_YEARS;
+  const priorCompany = MOCK_PRIOR_COMPANIES[index % MOCK_PRIOR_COMPANIES.length]!;
+  const school = MOCK_SCHOOLS[index % MOCK_SCHOOLS.length]!;
+  const degree = MOCK_DEGREES[index % MOCK_DEGREES.length]!;
+  const firstName = name.split(' ')[0] ?? name;
+
+  return {
+    about: `${firstName} atua na construção de operações comerciais e de relacionamento com clientes, com experiência em ambientes B2B e foco em crescimento sustentável.`,
+    openToWork: index % UNCERTAIN_LOCATION_EVERY === 0,
+    experience: [
+      {
+        position,
+        companyName: company,
+        location,
+        startDate: { month: 2 + (index % 8), year: currentStartYear },
+        endDate: { text: 'Present' },
+        description:
+          'Responsável por estratégia da área, acompanhamento de indicadores e desenvolvimento do time.',
+      },
+      {
+        position: index % 2 === 0 ? 'Executivo de Contas Sênior' : 'Coordenador de Customer Success',
+        companyName: priorCompany,
+        location,
+        startDate: { month: 1, year: previousStartYear },
+        endDate: { month: 12, year: currentStartYear - 1 },
+        description:
+          'Atuação em carteira B2B, negociação consultiva e melhoria dos processos de aquisição e retenção.',
+      },
+    ],
+    education: [
+      {
+        schoolName: school,
+        degree: 'Bacharelado',
+        fieldOfStudy: degree,
+        startDate: { year: previousStartYear - MOCK_PREVIOUS_ROLE_YEARS },
+        endDate: { year: previousStartYear },
+      },
+    ],
+    ...(hasPhoto
+      ? {
+          photoSummary:
+            index % 3 === 0
+              ? 'Retrato profissional, rosto visível e imagem nítida.'
+              : 'Foto utilizável, com rosto claramente identificável.',
+        }
+      : {}),
+  };
+}
+
+/** Creates a local SVG avatar so mock mode never depends on image downloads. */
+function mockPhoto(name: string, index: number): string {
+  const initials = name
+    .split(' ')
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? '')
+    .join('');
+  const background = MOCK_PHOTO_BACKGROUNDS[index % MOCK_PHOTO_BACKGROUNDS.length]!;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="160" height="160"><rect width="160" height="160" rx="80" fill="${background}"/><text x="80" y="94" text-anchor="middle" font-family="Arial" font-size="48" font-weight="700" fill="#334155">${initials}</text></svg>`;
+  return `data:image/svg+xml,${encodeURIComponent(svg)}`;
 }
 
 /** Warning-like uncertainties the list turns into chips. */

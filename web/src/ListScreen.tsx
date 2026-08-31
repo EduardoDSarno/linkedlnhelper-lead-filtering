@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 
+import { ProfileDetails } from './ProfileDetails';
 import { ProfileRow } from './ProfileRow';
 import { criteriaSummary } from './code/criteria';
 import {
@@ -29,6 +30,7 @@ export function ListScreen({ flow }: { flow: ReviewFlow }) {
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState<ListSort>(LIST_SORT.score);
   const [selected, setSelected] = useState(0);
+  const [expandedPublicId, setExpandedPublicId] = useState<string | undefined>(undefined);
 
   const bands = { approveMin: criteria.approveMin, manualMin: criteria.manualMin };
   const counts = useMemo(() => tabCounts(results, overrides), [results, overrides]);
@@ -226,16 +228,35 @@ export function ListScreen({ flow }: { flow: ReviewFlow }) {
             </div>
           </div>
         ) : (
-          visible.map((profile, index) => (
-            <ProfileRow
-              key={profile.publicId}
-              row={presentRow(profile, overrides[profile.publicId], bands)}
-              selected={index === selectedIndex}
-              onSelect={() => setSelected(index)}
-              onApprove={() => decide(profile.publicId, 'approved')}
-              onReject={() => decide(profile.publicId, 'rejected')}
-            />
-          ))
+          visible.map((profile, index) => {
+            const expanded = profile.publicId === expandedPublicId;
+            const presented = presentRow(profile, overrides[profile.publicId], bands);
+
+            return (
+              <div key={profile.publicId}>
+                <ProfileRow
+                  row={presented}
+                  selected={index === selectedIndex}
+                  expanded={expanded}
+                  onSelect={() => {
+                    setSelected(index);
+                    setExpandedPublicId((current) =>
+                      current === profile.publicId ? undefined : profile.publicId,
+                    );
+                  }}
+                  onApprove={() => decide(profile.publicId, 'approved')}
+                  onReject={() => decide(profile.publicId, 'rejected')}
+                />
+                {expanded && (
+                  <ProfileDetails
+                    profile={profile}
+                    row={presented}
+                    onClose={() => setExpandedPublicId(undefined)}
+                  />
+                )}
+              </div>
+            );
+          })
         )}
       </div>
     </main>

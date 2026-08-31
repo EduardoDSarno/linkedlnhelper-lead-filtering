@@ -13,6 +13,7 @@ function LinkedInIcon() {
 interface ProfileRowProps {
   row: PresentedRow;
   selected: boolean;
+  expanded: boolean;
   onSelect: () => void;
   onApprove: () => void;
   onReject: () => void;
@@ -22,7 +23,14 @@ interface ProfileRowProps {
  * One profile in the review list: identity, compensation, age, score, status,
  * and the approve/reject actions that appear more clearly on hover.
  */
-export function ProfileRow({ row, selected, onSelect, onApprove, onReject }: ProfileRowProps) {
+export function ProfileRow({
+  row,
+  selected,
+  expanded,
+  onSelect,
+  onApprove,
+  onReject,
+}: ProfileRowProps) {
   const approved = row.override === 'approved';
   const rejected = row.override === 'rejected';
 
@@ -87,6 +95,18 @@ export function ProfileRow({ row, selected, onSelect, onApprove, onReject }: Pro
               {row.seniority}
             </span>
           )}
+          <button
+            type="button"
+            className="lead-expand-toggle"
+            aria-label={`${expanded ? 'Recolher' : 'Expandir'} perfil de ${row.name}`}
+            aria-expanded={expanded}
+            onClick={(event) => {
+              event.stopPropagation();
+              onSelect();
+            }}
+          >
+            {expanded ? '⌃' : '⌄'}
+          </button>
         </span>
         <span
           style={{
