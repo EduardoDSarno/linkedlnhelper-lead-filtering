@@ -4,6 +4,7 @@ import { DatabaseSync } from 'node:sqlite';
 
 import { linkedinProfileKey } from '../linkedin/index.js';
 import type { FullProfile } from '../profile/index.js';
+import { PROCESSING_STATUS } from './types.js';
 import type {
   ManualOverride,
   ProcessingRun,
@@ -248,6 +249,64 @@ export function dbGetProcessingRunById(
     | undefined;
 
   return row ? processingRunFromRow(row) : undefined;
+}
+
+/**
+ * Marks every run still recorded as running as failed.
+ *
+ * Only one process executes pipelines, so a running row observed at process
+ * startup belongs to a run the previous process never finished. The original
+ * CSV is kept on failure, so these runs stay retryable.
+ */
+export function dbFailInterruptedRuns(db: DatabaseSync): number {
+  const result = db
+    .prepare(`
+      UPDATE ${PROCESSING_RUN_TABLE_NAME}
+      SET
+        status = ?,
+        error = 'Interrupted by an application restart',
+        completed_at = ?
+      WHERE status = ?
+    `)
+    .run(
+      PROCESSING_STATUS.failed,
+      new Date().toISOString(),
+      PROCESSING_STATUS.running,
+    );
+
+  return Number(result.changes);
+}
+
+/** Lists finished (completed or failed) runs whose completion is older than the cutoff. */
+export function dbListFinishedRunsBefore(
+  cutoffIso: string,
+  db: DatabaseSync,
+): ProcessingRun[] {
+  const rows = db
+    .prepare(`
+      SELECT
+        id,
+        status,
+        original_csv_path,
+        approved_csv_path,
+        evaluation_report_path,
+        evaluation_run_id,
+        error,
+        created_at,
+        completed_at,
+        manual_overrides_json
+      FROM ${PROCESSING_RUN_TABLE_NAME}
+      WHERE status IN (?, ?)
+        AND completed_at IS NOT NULL
+        AND completed_at < ?
+    `)
+    .all(
+      PROCESSING_STATUS.completed,
+      PROCESSING_STATUS.failed,
+      cutoffIso,
+    ) as Array<Parameters<typeof processingRunFromRow>[0]>;
+
+  return rows.map(processingRunFromRow);
 }
 
 /** Opens a SQLite file and ensures the MVP schema exists before returning it. */

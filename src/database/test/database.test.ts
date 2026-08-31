@@ -3,8 +3,10 @@ import test from 'node:test';
 
 import {
   dbDeleteProfile,
+  dbFailInterruptedRuns,
   dbGetEvaluationRunById,
   dbGetProcessingRunById,
+  dbListFinishedRunsBefore,
   dbGetProfileById,
   dbInsertEvaluationRun,
   dbInsertProcessingRun,
@@ -316,6 +318,80 @@ test('records a failed processing run with its error', () => {
     const stored = dbGetProcessingRunById('proc-3', db);
     assert.equal(stored?.status, PROCESSING_STATUS.failed);
     assert.equal(stored?.error, 'pipeline crashed');
+  } finally {
+    db.close();
+  }
+});
+
+test('fails interrupted running runs at startup and leaves others alone', () => {
+  const db = openDatabase(':memory:');
+
+  try {
+    dbInsertProcessingRun(
+      {
+        id: 'proc-running',
+        status: PROCESSING_STATUS.running,
+        originalCsvPath: 'x/original.csv',
+        createdAt: '2026-01-01T00:00:00.000Z',
+      },
+      db,
+    );
+    dbInsertProcessingRun(
+      {
+        id: 'proc-done',
+        status: PROCESSING_STATUS.completed,
+        originalCsvPath: 'y/original.csv',
+        createdAt: '2026-01-01T00:00:00.000Z',
+        completedAt: '2026-01-01T00:10:00.000Z',
+      },
+      db,
+    );
+
+    assert.equal(dbFailInterruptedRuns(db), 1);
+
+    const interrupted = dbGetProcessingRunById('proc-running', db);
+    assert.equal(interrupted?.status, PROCESSING_STATUS.failed);
+    assert.ok(interrupted?.error);
+    assert.ok(interrupted?.completedAt);
+    assert.equal(
+      dbGetProcessingRunById('proc-done', db)?.status,
+      PROCESSING_STATUS.completed,
+    );
+  } finally {
+    db.close();
+  }
+});
+
+test('lists only finished runs completed before the cutoff', () => {
+  const db = openDatabase(':memory:');
+
+  try {
+    const base = {
+      originalCsvPath: 'x/original.csv',
+      createdAt: '2026-01-01T00:00:00.000Z',
+    };
+    dbInsertProcessingRun(
+      { ...base, id: 'old-done', status: PROCESSING_STATUS.completed, completedAt: '2026-01-01T00:00:00.000Z' },
+      db,
+    );
+    dbInsertProcessingRun(
+      { ...base, id: 'old-failed', status: PROCESSING_STATUS.failed, completedAt: '2026-01-02T00:00:00.000Z' },
+      db,
+    );
+    dbInsertProcessingRun(
+      { ...base, id: 'fresh-done', status: PROCESSING_STATUS.completed, completedAt: '2026-08-01T00:00:00.000Z' },
+      db,
+    );
+    dbInsertProcessingRun(
+      { ...base, id: 'still-running', status: PROCESSING_STATUS.running },
+      db,
+    );
+
+    const finished = dbListFinishedRunsBefore('2026-06-01T00:00:00.000Z', db);
+    assert.deepEqual(
+      finished.map((run) => run.id).sort(),
+      ['old-done', 'old-failed'],
+    );
   } finally {
     db.close();
   }

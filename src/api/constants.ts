@@ -43,3 +43,17 @@ export const PARSE_AS_BUFFER = 'buffer';
 
 /** Default port the API listens on. */
 export const DEFAULT_PORT = 3000;
+
+/**
+ * How long a finished run's files are kept before the cleanup pass deletes
+ * them, overridable through the PROCESSING_TTL_HOURS environment variable.
+ * The window must outlive a human review, since expiring removes the retained
+ * original CSV that decision overrides rebuild from.
+ */
+export const DEFAULT_PROCESSING_TTL_HOURS = 72;
+
+/** Environment variable overriding the retention window, in hours. */
+export const PROCESSING_TTL_ENVIRONMENT_KEY = 'PROCESSING_TTL_HOURS';
+
+/** How often the running server repeats the cleanup pass. */
+export const CLEANUP_INTERVAL_MS = 60 * 60 * 1000;

@@ -4,7 +4,8 @@ test_data/
 .env
 output/
 .vscode
-markdown/
+markdown/*
+!markdown/CONFIGURATION.md
 scripts/
 opencode.json
 .claude

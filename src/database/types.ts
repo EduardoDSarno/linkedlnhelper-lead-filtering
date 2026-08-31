@@ -17,6 +17,9 @@ export const PROCESSING_STATUS = {
   running: 'running',
   completed: 'completed',
   failed: 'failed',
+
+  /** The retention window elapsed and the run's files were deleted. */
+  expired: 'expired',
 } as const;
 
 /** A single processing status value. */
