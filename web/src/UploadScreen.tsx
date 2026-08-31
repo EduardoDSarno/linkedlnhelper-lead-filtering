@@ -1,6 +1,14 @@
 import { useState } from 'react';
 
-import { importCsv, type ImportResult } from './api';
+import { importCsv, startReview, type ImportResult } from './api';
+import { CriteriaModal } from './CriteriaModal';
+import {
+  DEFAULT_CRITERIA,
+  criteriaSummary,
+  isCriteriaComplete,
+  toEvaluationCriteria,
+  type CriteriaForm,
+} from './criteria';
 
 /** Formats a byte count as a short Brazilian-style size label. */
 function formatSize(bytes: number): string {
@@ -47,6 +55,11 @@ export function UploadScreen() {
   const [file, setFile] = useState<File | undefined>(undefined);
   const [imported, setImported] = useState<ImportResult | undefined>(undefined);
 
+  const [criteria, setCriteria] = useState<CriteriaForm>(DEFAULT_CRITERIA);
+  const [criteriaOpen, setCriteriaOpen] = useState(false);
+  const [configured, setConfigured] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+
   /** Uploads the chosen file and keeps the parsed result for display. */
   async function handleFile(chosen: File | undefined) {
     if (!chosen) return;
@@ -60,6 +73,29 @@ export function UploadScreen() {
       console.error('import failed', error);
     } finally {
       setBusy(false);
+    }
+  }
+
+  /** Merges one change into the criteria form. */
+  function updateCriteria(patch: Partial<CriteriaForm>) {
+    setCriteria((current) => ({ ...current, ...patch }));
+  }
+
+  /** Starts the evaluation run for the imported CSV. */
+  async function submit() {
+    if (!imported) return;
+
+    setSubmitting(true);
+    try {
+      const result = await startReview(
+        imported.processingId,
+        toEvaluationCriteria(criteria),
+      );
+      console.log('review started', result);
+    } catch (error) {
+      console.error('start review failed', error);
+    } finally {
+      setSubmitting(false);
     }
   }
 
@@ -238,9 +274,106 @@ export function UploadScreen() {
               <StatCard label="Duplicados" value={imported.duplicatedProfiles} />
               <StatCard label="Inválidos" value={imported.invalidProfiles} />
             </div>
+
+            {configured && (
+              <div
+                style={{
+                  marginTop: 16,
+                  border: '1px solid #cfe0fb',
+                  background: '#f5f9ff',
+                  borderRadius: 12,
+                  padding: '14px 16px',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <span style={{ fontSize: 12.5, fontWeight: 600, color: '#1d4ed8' }}>
+                    Critérios definidos
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setCriteriaOpen(true)}
+                    style={{
+                      all: 'unset',
+                      cursor: 'pointer',
+                      marginLeft: 'auto',
+                      fontSize: 12.5,
+                      fontWeight: 600,
+                      color: '#2563eb',
+                    }}
+                  >
+                    Editar
+                  </button>
+                </div>
+                <div style={{ fontSize: 12.5, color: '#475569', lineHeight: 1.6, marginTop: 6 }}>
+                  {criteriaSummary(criteria)}
+                </div>
+              </div>
+            )}
+
+            <div style={{ marginTop: 22, display: 'flex', alignItems: 'center', gap: 14 }}>
+              {configured ? (
+                <button
+                  type="button"
+                  onClick={submit}
+                  disabled={submitting}
+                  style={{
+                    all: 'unset',
+                    cursor: submitting ? 'not-allowed' : 'pointer',
+                    background: '#2563eb',
+                    color: '#fff',
+                    fontSize: 14,
+                    fontWeight: 600,
+                    padding: '11px 20px',
+                    borderRadius: 10,
+                    boxShadow: '0 1px 2px rgba(37,99,235,.35)',
+                    opacity: submitting ? 0.7 : 1,
+                  }}
+                >
+                  {submitting
+                    ? 'Iniciando…'
+                    : `Avaliar ${imported.validProfiles} perfis com IA`}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setCriteriaOpen(true)}
+                  style={{
+                    all: 'unset',
+                    cursor: 'pointer',
+                    background: '#2563eb',
+                    color: '#fff',
+                    fontSize: 14,
+                    fontWeight: 600,
+                    padding: '11px 20px',
+                    borderRadius: 10,
+                    boxShadow: '0 1px 2px rgba(37,99,235,.35)',
+                  }}
+                >
+                  Configurar avaliação
+                </button>
+              )}
+              <span style={{ fontSize: 12.5, color: '#94a3b8' }}>
+                {configured
+                  ? 'Leva alguns minutos. Você acompanha o progresso.'
+                  : 'Defina os critérios para liberar a avaliação.'}
+              </span>
+            </div>
           </>
         )}
       </div>
+
+      {criteriaOpen && (
+        <CriteriaModal
+          form={criteria}
+          update={updateCriteria}
+          onClose={() => setCriteriaOpen(false)}
+          onConfirm={() => {
+            if (!isCriteriaComplete(criteria)) return;
+            setCriteriaOpen(false);
+            setConfigured(true);
+          }}
+        />
+      )}
     </main>
   );
 }
