@@ -12,6 +12,7 @@ import {
 import { MANUAL_DECISION, PROCESSING_STATUS } from '../database/types.js';
 import type { ManualOverride } from '../database/types.js';
 import { finalizeRun } from '../dataCollector/processing/finalize.js';
+import { loadProfilesFromCsv } from '../dataCollector/csv/csvdata.js';
 import {
     API_ROUTES,
     ARTIFACT_TYPE,
@@ -396,6 +397,19 @@ function registerImportRoute(server: FastifyInstance)
         const id = crypto.randomUUID(); // Create Id for the processing run
         const { originalPath } = await saveOriginalCsv(id, bytes);
 
+        // Parse a copy right away so the upload screen can report what the file
+        // holds before the user commits to a paid evaluation run.
+        let imported;
+        try
+        {
+            imported = await loadProfilesFromCsv(originalPath);
+        }
+        catch (error)
+        {
+            request.log.error({ err: error }, 'Uploaded CSV could not be parsed');
+            return reply.status(HTTP_STATUS.badRequest).send({ error: 'Could not parse the uploaded CSV' });
+        }
+
         const db = openDatabase();
         try
         {
@@ -406,7 +420,18 @@ function registerImportRoute(server: FastifyInstance)
                 createdAt: new Date().toISOString(),
             }, db);
 
-            reply.status(HTTP_STATUS.created).send({ processingId: id });
+            reply.status(HTTP_STATUS.created).send({
+                processingId: id,
+                totalRows: imported.total_rows,
+                validProfiles: imported.total_profiles,
+                duplicatedProfiles: imported.duplicated_profiles,
+
+                // Rows the importer dropped because they carry no public_id.
+                invalidProfiles:
+                    imported.total_rows
+                    - imported.total_profiles
+                    - imported.duplicated_profiles,
+            });
         }
         catch (error)
         {
