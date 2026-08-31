@@ -1,14 +1,5 @@
-import { useState } from 'react';
-
-import { importCsv, startReview, type ImportResult } from './api';
-import { CriteriaModal } from './CriteriaModal';
-import {
-  DEFAULT_CRITERIA,
-  criteriaSummary,
-  isCriteriaComplete,
-  toEvaluationCriteria,
-  type CriteriaForm,
-} from './criteria';
+import { criteriaSummary } from './criteria';
+import type { ReviewFlow } from './useReviewFlow';
 
 /** Formats a byte count as a short Brazilian-style size label. */
 function formatSize(bytes: number): string {
@@ -28,17 +19,8 @@ function StatCard({ label, value }: { label: string; value: number }) {
         padding: '13px 15px',
       }}
     >
-      <div style={{ fontSize: 11.5, color: '#94a3b8', fontWeight: 500 }}>
-        {label}
-      </div>
-      <div
-        style={{
-          fontSize: 23,
-          fontWeight: 700,
-          letterSpacing: '-0.02em',
-          marginTop: 2,
-        }}
-      >
+      <div style={{ fontSize: 11.5, color: '#94a3b8', fontWeight: 500 }}>{label}</div>
+      <div style={{ fontSize: 23, fontWeight: 700, letterSpacing: '-0.02em', marginTop: 2 }}>
         {value}
       </div>
     </div>
@@ -46,58 +28,12 @@ function StatCard({ label, value }: { label: string; value: number }) {
 }
 
 /**
- * The import screen: a dropzone, and once a Linked Helper CSV is uploaded, a
- * summary card plus the valid / duplicated / invalid counts the backend
- * reported. The criteria step and evaluate action come next.
+ * The import screen: a dropzone, then the file summary, the parse counts, and
+ * the criteria/evaluate actions. All state comes from the flow; this component
+ * only renders it and calls its actions.
  */
-export function UploadScreen() {
-  const [busy, setBusy] = useState(false);
-  const [file, setFile] = useState<File | undefined>(undefined);
-  const [imported, setImported] = useState<ImportResult | undefined>(undefined);
-
-  const [criteria, setCriteria] = useState<CriteriaForm>(DEFAULT_CRITERIA);
-  const [criteriaOpen, setCriteriaOpen] = useState(false);
-  const [configured, setConfigured] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-
-  /** Uploads the chosen file and keeps the parsed result for display. */
-  async function handleFile(chosen: File | undefined) {
-    if (!chosen) return;
-
-    setBusy(true);
-    try {
-      const result = await importCsv(chosen);
-      setFile(chosen);
-      setImported(result);
-    } catch (error) {
-      console.error('import failed', error);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  /** Merges one change into the criteria form. */
-  function updateCriteria(patch: Partial<CriteriaForm>) {
-    setCriteria((current) => ({ ...current, ...patch }));
-  }
-
-  /** Starts the evaluation run for the imported CSV. */
-  async function submit() {
-    if (!imported) return;
-
-    setSubmitting(true);
-    try {
-      const result = await startReview(
-        imported.processingId,
-        toEvaluationCriteria(criteria),
-      );
-      console.log('review started', result);
-    } catch (error) {
-      console.error('start review failed', error);
-    } finally {
-      setSubmitting(false);
-    }
-  }
+export function UploadScreen({ flow }: { flow: ReviewFlow }) {
+  const { file, imported, configured, criteria } = flow;
 
   return (
     <main
@@ -122,14 +58,7 @@ export function UploadScreen() {
         >
           Importe sua exportação do Linked Helper
         </h1>
-        <p
-          style={{
-            margin: '10px 0 0',
-            fontSize: 14.5,
-            lineHeight: 1.6,
-            color: '#64748b',
-          }}
-        >
+        <p style={{ margin: '10px 0 0', fontSize: 14.5, lineHeight: 1.6, color: '#64748b' }}>
           Cada perfil é enriquecido, tem a foto analisada e recebe uma nota de
           aderência à campanha. Você revisa a lista já ordenada.
         </p>
@@ -138,7 +67,7 @@ export function UploadScreen() {
           <input
             type="file"
             accept=".csv"
-            onChange={(event) => handleFile(event.target.files?.[0])}
+            onChange={(event) => flow.pickFile(event.target.files?.[0])}
             style={{ position: 'absolute', opacity: 0, width: 0, height: 0 }}
           />
           <div
@@ -178,9 +107,7 @@ export function UploadScreen() {
               </svg>
             </div>
             <div style={{ marginTop: 14, fontSize: 15, fontWeight: 600 }}>
-              {busy
-                ? 'Enviando…'
-                : 'Arraste o CSV aqui ou clique para selecionar'}
+              {flow.busy ? 'Enviando…' : 'Arraste o CSV aqui ou clique para selecionar'}
             </div>
             <div style={{ marginTop: 5, fontSize: 12.5, color: '#94a3b8' }}>
               Formato Linked Helper · colunas obrigatórias: public_id e profile_url
@@ -232,14 +159,7 @@ export function UploadScreen() {
                 >
                   {file.name}
                 </span>
-                <span
-                  style={{
-                    display: 'block',
-                    fontSize: 12,
-                    color: '#94a3b8',
-                    marginTop: 1,
-                  }}
-                >
+                <span style={{ display: 'block', fontSize: 12, color: '#94a3b8', marginTop: 1 }}>
                   {formatSize(file.size)} · {imported.totalRows} linhas
                 </span>
               </span>
@@ -291,7 +211,7 @@ export function UploadScreen() {
                   </span>
                   <button
                     type="button"
-                    onClick={() => setCriteriaOpen(true)}
+                    onClick={flow.openCriteria}
                     style={{
                       all: 'unset',
                       cursor: 'pointer',
@@ -314,11 +234,11 @@ export function UploadScreen() {
               {configured ? (
                 <button
                   type="button"
-                  onClick={submit}
-                  disabled={submitting}
+                  onClick={flow.submit}
+                  disabled={flow.submitting}
                   style={{
                     all: 'unset',
-                    cursor: submitting ? 'not-allowed' : 'pointer',
+                    cursor: flow.submitting ? 'not-allowed' : 'pointer',
                     background: '#2563eb',
                     color: '#fff',
                     fontSize: 14,
@@ -326,17 +246,17 @@ export function UploadScreen() {
                     padding: '11px 20px',
                     borderRadius: 10,
                     boxShadow: '0 1px 2px rgba(37,99,235,.35)',
-                    opacity: submitting ? 0.7 : 1,
+                    opacity: flow.submitting ? 0.7 : 1,
                   }}
                 >
-                  {submitting
+                  {flow.submitting
                     ? 'Iniciando…'
                     : `Avaliar ${imported.validProfiles} perfis com IA`}
                 </button>
               ) : (
                 <button
                   type="button"
-                  onClick={() => setCriteriaOpen(true)}
+                  onClick={flow.openCriteria}
                   style={{
                     all: 'unset',
                     cursor: 'pointer',
@@ -361,19 +281,6 @@ export function UploadScreen() {
           </>
         )}
       </div>
-
-      {criteriaOpen && (
-        <CriteriaModal
-          form={criteria}
-          update={updateCriteria}
-          onClose={() => setCriteriaOpen(false)}
-          onConfirm={() => {
-            if (!isCriteriaComplete(criteria)) return;
-            setCriteriaOpen(false);
-            setConfigured(true);
-          }}
-        />
-      )}
     </main>
   );
 }

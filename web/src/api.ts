@@ -150,8 +150,7 @@ export interface RunResults {
     results: ProfileResult[];
 }
 
-/** Retrieves every evaluated profile for one run. */
-/** Retrieves the results of a processing run, via the /run_filter/:processingId/results endpoint. */
+/** Retrieves every evaluated profile for one run, via /run_filter/:processingId/results. */
 export async function getResults(processingId: string): Promise<RunResults>
 {
     const response = await fetch(`/run_filter/${processingId}/results`);
