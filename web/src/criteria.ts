@@ -7,6 +7,20 @@
  * reads an omitted criterion as "do not filter on this" and rejects an empty one.
  */
 
+import { BRAZIL_REGIONS, BRAZIL_STATES } from './data/regions';
+
+/** Whether the location list keeps only its places or removes them. */
+export const LOCATION_MODE = {
+  /** Keep only profiles in the listed places. */
+  include: 'include',
+
+  /** Keep everywhere except the listed states/regions. */
+  exclude: 'exclude',
+} as const;
+
+/** A single location-mode value. */
+export type LocationMode = (typeof LOCATION_MODE)[keyof typeof LOCATION_MODE];
+
 /** How the open-to-work badge filters the first pass. */
 export const OPEN_TO_WORK = {
   /** The badge is ignored. */
@@ -30,7 +44,14 @@ export interface CriteriaForm {
   /** Optional extra guidance sent as the user prompt. */
   extra: string;
 
-  locations: string[];
+  /** Places to keep, used when the mode is include: cities, states, or regions. */
+  includeLocations: string[];
+
+  /** States or regions to remove, used when the mode is exclude. */
+  excludeLocations: string[];
+
+  /** Which of the two location lists is active. */
+  locationMode: LocationMode;
 
   /** Words that exclude a profile when present in its current role. */
   exclusions: string[];
@@ -56,7 +77,9 @@ export const DEFAULT_CRITERIA: CriteriaForm = {
   ideal:
     'Gestores comerciais e de Customer Success em SaaS B2B ou serviços financeiros, com carreira consultiva e progressão de analista a gestão.',
   extra: '',
-  locations: ['São Paulo, SP', 'Minas Gerais', 'Paraná', 'Santa Catarina'],
+  includeLocations: ['São Paulo, SP', 'Minas Gerais', 'Paraná', 'Santa Catarina'],
+  excludeLocations: [],
+  locationMode: LOCATION_MODE.include,
   exclusions: ['estagiário', 'intern', 'trainee', 'graduando', 'aluno'],
   ageMin: 25,
   ageMax: 40,
@@ -74,11 +97,33 @@ export function brl(value: number): string {
   return `R$ ${value.toLocaleString('pt-BR')}`;
 }
 
+/** Expands a selection to its state names when it is a region, else keeps it. */
+function expandSelection(selection: string): string[] {
+  return BRAZIL_REGIONS[selection] ?? [selection];
+}
+
+/**
+ * Turns the user's location choices into the backend's include-list.
+ *
+ * Regions expand to their states. In exclude mode the result is every state
+ * except the chosen ones, because the backend only understands an allow-list;
+ * excluding therefore means "include all other states".
+ */
+export function resolveLocations(form: CriteriaForm): string[] {
+  if (form.locationMode === LOCATION_MODE.include) {
+    return [...new Set(form.includeLocations.flatMap(expandSelection))];
+  }
+
+  const removed = new Set(form.excludeLocations.flatMap(expandSelection));
+  return BRAZIL_STATES.filter((state) => !removed.has(state));
+}
+
 /** Builds the one-line summary shown on the upload screen and modal footer. */
 export function criteriaSummary(form: CriteriaForm): string {
-  const locations = form.locations.length
-    ? form.locations.join(', ')
-    : 'qualquer localização';
+  const exclude = form.locationMode === LOCATION_MODE.exclude;
+  const active = exclude ? form.excludeLocations : form.includeLocations;
+  const chosen = active.length ? active.join(', ') : 'qualquer localização';
+  const locations = exclude && active.length ? `exceto ${chosen}` : chosen;
 
   return [
     `${form.ageMin}–${form.ageMax} anos (est.)`,
@@ -102,15 +147,16 @@ export function isCriteriaComplete(form: CriteriaForm): boolean {
  */
 export function toEvaluationCriteria(form: CriteriaForm): Record<string, unknown> {
   const extra = form.extra.trim();
+  const locations = resolveLocations(form);
 
   return {
     systemPrompt: form.ideal.trim(),
     ...(extra ? { userPrompt: extra } : {}),
 
-    ...(form.locations.length
+    ...(locations.length
       ? {
           location: {
-            locations: form.locations,
+            locations,
             fields: ['text'],
             match: 'any',
           },

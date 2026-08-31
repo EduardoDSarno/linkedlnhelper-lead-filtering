@@ -279,6 +279,7 @@ function registerResultsRoute(server: FastifyInstance)
                 const profile = profileByPublicId.get(publicId);
                 const model = modelByPublicId.get(publicId);
                 const override = overrideByPublicId.get(publicId);
+                const currentRole = profile?.experience?.[0];
 
                 return {
                     publicId,
@@ -286,6 +287,17 @@ function registerResultsRoute(server: FastifyInstance)
                     linkedinUrl: profile?.linkedinUrl ?? '',
                     broadDecision: broad.decision,
                     broadDecisionMessage: broad.decisionMessage,
+
+                    // Presentation details the review list shows per row.
+                    ...(profile?.headline ? { headline: profile.headline } : {}),
+                    ...(currentRole?.position ? { position: currentRole.position } : {}),
+                    ...(currentRole?.companyName ? { company: currentRole.companyName } : {}),
+                    ...(profile?.location?.text ? { location: profile.location.text } : {}),
+                    ...(profile?.photo ? { photo: profile.photo } : {}),
+                    ...(profile?.imageAnalysis?.assessment?.apparentAge
+                        ? { apparentAge: profile.imageAnalysis.assessment.apparentAge }
+                        : {}),
+
                     ...(model
                         ? {
                             modelDecision: model.decision,
@@ -293,6 +305,10 @@ function registerResultsRoute(server: FastifyInstance)
                             reasons: model.reasons,
                             evidence: model.evidence,
                             uncertainties: model.uncertainties,
+                            compensation: model.estimatedTotalMonthlyCompensation,
+                            ...(model.compensationRangeMatch
+                                ? { compensationMatch: model.compensationRangeMatch }
+                                : {}),
                           }
                         : {}),
                     ...(override ? { override } : {}),

@@ -61,3 +61,104 @@ export async function startReview(
 
     return (await response.json()) as StartReviewResult;
 }
+
+export type ProcessingStatus = 'queued' | 'running' | 'completed' | 'failed' | 'expired';
+
+export interface RunStatus
+{
+    processingId: string;
+    status: ProcessingStatus;
+    evaluationRunId?: string;   // present once the run produced results
+    error?: string;             // present only on 'failed'
+    completedAt?: string;       // present once finished
+}
+
+/** Retrieves the status of a processing run, via the /run_filter/:processingId endpoint. */
+export async function getStatus(processingId: string): Promise<RunStatus>
+{
+    const response = await fetch(`/run_filter/${processingId}`);
+    if (!response.ok) {
+        throw new Error(`Request failed: ${response.status}`);
+    }
+    return (await response.json()) as RunStatus;
+}
+
+/** A model decision for one profile. */
+export type ModelDecision = 'approved' | 'rejected' | 'manual_review';
+
+/** A decision a human reviewer can assign. */
+export type ManualDecision = 'approved' | 'rejected';
+
+/** One human decision already recorded for a profile. */
+export interface ManualOverride {
+    publicId: string;
+    decision: ManualDecision;
+    reason?: string;
+}
+
+/** A model-estimated monthly compensation range, or a refusal to estimate. */
+export type Compensation =
+    | {
+          status: 'estimated';
+          currency: 'BRL';
+          minimumMonthlyCompensation: number;
+          maximumMonthlyCompensation: number;
+          confidence: 'high' | 'medium' | 'low';
+          basis: string[];
+      }
+    | { status: 'insufficient_evidence'; reasons: string[] };
+
+/** How a compensation estimate compared with the campaign's desired range. */
+export interface CompensationMatch {
+    outcome: 'matched' | 'not_matched' | 'unknown';
+    overlapRatio?: number;
+    explanation: string;
+}
+
+/** Everything the review list knows about one evaluated profile. */
+export interface ProfileResult {
+    publicId: string;
+    name: string;
+    linkedinUrl: string;
+
+    /** 'Failed' means the deterministic filter excluded it before the model. */
+    broadDecision: string;
+    broadDecisionMessage: string;
+
+    headline?: string;
+    position?: string;
+    company?: string;
+    location?: string;
+    photo?: string;
+    apparentAge?: string;
+
+    /** Absent when the profile never reached the model or its request failed. */
+    modelDecision?: ModelDecision;
+    matchPercent?: number;
+    reasons?: string[];
+    evidence?: string[];
+    uncertainties?: string[];
+    compensation?: Compensation;
+    compensationMatch?: CompensationMatch;
+
+    override?: ManualOverride;
+}
+
+/** Evaluation results for one run. */
+export interface RunResults {
+    processingId: string;
+    results: ProfileResult[];
+}
+
+/** Retrieves every evaluated profile for one run. */
+/** Retrieves the results of a processing run, via the /run_filter/:processingId/results endpoint. */
+export async function getResults(processingId: string): Promise<RunResults>
+{
+    const response = await fetch(`/run_filter/${processingId}/results`);
+    if (!response.ok) {
+        throw new Error(`Request failed: ${response.status}`);
+    }
+    return (await response.json()) as RunResults;
+}
+
+

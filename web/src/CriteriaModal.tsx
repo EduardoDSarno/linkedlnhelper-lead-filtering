@@ -2,7 +2,9 @@ import type { KeyboardEvent } from 'react';
 
 import { Combobox } from './Combobox';
 import { BRAZIL_LOCATIONS } from './data/locations';
+import { BRAZIL_STATES, REGION_NAMES } from './data/regions';
 import {
+  LOCATION_MODE,
   OPEN_TO_WORK,
   criteriaSummary,
   type CriteriaForm,
@@ -145,6 +147,13 @@ export function CriteriaModal({ form, update, onClose, onConfirm }: CriteriaModa
   const band2 = Math.max(0, form.approveMin - form.manualMin);
   const band3 = Math.max(0, 100 - form.approveMin);
 
+  // The location field shown depends on the active mode; each keeps its own list.
+  const locationField =
+    form.locationMode === LOCATION_MODE.include
+      ? 'includeLocations'
+      : 'excludeLocations';
+  const locationValues = form[locationField];
+
   return (
     <div
       style={{
@@ -286,18 +295,71 @@ export function CriteriaModal({ form, update, onClose, onConfirm }: CriteriaModa
 
           {/* Locations */}
           <div style={{ borderTop: '1px solid #eef1f5', paddingTop: 18 }}>
-            <SectionTitle>Localizações permitidas</SectionTitle>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+              <span style={{ fontSize: 13, fontWeight: 600 }}>Localização</span>
+              <div style={{ marginLeft: 'auto', display: 'flex', gap: 4 }}>
+                {[
+                  { label: 'Incluir apenas', value: LOCATION_MODE.include },
+                  { label: 'Excluir', value: LOCATION_MODE.exclude },
+                ].map((option) => {
+                  const on = form.locationMode === option.value;
+                  return (
+                    <button
+                      key={option.label}
+                      type="button"
+                      // Each mode keeps its own list, so switching only changes
+                      // which list is shown — nothing is cleared.
+                      onClick={() => update({ locationMode: option.value })}
+                      style={{
+                        all: 'unset',
+                        cursor: 'pointer',
+                        fontSize: 12,
+                        fontWeight: 600,
+                        padding: '4px 10px',
+                        borderRadius: 7,
+                        border: `1px solid ${on ? '#2563eb' : '#e2e8f0'}`,
+                        background: on ? '#f5f9ff' : '#fff',
+                        color: on ? '#1d4ed8' : '#475569',
+                      }}
+                    >
+                      {option.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
             <Combobox
-              values={form.locations}
-              suggestions={BRAZIL_LOCATIONS}
-              onAdd={(value) => update({ locations: [...form.locations, value] })}
-              onRemove={(index) =>
-                update({ locations: form.locations.filter((_, i) => i !== index) })
+              values={locationValues}
+              suggestions={
+                form.locationMode === LOCATION_MODE.include
+                  ? [...REGION_NAMES, ...BRAZIL_LOCATIONS]
+                  : [...REGION_NAMES, ...BRAZIL_STATES]
               }
-              placeholder="+ cidade ou estado"
+              onAdd={(value) => update({ [locationField]: [...locationValues, value] })}
+              onRemove={(index) =>
+                update({
+                  [locationField]: locationValues.filter((_, i) => i !== index),
+                })
+              }
+              placeholder={
+                form.locationMode === LOCATION_MODE.include
+                  ? '+ cidade, estado ou região'
+                  : '+ estado ou região a excluir'
+              }
             />
             <Note>
-              Comece a digitar para escolher da lista, ou digite livremente.
+              {form.locationMode === LOCATION_MODE.include ? (
+                <>
+                  Mantém apenas perfis nas localizações listadas. Adicione uma{' '}
+                  <b>região</b> para incluir todos os seus estados de uma vez.
+                </>
+              ) : (
+                <>
+                  Mantém todos os estados <b>exceto</b> os listados (o backend
+                  recebe a lista dos demais estados). Funciona por estado ou
+                  região, não por cidade.
+                </>
+              )}{' '}
               Localização incerta no perfil não elimina o lead: vai para revisão
               manual com o aviso registrado.
             </Note>
