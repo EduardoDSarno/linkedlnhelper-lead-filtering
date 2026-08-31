@@ -13,14 +13,21 @@ export const API_ROUTES = {
   import: '/import',
   review: '/run_filter',
   getProccessById: '/run_filter/:processingId',
+  download: '/download/:processingId/:artifact',
 } as const;
 
 /** Field names shared by the API request and response bodies. */
 export const API_FIELD = {
   processingId: 'processingId',
   criteria: 'criteria',
+  artifact: 'artifact',
 } as const;
 
+/** Artifact types that can be downloaded. */
+export const ARTIFACT_TYPE = {
+  approved: 'approved',
+  report: 'report',
+} as const;
 /** Content type accepted for a raw Linked Helper CSV upload. */
 export const CSV_CONTENT_TYPE = 'text/csv';
 

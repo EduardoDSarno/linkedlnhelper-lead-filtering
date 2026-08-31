@@ -1,5 +1,3 @@
-import { rm } from 'node:fs/promises';
-
 import { loadProfilesFromCsv } from './dataCollector/csv/csvdata.js';
 import type { ImportedCsvData } from './dataCollector/csv/csvdata.js';
 import {
@@ -48,9 +46,9 @@ export async function prepRun(
  * Reviews an already-saved upload and writes both output artifacts.
  *
  * Shared by the CLI and the API so the review runs identically regardless of
- * how the request arrived. The original is deleted only after both artifacts
- * are written and the completed status is recorded; a failure keeps it for
- * retry and re-throws for the caller to report.
+ * how the request arrived. The original is kept after completion so manual
+ * decision overrides can rebuild the approved CSV from its exact bytes; a
+ * failure also keeps it for retry and re-throws for the caller to report.
  */
 export async function runPipeline(
   id: string,
@@ -92,9 +90,8 @@ export async function runPipeline(
       ),
     );
 
-    // Both artifacts are written and recorded, so the original is safe to drop.
-    await rm(paths.original, { force: true });
-
+    // The original is deliberately kept: manual decision overrides rebuild the
+    // approved CSV from its exact bytes. A later cleanup pass removes it.
     return { approvedCsvPath: artifacts.approvedCsvPath, evaluationReportPath: artifacts.evaluationReportPath, evaluationRunId: result.evaluationRun.id };
 
   } catch (error: unknown) {

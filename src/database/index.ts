@@ -4,10 +4,16 @@ import { DatabaseSync } from 'node:sqlite';
 
 import { linkedinProfileKey } from '../linkedin/index.js';
 import type { FullProfile } from '../profile/index.js';
-import type { ProcessingRun, StoredEvaluationRun } from './types.js';
+import type {
+  ManualOverride,
+  ProcessingRun,
+  StoredEvaluationRun,
+} from './types.js';
 
-export { PROCESSING_STATUS } from './types.js';
+export { MANUAL_DECISION, PROCESSING_STATUS } from './types.js';
 export type {
+  ManualDecision,
+  ManualOverride,
   ProcessingRun,
   ProcessingStatus,
   StoredEvaluationRun,
@@ -61,9 +67,35 @@ export function initializeDatabase(db: DatabaseSync): void {
       evaluation_run_id TEXT,
       error TEXT,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      completed_at TEXT
+      completed_at TEXT,
+      manual_overrides_json TEXT CHECK (
+        manual_overrides_json IS NULL OR json_valid(manual_overrides_json)
+      )
     );
   `);
+
+  addManualOverridesColumnIfMissing(db);
+}
+
+/**
+ * Adds the manual-overrides column to a database created before it existed.
+ *
+ * CREATE TABLE IF NOT EXISTS never alters an existing table, so older files
+ * need this one-time migration to accept human decision overrides.
+ */
+function addManualOverridesColumnIfMissing(db: DatabaseSync): void {
+  const columns = db
+    .prepare(`SELECT name FROM pragma_table_info('${PROCESSING_RUN_TABLE_NAME}')`)
+    .all() as Array<{ name: string }>;
+
+  if (!columns.some((column) => column.name === 'manual_overrides_json')) {
+    db.exec(`
+      ALTER TABLE ${PROCESSING_RUN_TABLE_NAME}
+      ADD COLUMN manual_overrides_json TEXT CHECK (
+        manual_overrides_json IS NULL OR json_valid(manual_overrides_json)
+      )
+    `);
+  }
 }
 
 /** Converts one database row into the application processing-run shape. */
@@ -77,6 +109,7 @@ function processingRunFromRow(row: {
   error: string | null;
   created_at: string;
   completed_at: string | null;
+  manual_overrides_json: string | null;
 }): ProcessingRun {
   return {
     id: row.id,
@@ -92,10 +125,23 @@ function processingRunFromRow(row: {
       : {}),
     ...(row.error ? { error: row.error } : {}),
     ...(row.completed_at ? { completedAt: row.completed_at } : {}),
+    ...(row.manual_overrides_json
+      ? {
+          manualOverrides: JSON.parse(
+            row.manual_overrides_json,
+          ) as readonly ManualOverride[],
+        }
+      : {}),
   };
 }
 
-/** Inserts one processing run, typically in the queued or running state. */
+/**
+ * Inserts one processing run, or refreshes the existing row with the same id.
+ *
+ * The API inserts the row at import time and the pipeline registers the same
+ * id again when it starts (and on a retry after failure), so the conflict
+ * branch updates the mutable columns while keeping the original creation time.
+ */
 export function dbInsertProcessingRun(
   run: ProcessingRun,
   db: DatabaseSync,
@@ -110,9 +156,19 @@ export function dbInsertProcessingRun(
       evaluation_run_id,
       error,
       created_at,
-      completed_at
+      completed_at,
+      manual_overrides_json
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET
+      status = excluded.status,
+      original_csv_path = excluded.original_csv_path,
+      approved_csv_path = excluded.approved_csv_path,
+      evaluation_report_path = excluded.evaluation_report_path,
+      evaluation_run_id = excluded.evaluation_run_id,
+      error = excluded.error,
+      completed_at = excluded.completed_at,
+      manual_overrides_json = excluded.manual_overrides_json
   `).run(
     run.id,
     run.status,
@@ -123,6 +179,7 @@ export function dbInsertProcessingRun(
     run.error ?? null,
     run.createdAt,
     run.completedAt ?? null,
+    run.manualOverrides ? JSON.stringify(run.manualOverrides) : null,
   );
 
   return run;
@@ -147,7 +204,8 @@ export function dbUpdateProcessingRun(
       evaluation_report_path = ?,
       evaluation_run_id = ?,
       error = ?,
-      completed_at = ?
+      completed_at = ?,
+      manual_overrides_json = ?
     WHERE id = ?
   `).run(
     run.status,
@@ -157,6 +215,7 @@ export function dbUpdateProcessingRun(
     run.evaluationRunId ?? null,
     run.error ?? null,
     run.completedAt ?? null,
+    run.manualOverrides ? JSON.stringify(run.manualOverrides) : null,
     run.id,
   );
 
@@ -179,7 +238,8 @@ export function dbGetProcessingRunById(
         evaluation_run_id,
         error,
         created_at,
-        completed_at
+        completed_at,
+        manual_overrides_json
       FROM ${PROCESSING_RUN_TABLE_NAME}
       WHERE id = ?
     `)

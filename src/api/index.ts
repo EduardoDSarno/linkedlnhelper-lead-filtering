@@ -5,6 +5,7 @@ import { dbGetProcessingRunById, dbInsertProcessingRun, openDatabase } from '../
 import {PROCESSING_STATUS} from '../database/types.js';
 import {
     API_ROUTES,
+    ARTIFACT_TYPE,
     CSV_CONTENT_TYPE,
     HTTP_STATUS,
     PARSE_AS_BUFFER,
@@ -14,6 +15,8 @@ import { asRecord, asString } from '../helpers/type_guards.js';
 import { parseFullEvaluationCriteria } from '../evaluation/index.js';
 import { runPipeline } from '../app.js';
 import type { Logger } from '../logging/index.js';
+import { createReadStream } from 'node:fs';
+import { basename } from 'node:path';
 
 export async function buildServer()
 {
@@ -22,10 +25,61 @@ export async function buildServer()
     registerImportRoute(server);
     registerFilterRoute(server);
     registerGetProccessByIdRoute(server);
+    registerDownloadRoute(server);
     return server;
 }
 
+function registerDownloadRoute(server: FastifyInstance)
+{
+    server.get(API_ROUTES.download, async (request, reply) =>
+    {
+        const params = asRecord(request.params);
+        if (!params) return reply.status(HTTP_STATUS.badRequest).send({ error: 'Invalid params' });
 
+        const processingId = asString(params[API_FIELD.processingId]);
+        if (!processingId) return reply.status(HTTP_STATUS.badRequest).send({ error: 'Missing processingId' });
+
+        const artifactType = asString(params[API_FIELD.artifact]);
+        if (!artifactType) return reply.status(HTTP_STATUS.badRequest).send({ error: 'Missing artifact' });
+
+        // Map the requested artifact to a fixed path. Only these two values are
+        // ever served, so a caller cannot craft a path to another file.
+        const paths = processingPaths(processingId);
+        const filePath =
+            artifactType === ARTIFACT_TYPE.approved ? paths.approved
+            : artifactType === ARTIFACT_TYPE.report ? paths.report
+            : undefined;
+        if (!filePath) return reply.status(HTTP_STATUS.badRequest).send({ error: 'Unknown artifact' });
+
+        // The artifacts only exist after a successful run.
+        const db = openDatabase();
+        try
+        {
+            const run = dbGetProcessingRunById(processingId, db);
+            if (!run) {
+                return reply.status(HTTP_STATUS.notFound).send({ error: 'Processing run not found' });
+            }
+            if (run.status !== PROCESSING_STATUS.completed) {
+                return reply.status(HTTP_STATUS.notFound).send({ error: 'Artifacts are not ready' });
+            }
+        }
+        finally
+        {
+            db.close();
+        }
+
+        // Send the file to the client
+        return reply
+            .header('Content-Type', CSV_CONTENT_TYPE)
+            .header('Content-Disposition', `attachment; filename="${basename(filePath)}"`)
+            .send(createReadStream(filePath));
+    });
+}
+
+/** This function receives a server instance and it's responsible
+ * for registering the get processing by id route for the API
+ * it gets the processing run by id and returns the processing run
+*/
 function registerGetProccessByIdRoute(server: FastifyInstance)
 {
     server.get(API_ROUTES.getProccessById, async (request, reply) =>

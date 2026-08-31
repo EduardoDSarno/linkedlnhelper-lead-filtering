@@ -1,5 +1,11 @@
 import { writeFileAtomically } from '../../helpers/index.js';
-import type { StoredEvaluationRun } from '../../database/index.js';
+import { MANUAL_DECISION } from '../../database/index.js';
+import type {
+  ManualOverride,
+  StoredEvaluationRun,
+} from '../../database/index.js';
+import { MODEL_EVALUATION_DECISION } from '../../evaluation/index.js';
+import type { ProfileModelEvaluation } from '../../evaluation/index.js';
 import type { FullProfile } from '../../profile/index.js';
 
 /** UTF-8 BOM so spreadsheets open accented names in the correct encoding. */
@@ -26,6 +32,8 @@ const REPORT_COLUMNS = [
   'evidence',
   'uncertainties',
   'status',
+  'final_decision',
+  'manual_reason',
 ] as const;
 
 /** Human-facing status describing how far one profile progressed. */
@@ -35,6 +43,41 @@ const REPORT_STATUS = {
   modelError: 'model_error',
   modelIncomplete: 'model_incomplete',
 } as const;
+
+/** Where one profile ends up after automatic and human decisions combine. */
+const FINAL_DECISION = {
+  autoApproved: 'auto_approved',
+  autoRejected: 'auto_rejected',
+  manualReview: 'manual_review',
+  manuallyApproved: 'manually_approved',
+  manuallyRejected: 'manually_rejected',
+  filteredOut: 'filtered_out',
+} as const;
+
+/**
+ * Resolves one profile's final decision from the automatic result and the
+ * optional human override, which always wins over the model.
+ */
+function finalDecisionFor(
+  broadDecision: string,
+  model: ProfileModelEvaluation | undefined,
+  override: ManualOverride | undefined,
+): string {
+  if (override) {
+    return override.decision === MANUAL_DECISION.approved
+      ? FINAL_DECISION.manuallyApproved
+      : FINAL_DECISION.manuallyRejected;
+  }
+  if (broadDecision === 'Failed') return FINAL_DECISION.filteredOut;
+  if (!model) return '';
+  if (model.decision === MODEL_EVALUATION_DECISION.approved) {
+    return FINAL_DECISION.autoApproved;
+  }
+  if (model.decision === MODEL_EVALUATION_DECISION.rejected) {
+    return FINAL_DECISION.autoRejected;
+  }
+  return FINAL_DECISION.manualReview;
+}
 
 /** Quotes one field only when it contains a delimiter, quote, or line break. */
 function quoteCsvField(value: string): string {
@@ -65,8 +108,13 @@ function profileName(profile: FullProfile | undefined): string {
 export function buildEvaluationReportCsv(
   profiles: readonly FullProfile[],
   run: StoredEvaluationRun,
+  overrides: readonly ManualOverride[] = [],
 ): string {
   const { broadFilter, modelEvaluation } = run.evaluation;
+
+  const overrideByPublicId = new Map(
+    overrides.map((override) => [override.publicId, override]),
+  );
 
   const profileByPublicId = new Map<string, FullProfile>();
   const publicIdByProfileId = new Map<string, string>();
@@ -98,6 +146,7 @@ export function buildEvaluationReportCsv(
     const publicId = broad.linkedHelperPublicId ?? '';
     const model = modelByPublicId.get(publicId);
     const failureError = failureByPublicId.get(publicId);
+    const override = overrideByPublicId.get(publicId);
 
     let status: string;
     let reasons: string;
@@ -128,6 +177,8 @@ export function buildEvaluationReportCsv(
         model?.evidence.join(LIST_SEPARATOR) ?? '',
         model?.uncertainties.join(LIST_SEPARATOR) ?? '',
         status,
+        finalDecisionFor(broad.decision, model, override),
+        override?.reason ?? '',
       ]),
     );
   }
@@ -140,6 +191,10 @@ export async function writeEvaluationReport(
   profiles: readonly FullProfile[],
   run: StoredEvaluationRun,
   outputPath: string,
+  overrides: readonly ManualOverride[] = [],
 ): Promise<void> {
-  await writeFileAtomically(outputPath, buildEvaluationReportCsv(profiles, run));
+  await writeFileAtomically(
+    outputPath,
+    buildEvaluationReportCsv(profiles, run, overrides),
+  );
 }

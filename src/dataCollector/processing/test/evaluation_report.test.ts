@@ -123,18 +123,42 @@ test('buildEvaluationReportCsv reports one row per profile with the right status
 
   // Header (with BOM) plus one row per profile.
   assert.equal(lines.length, 4);
-  assert.ok(lines[0]?.endsWith('public_id,name,linkedin_url,broad_decision,model_decision,match_percent,reasons,evidence,uncertainties,status'));
+  assert.ok(lines[0]?.endsWith('public_id,name,linkedin_url,broad_decision,model_decision,match_percent,reasons,evidence,uncertainties,status,final_decision,manual_reason'));
 
   // Approved profile: evaluated, comma-containing reason is quoted.
   assert.ok(lines[1]?.startsWith('a,Ada Lovelace,https://linkedin.com/in/a,NextPhase,approved,90,'));
   assert.ok(lines[1]?.includes('"strong fit, senior role"'));
-  assert.ok(lines[1]?.endsWith(',evaluated'));
+  assert.ok(lines[1]?.endsWith(',evaluated,auto_approved,'));
 
   // Filtered-out profile: reason is the broad decision message, no model cells.
   assert.ok(lines[2]?.startsWith('b,Bob Stone,https://linkedin.com/in/b,Failed,,,'));
-  assert.ok(lines[2]?.endsWith(',filtered_out'));
+  assert.ok(lines[2]?.endsWith(',filtered_out,filtered_out,'));
 
   // Model failure: recorded as model_error with the failure message.
   assert.ok(lines[3]?.startsWith('c,Cleo Vale,https://linkedin.com/in/c,NextPhase,,,model timed out'));
-  assert.ok(lines[3]?.endsWith(',model_error'));
+  assert.ok(lines[3]?.endsWith(',model_error,,'));
+});
+
+test('buildEvaluationReportCsv records manual overrides with their reason', () => {
+  const profiles = [
+    profile('a', 'Ada', 'Lovelace'),
+    profile('b', 'Bob', 'Stone'),
+  ];
+
+  const stored = run(
+    [broad('a', 'NextPhase', 'passed'), broad('b', 'NextPhase', 'passed')],
+    [model('a', 90, ['strong fit']), model('b', 88, ['good fit'])],
+    [],
+  );
+
+  const csv = buildEvaluationReportCsv(profiles, stored, [
+    { publicId: 'b', decision: 'rejected', reason: 'not a fit after a call' },
+  ]);
+  const lines = csv.trimEnd().split('\r\n');
+
+  // The untouched profile keeps its automatic decision.
+  assert.ok(lines[1]?.endsWith(',evaluated,auto_approved,'));
+
+  // The overridden profile records the human decision and reason.
+  assert.ok(lines[2]?.endsWith(',evaluated,manually_rejected,not a fit after a call'));
 });

@@ -23,6 +23,23 @@ export const PROCESSING_STATUS = {
 export type ProcessingStatus =
   (typeof PROCESSING_STATUS)[keyof typeof PROCESSING_STATUS];
 
+/** Decisions a human reviewer may assign to one profile. */
+export const MANUAL_DECISION = {
+  approved: 'approved',
+  rejected: 'rejected',
+} as const;
+
+/** A single manual-decision value. */
+export type ManualDecision =
+  (typeof MANUAL_DECISION)[keyof typeof MANUAL_DECISION];
+
+/** One human decision overriding the automatic result for a profile. */
+export interface ManualOverride {
+  readonly publicId: string;
+  readonly decision: ManualDecision;
+  readonly reason?: string;
+}
+
 /** Metadata and on-disk artifact paths for one uploaded-CSV processing run. */
 export interface ProcessingRun {
   readonly id: string;
@@ -34,4 +51,7 @@ export interface ProcessingRun {
   readonly error?: string;
   readonly createdAt: string;
   readonly completedAt?: string;
+
+  /** Latest human decisions submitted for this run; replaced on re-submission. */
+  readonly manualOverrides?: readonly ManualOverride[];
 }
