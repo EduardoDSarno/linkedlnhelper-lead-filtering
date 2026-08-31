@@ -1,4 +1,4 @@
-import type { ReviewFlow } from './useReviewFlow';
+import type { ReviewFlow } from './scripts/useReviewFlow';
 
 /** Human labels for the model decision on each row (temporary, minimal list). */
 const DECISION_LABEL: Record<string, string> = {

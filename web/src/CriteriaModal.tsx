@@ -8,7 +8,7 @@ import {
   OPEN_TO_WORK,
   criteriaSummary,
   type CriteriaForm,
-} from './criteria';
+} from './scripts/criteria';
 
 /** Props: the current form, a patch applier, and the modal's actions. */
 interface CriteriaModalProps {

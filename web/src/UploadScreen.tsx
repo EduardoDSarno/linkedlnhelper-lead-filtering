@@ -1,5 +1,5 @@
-import { criteriaSummary } from './criteria';
-import type { ReviewFlow } from './useReviewFlow';
+import { criteriaSummary } from './scripts/criteria';
+import type { ReviewFlow } from './scripts/useReviewFlow';
 
 /** Formats a byte count as a short Brazilian-style size label. */
 function formatSize(bytes: number): string {
