@@ -5,6 +5,7 @@ export const HTTP_STATUS = {
   accepted: 202,
   badRequest: 400,
   notFound: 404,
+  conflict: 409,
   internalError: 500,
 } as const;
 
@@ -13,6 +14,8 @@ export const API_ROUTES = {
   import: '/import',
   review: '/run_filter',
   getProccessById: '/run_filter/:processingId',
+  decisions: '/run_filter/:processingId/decisions',
+  results: '/run_filter/:processingId/results',
   download: '/download/:processingId/:artifact',
 } as const;
 
@@ -21,6 +24,10 @@ export const API_FIELD = {
   processingId: 'processingId',
   criteria: 'criteria',
   artifact: 'artifact',
+  overrides: 'overrides',
+  publicId: 'publicId',
+  decision: 'decision',
+  reason: 'reason',
 } as const;
 
 /** Artifact types that can be downloaded. */

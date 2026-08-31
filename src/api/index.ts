@@ -1,8 +1,17 @@
 import Fastify, { type FastifyInstance } from 'fastify';
 import { processingPaths, saveOriginalCsv } from '../dataCollector/processing/processing.js';
 import crypto from 'crypto';
-import { dbGetProcessingRunById, dbInsertProcessingRun, openDatabase } from '../database/index.js';
-import {PROCESSING_STATUS} from '../database/types.js';
+import {
+    dbGetEvaluationRunById,
+    dbGetProcessingRunById,
+    dbInsertProcessingRun,
+    dbListProfiles,
+    dbUpdateProcessingRun,
+    openDatabase,
+} from '../database/index.js';
+import { MANUAL_DECISION, PROCESSING_STATUS } from '../database/types.js';
+import type { ManualOverride } from '../database/types.js';
+import { finalizeRun } from '../dataCollector/processing/finalize.js';
 import {
     API_ROUTES,
     ARTIFACT_TYPE,
@@ -25,6 +34,8 @@ export async function buildServer()
     registerImportRoute(server);
     registerFilterRoute(server);
     registerGetProccessByIdRoute(server);
+    registerDecisionsRoute(server);
+    registerResultsRoute(server);
     registerDownloadRoute(server);
     return server;
 }
@@ -113,6 +124,189 @@ function registerGetProccessByIdRoute(server: FastifyInstance)
     });
 }
 
+/**
+ * Parses the request's overrides array into typed manual decisions.
+ *
+ * Returns undefined when the value is not an array of well-formed entries, so
+ * the route can reject the request instead of applying a partial review.
+ */
+function parseManualOverrides(value: unknown): ManualOverride[] | undefined
+{
+    if (!Array.isArray(value)) return undefined;
+
+    const overrides: ManualOverride[] = [];
+    for (const entry of value)
+    {
+        const record = asRecord(entry);
+        if (!record) return undefined;
+
+        const publicId = asString(record[API_FIELD.publicId]);
+        const decision = asString(record[API_FIELD.decision]);
+        const reason = asString(record[API_FIELD.reason]);
+        if (!publicId) return undefined;
+        if (decision !== MANUAL_DECISION.approved && decision !== MANUAL_DECISION.rejected) {
+            return undefined;
+        }
+
+        overrides.push({ publicId, decision, ...(reason ? { reason } : {}) });
+    }
+    return overrides;
+}
+
+/** This function receives a server instance and it's responsible
+ * for registering the decisions route for the API.
+ * It applies human approved/rejected overrides to a completed run and
+ * rebuilds both output artifacts from the retained original CSV.
+*/
+function registerDecisionsRoute(server: FastifyInstance)
+{
+    server.post(API_ROUTES.decisions, async (request, reply) =>
+    {
+        const params = asRecord(request.params);
+        if (!params) return reply.status(HTTP_STATUS.badRequest).send({ error: 'Invalid params' });
+
+        const processingId = asString(params[API_FIELD.processingId]);
+        if (!processingId) return reply.status(HTTP_STATUS.badRequest).send({ error: 'Missing processingId' });
+
+        const body = asRecord(request.body);
+        if (!body) return reply.status(HTTP_STATUS.badRequest).send({ error: 'Invalid body' });
+
+        const overrides = parseManualOverrides(body[API_FIELD.overrides]);
+        if (!overrides) {
+            return reply.status(HTTP_STATUS.badRequest).send({ error: 'Invalid overrides' });
+        }
+
+        const db = openDatabase();
+        try
+        {
+            const run = dbGetProcessingRunById(processingId, db);
+            if (!run) {
+                return reply.status(HTTP_STATUS.notFound).send({ error: 'Processing run not found' });
+            }
+            // Decisions only make sense over a finished automatic review.
+            if (run.status !== PROCESSING_STATUS.completed || !run.evaluationRunId) {
+                return reply.status(HTTP_STATUS.conflict).send({ error: 'Processing run is not completed' });
+            }
+
+            const evaluationRun = dbGetEvaluationRunById(run.evaluationRunId, db);
+            if (!evaluationRun) {
+                return reply.status(HTTP_STATUS.internalError).send({ error: 'Evaluation results are missing' });
+            }
+
+            // The report join only needs the profiles that carry a Linked
+            // Helper identity from this kind of import.
+            const profiles = dbListProfiles(db).filter(
+                (profile) => profile.linkedHelperPublicId,
+            );
+
+            const { finalApprovedCount } = await finalizeRun(
+                processingPaths(processingId),
+                evaluationRun,
+                profiles,
+                overrides,
+            );
+
+            // Each submission replaces the previous overrides entirely.
+            dbUpdateProcessingRun({ ...run, manualOverrides: overrides }, db);
+
+            return reply.status(HTTP_STATUS.ok).send({
+                processingId,
+                finalApprovedCount,
+                overridesApplied: overrides.length,
+            });
+        }
+        catch (error)
+        {
+            request.log.error({ err: error }, 'Applying decisions failed');
+            return reply.status(HTTP_STATUS.internalError).send({ error: 'Failed to apply decisions' });
+        }
+        finally
+        {
+            db.close();
+        }
+    });
+}
+
+/** This function receives a server instance and it's responsible
+ * for registering the results route for the API.
+ * It returns the evaluation results as JSON so a review interface can list
+ * every profile's decisions without parsing the report CSV.
+*/
+function registerResultsRoute(server: FastifyInstance)
+{
+    server.get(API_ROUTES.results, async (request, reply) =>
+    {
+        const params = asRecord(request.params);
+        if (!params) return reply.status(HTTP_STATUS.badRequest).send({ error: 'Invalid params' });
+
+        const processingId = asString(params[API_FIELD.processingId]);
+        if (!processingId) return reply.status(HTTP_STATUS.badRequest).send({ error: 'Missing processingId' });
+
+        const db = openDatabase();
+        try
+        {
+            const run = dbGetProcessingRunById(processingId, db);
+            if (!run) {
+                return reply.status(HTTP_STATUS.notFound).send({ error: 'Processing run not found' });
+            }
+            if (!run.evaluationRunId) {
+                return reply.status(HTTP_STATUS.conflict).send({ error: 'Results are not ready' });
+            }
+
+            const evaluationRun = dbGetEvaluationRunById(run.evaluationRunId, db);
+            if (!evaluationRun) {
+                return reply.status(HTTP_STATUS.internalError).send({ error: 'Evaluation results are missing' });
+            }
+
+            const profileByPublicId = new Map(
+                dbListProfiles(db)
+                    .filter((profile) => profile.linkedHelperPublicId)
+                    .map((profile) => [profile.linkedHelperPublicId as string, profile]),
+            );
+            const modelByPublicId = new Map(
+                evaluationRun.evaluation.modelEvaluation.evaluations
+                    .filter((evaluation) => evaluation.linkedHelperPublicId)
+                    .map((evaluation) => [evaluation.linkedHelperPublicId as string, evaluation]),
+            );
+            const overrideByPublicId = new Map(
+                (run.manualOverrides ?? []).map((override) => [override.publicId, override]),
+            );
+
+            const results = evaluationRun.evaluation.broadFilter.evaluations.map((broad) =>
+            {
+                const publicId = broad.linkedHelperPublicId ?? '';
+                const profile = profileByPublicId.get(publicId);
+                const model = modelByPublicId.get(publicId);
+                const override = overrideByPublicId.get(publicId);
+
+                return {
+                    publicId,
+                    name: [profile?.firstName, profile?.lastName].filter(Boolean).join(' '),
+                    linkedinUrl: profile?.linkedinUrl ?? '',
+                    broadDecision: broad.decision,
+                    broadDecisionMessage: broad.decisionMessage,
+                    ...(model
+                        ? {
+                            modelDecision: model.decision,
+                            matchPercent: model.matchPercent,
+                            reasons: model.reasons,
+                            evidence: model.evidence,
+                            uncertainties: model.uncertainties,
+                          }
+                        : {}),
+                    ...(override ? { override } : {}),
+                };
+            });
+
+            return reply.status(HTTP_STATUS.ok).send({ processingId, results });
+        }
+        finally
+        {
+            db.close();
+        }
+    });
+}
+
 /** This function receives a server instance and it's responsible
  * for registering the filter route for the API
  * it validates the request body and runs the pipeline
@@ -133,15 +327,22 @@ function registerFilterRoute(server: FastifyInstance)
             return reply.status(HTTP_STATUS.badRequest).send({ error: 'Missing processingId' });
         }
 
-        // Check if the processing run exists
+        // Check if the processing run exists and may be (re)started. Only a
+        // queued run or a failed one being retried may start the pipeline.
         const db = openDatabase();
-        try 
+        try
         {
             const run = dbGetProcessingRunById(processingId, db);
             if (!run) {
                 return reply.status(HTTP_STATUS.notFound).send({ error: 'Processing run not found' });
             }
-        } 
+            if (run.status === PROCESSING_STATUS.running) {
+                return reply.status(HTTP_STATUS.conflict).send({ error: 'Processing run is already running' });
+            }
+            if (run.status === PROCESSING_STATUS.completed) {
+                return reply.status(HTTP_STATUS.conflict).send({ error: 'Processing run is already completed; submit decisions instead' });
+            }
+        }
         finally {
             db.close();
         }
