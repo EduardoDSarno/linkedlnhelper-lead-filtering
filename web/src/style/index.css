@@ -48,3 +48,51 @@ select {
   border-radius: 99px;
   border: 3px solid #f7f8fa;
 }
+
+.lead-row {
+  border-bottom: 1px solid #eceff3;
+  border-left: 3px solid transparent;
+  background: #fff;
+  padding: 12px 22px 12px 19px;
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr) 148px 96px 62px 122px;
+  gap: 14px;
+  align-items: center;
+  cursor: default;
+}
+.lead-row:hover {
+  background: #f8fafc;
+}
+.lead-row.is-selected {
+  background: #f5f9ff;
+  border-left-color: #2563eb;
+}
+.lead-in {
+  flex: none;
+  display: inline-flex;
+  color: #94a3b8;
+}
+.lead-in:hover {
+  color: #2563eb;
+}
+.lead-acts {
+  display: flex;
+  gap: 5px;
+  opacity: 0.6;
+  transition: opacity 0.12s;
+}
+.lead-row:hover .lead-acts,
+.lead-row.has-override .lead-acts {
+  opacity: 1;
+}
+.lead-act {
+  all: unset;
+  cursor: pointer;
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 7px;
+}
+.lead-act:hover {
+  filter: brightness(0.97);
+}

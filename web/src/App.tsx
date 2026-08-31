@@ -1,8 +1,8 @@
 import { CriteriaModal } from './CriteriaModal';
 import { ListScreen } from './ListScreen';
 import { UploadScreen } from './UploadScreen';
-import { isCriteriaComplete } from './scripts/criteria';
-import { useReviewFlow } from './scripts/useReviewFlow';
+import { isCriteriaComplete } from './code/criteria';
+import { useReviewFlow } from './code/useReviewFlow';
 
 /** The application shell: top bar, error banner, the active screen, and the modal. */
 export default function App() {
