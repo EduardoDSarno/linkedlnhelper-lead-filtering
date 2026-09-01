@@ -17,6 +17,8 @@ export const API_ROUTES = {
   decisions: '/run_filter/:processingId/decisions',
   results: '/run_filter/:processingId/results',
   download: '/download/:processingId/:artifact',
+  runs: '/runs',
+  run: '/runs/:processingId',
 } as const;
 
 /** Field names shared by the API request and response bodies. */

@@ -261,6 +261,44 @@ export function dbGetProcessingRunById(
   return row ? processingRunFromRow(row) : undefined;
 }
 
+/** Lists every processing run, newest first. */
+export function dbListProcessingRuns(db: DatabaseSync): ProcessingRun[] {
+  const rows = db
+    .prepare(`
+      SELECT
+        id,
+        status,
+        name,
+        original_csv_path,
+        approved_csv_path,
+        evaluation_report_path,
+        evaluation_run_id,
+        error,
+        created_at,
+        completed_at,
+        manual_overrides_json
+      FROM ${PROCESSING_RUN_TABLE_NAME}
+      ORDER BY created_at DESC, rowid DESC
+    `)
+    .all() as Array<Parameters<typeof processingRunFromRow>[0]>;
+
+  return rows.map(processingRunFromRow);
+}
+
+/**
+ * Deletes one processing run by id.
+ *
+ * Returns true when a row was removed. The caller deletes the run's files
+ * separately, since the database does not own the filesystem.
+ */
+export function dbDeleteProcessingRun(id: string, db: DatabaseSync): boolean {
+  const result = db
+    .prepare(`DELETE FROM ${PROCESSING_RUN_TABLE_NAME} WHERE id = ?`)
+    .run(id);
+
+  return result.changes > 0;
+}
+
 /**
  * Marks every run still recorded as running as failed.
  *

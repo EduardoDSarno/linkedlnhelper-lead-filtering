@@ -1,8 +1,8 @@
 import { useState } from 'react';
 
+import { CampaignsScreen } from './CampaignsScreen';
 import { ConcludeDialog } from './ConcludeDialog';
 import { CriteriaModal } from './CriteriaModal';
-import { DoneScreen } from './DoneScreen';
 import { ListScreen } from './ListScreen';
 import { RunNameDialog } from './RunNameDialog';
 import { UploadScreen } from './UploadScreen';
@@ -189,7 +189,7 @@ export default function App() {
 
       {flow.screen === 'upload' && <UploadScreen flow={flow} />}
       {flow.screen === 'list' && <ListScreen flow={flow} />}
-      {flow.screen === 'done' && <DoneScreen flow={flow} />}
+      {flow.screen === 'done' && <CampaignsScreen />}
 
       {flow.criteriaOpen && (
         <CriteriaModal

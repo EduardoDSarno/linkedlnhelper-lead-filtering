@@ -9,6 +9,7 @@
  */
 import type {
   ArtifactKind,
+  CampaignSummary,
   CompensationMatch,
   DecisionsResult,
   ImportResult,
@@ -312,6 +313,28 @@ const MOCK_PROFILES: ProfileResult[] = SAMPLE.map(mockProfile);
 /** Counts status polls so the run reports running before it completes. */
 let statusPolls = 0;
 
+/** In-memory campaigns store, seeded with a couple of past runs. */
+let mockRuns: CampaignSummary[] = [
+  {
+    processingId: 'mock-past-1',
+    name: 'Gestores comerciais SaaS — ago/2026',
+    status: 'completed',
+    createdAt: '2026-08-20T14:00:00.000Z',
+    completedAt: '2026-08-20T14:08:00.000Z',
+    systemPrompt:
+      'Gestores comerciais e de Customer Success em SaaS B2B, com carreira consultiva e progressão de analista a gestão.',
+  },
+  {
+    processingId: 'mock-past-2',
+    name: 'Relacionamento bancário PJ — jul/2026',
+    status: 'completed',
+    createdAt: '2026-07-11T09:30:00.000Z',
+    completedAt: '2026-07-11T09:41:00.000Z',
+    systemPrompt:
+      'Profissionais de relacionamento e contas PJ em bancos e fintechs, foco em ticket alto.',
+  },
+];
+
 /** Mock of importCsv: returns fabricated counts. */
 export function importCsv(_file: File): Promise<ImportResult> {
   return delay({
@@ -327,9 +350,22 @@ export function importCsv(_file: File): Promise<ImportResult> {
 export function startReview(
   processingId: string,
   _criteria: unknown,
-  _name: string,
+  name: string,
 ): Promise<StartReviewResult> {
   statusPolls = 0;
+  const systemPrompt = (_criteria as { systemPrompt?: string })?.systemPrompt;
+  // Record (or update) this run in the in-memory campaigns store.
+  mockRuns = [
+    {
+      processingId,
+      name,
+      status: 'completed',
+      createdAt: new Date().toISOString(),
+      completedAt: new Date().toISOString(),
+      ...(systemPrompt ? { systemPrompt } : {}),
+    },
+    ...mockRuns.filter((run) => run.processingId !== processingId),
+  ];
   return delay({ processingId });
 }
 
@@ -405,4 +441,23 @@ export function startDownload(_processingId: string, artifact: ArtifactKind): vo
   anchor.click();
   anchor.remove();
   URL.revokeObjectURL(url);
+}
+
+/** Mock of listRuns: returns the in-memory campaigns store. */
+export function listRuns(): Promise<CampaignSummary[]> {
+  return delay([...mockRuns], 200);
+}
+
+/** Mock of renameRun: updates the campaign name in the store. */
+export function renameRun(processingId: string, name: string): Promise<void> {
+  mockRuns = mockRuns.map((run) =>
+    run.processingId === processingId ? { ...run, name } : run,
+  );
+  return delay(undefined, 150);
+}
+
+/** Mock of deleteRun: removes the campaign from the store. */
+export function deleteRun(processingId: string): Promise<void> {
+  mockRuns = mockRuns.filter((run) => run.processingId !== processingId);
+  return delay(undefined, 150);
 }

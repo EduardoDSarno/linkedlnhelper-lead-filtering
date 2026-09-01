@@ -2,13 +2,16 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import { processingPaths, saveOriginalCsv } from '../dataCollector/processing/processing.js';
 import crypto from 'crypto';
 import {
+    dbDeleteProcessingRun,
     dbGetEvaluationRunById,
     dbGetProcessingRunById,
     dbInsertProcessingRun,
+    dbListProcessingRuns,
     dbListProfiles,
     dbUpdateProcessingRun,
     openDatabase,
 } from '../database/index.js';
+import { rm } from 'node:fs/promises';
 import { MANUAL_DECISION, PROCESSING_STATUS } from '../database/types.js';
 import type { ManualOverride } from '../database/types.js';
 import { finalizeRun } from '../dataCollector/processing/finalize.js';
@@ -38,6 +41,9 @@ export async function buildServer()
     registerDecisionsRoute(server);
     registerResultsRoute(server);
     registerDownloadRoute(server);
+    registerRunsListRoute(server);
+    registerRenameRunRoute(server);
+    registerDeleteRunRoute(server);
     return server;
 }
 
@@ -486,3 +492,98 @@ async function registerCsvParser(server: FastifyInstance)
     );
 }
 
+
+/** Lists every campaign (processing run) with its shortened system prompt. */
+function registerRunsListRoute(server: FastifyInstance)
+{
+    server.get(API_ROUTES.runs, async (_request, reply) =>
+    {
+        const db = openDatabase();
+        try
+        {
+            const runs = dbListProcessingRuns(db).map((run) =>
+            {
+                const evaluationRun = run.evaluationRunId
+                    ? dbGetEvaluationRunById(run.evaluationRunId, db)
+                    : undefined;
+
+                return {
+                    processingId: run.id,
+                    name: run.name ?? '',
+                    status: run.status,
+                    createdAt: run.createdAt,
+                    ...(run.completedAt ? { completedAt: run.completedAt } : {}),
+                    ...(evaluationRun
+                        ? { systemPrompt: evaluationRun.criteria.systemPrompt }
+                        : {}),
+                };
+            });
+
+            return reply.status(HTTP_STATUS.ok).send({ runs });
+        }
+        finally
+        {
+            db.close();
+        }
+    });
+}
+
+/** Renames one campaign. */
+function registerRenameRunRoute(server: FastifyInstance)
+{
+    server.patch(API_ROUTES.run, async (request, reply) =>
+    {
+        const params = asRecord(request.params);
+        if (!params) return reply.status(HTTP_STATUS.badRequest).send({ error: 'Invalid params' });
+
+        const processingId = asString(params[API_FIELD.processingId]);
+        if (!processingId) return reply.status(HTTP_STATUS.badRequest).send({ error: 'Missing processingId' });
+
+        const body = asRecord(request.body);
+        const name = body ? asString(body[API_FIELD.name]) : undefined;
+        if (!name) return reply.status(HTTP_STATUS.badRequest).send({ error: 'Missing name' });
+
+        const db = openDatabase();
+        try
+        {
+            const run = dbGetProcessingRunById(processingId, db);
+            if (!run) return reply.status(HTTP_STATUS.notFound).send({ error: 'Processing run not found' });
+
+            dbUpdateProcessingRun({ ...run, name }, db);
+            return reply.status(HTTP_STATUS.ok).send({ processingId, name });
+        }
+        finally
+        {
+            db.close();
+        }
+    });
+}
+
+/** Deletes one campaign: its files and its database row. */
+function registerDeleteRunRoute(server: FastifyInstance)
+{
+    server.delete(API_ROUTES.run, async (request, reply) =>
+    {
+        const params = asRecord(request.params);
+        if (!params) return reply.status(HTTP_STATUS.badRequest).send({ error: 'Invalid params' });
+
+        const processingId = asString(params[API_FIELD.processingId]);
+        if (!processingId) return reply.status(HTTP_STATUS.badRequest).send({ error: 'Missing processingId' });
+
+        // Remove the run's files first; the directory may already be gone.
+        await rm(processingPaths(processingId).dir, { recursive: true, force: true });
+
+        const db = openDatabase();
+        try
+        {
+            const removed = dbDeleteProcessingRun(processingId, db);
+            if (!removed) return reply.status(HTTP_STATUS.notFound).send({ error: 'Processing run not found' });
+
+            return reply.status(HTTP_STATUS.ok).send({ processingId, deleted: true });
+        }
+        finally
+        {
+            db.close();
+        }
+    });
+}

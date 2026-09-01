@@ -261,4 +261,44 @@ export function startDownload(processingId: string, artifact: ArtifactKind): voi
     anchor.remove();
 }
 
+/** One campaign row in the campaigns table. */
+export interface CampaignSummary {
+    processingId: string;
+    name: string;
+    status: ProcessingStatus;
+    createdAt: string;
+    completedAt?: string;
+    systemPrompt?: string;
+}
+
+/** Lists every campaign (processing run), newest first. */
+export async function listRuns(): Promise<CampaignSummary[]> {
+    const response = await fetch('/runs');
+    if (!response.ok) {
+        throw new Error(`Request failed: ${response.status}`);
+    }
+    const body = (await response.json()) as { runs: CampaignSummary[] };
+    return body.runs;
+}
+
+/** Renames one campaign. */
+export async function renameRun(processingId: string, name: string): Promise<void> {
+    const response = await fetch(`/runs/${processingId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+    });
+    if (!response.ok) {
+        throw new Error(`Request failed: ${response.status}`);
+    }
+}
+
+/** Deletes one campaign and its files. */
+export async function deleteRun(processingId: string): Promise<void> {
+    const response = await fetch(`/runs/${processingId}`, { method: 'DELETE' });
+    if (!response.ok) {
+        throw new Error(`Request failed: ${response.status}`);
+    }
+}
+
 

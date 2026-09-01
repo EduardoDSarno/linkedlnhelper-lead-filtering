@@ -16,3 +16,6 @@ export const getStatus = client.getStatus;
 export const getResults = client.getResults;
 export const submitDecisions = client.submitDecisions;
 export const startDownload = client.startDownload;
+export const listRuns = client.listRuns;
+export const renameRun = client.renameRun;
+export const deleteRun = client.deleteRun;
