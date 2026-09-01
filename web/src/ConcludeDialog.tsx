@@ -1,5 +1,6 @@
 /** Counts shown in the conclude confirmation. */
 interface ConcludeDialogProps {
+  campaignName: string;
   approved: number;
   rejected: number;
   manual: number;
@@ -24,7 +25,7 @@ function Count({ icon, label, value, color }: { icon: string; label: string; val
  * manual review — warns that they will not enter the approved CSV, so the user
  * concludes knowing what is left out.
  */
-export function ConcludeDialog({ approved, rejected, manual, onCancel, onConfirm }: ConcludeDialogProps) {
+export function ConcludeDialog({ campaignName, approved, rejected, manual, onCancel, onConfirm }: ConcludeDialogProps) {
   return (
     <div
       style={{
@@ -49,7 +50,7 @@ export function ConcludeDialog({ approved, rejected, manual, onCancel, onConfirm
         }}
       >
         <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, letterSpacing: '-0.02em' }}>
-          Concluir revisão?
+          Concluir “{campaignName}”?
         </h2>
 
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, marginTop: 14 }}>

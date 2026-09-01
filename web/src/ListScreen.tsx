@@ -19,6 +19,68 @@ import type { ReviewFlow } from './code/useReviewFlow';
 /** Keys that must not trigger row actions while a field is focused. */
 const TYPING_TAGS = new Set(['INPUT', 'TEXTAREA', 'SELECT']);
 
+/** The campaign name with inline rename, shown above the list title. */
+function CampaignName({ name, onRename }: { name: string; onRename: (name: string) => void }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(name);
+
+  const commit = () => {
+    onRename(draft.trim() || name);
+    setEditing(false);
+  };
+
+  if (editing) {
+    return (
+      <input
+        value={draft}
+        autoFocus
+        onChange={(event) => setDraft(event.target.value)}
+        onBlur={commit}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') commit();
+          if (event.key === 'Escape') setEditing(false);
+        }}
+        style={{
+          fontSize: 12.5,
+          fontWeight: 600,
+          padding: '2px 6px',
+          border: '1px solid #cfd8e3',
+          borderRadius: 6,
+          color: '#334155',
+          background: '#fff',
+        }}
+      />
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        setDraft(name);
+        setEditing(true);
+      }}
+      style={{
+        all: 'unset',
+        cursor: 'pointer',
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 6,
+        fontSize: 12.5,
+        fontWeight: 600,
+        color: '#64748b',
+      }}
+      title="Editar nome da campanha"
+    >
+      Campanha · {name}
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M12 20h9" />
+        <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+      </svg>
+    </button>
+  );
+}
+
 /**
  * The evaluated-profiles screen: search, sort, status tabs, and the designed
  * row layout. Decisions are stored on the flow; everything else (tab, query,
@@ -90,7 +152,11 @@ export function ListScreen({ flow }: { flow: ReviewFlow }) {
       <div style={{ flex: 'none', background: '#fff', borderBottom: '1px solid #e6e9ef', padding: '16px 22px 0' }}>
         <div style={{ display: 'flex', alignItems: 'flex-end', gap: 18, flexWrap: 'wrap' }}>
           <div>
-            <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, letterSpacing: '-0.02em' }}>
+            <CampaignName
+              name={flow.campaignName}
+              onRename={flow.setCampaignName}
+            />
+            <h1 style={{ margin: '2px 0 0', fontSize: 20, fontWeight: 700, letterSpacing: '-0.02em' }}>
               Perfis avaliados
             </h1>
             <div style={{ fontSize: 12.5, color: '#94a3b8', marginTop: 3 }}>{summary}</div>

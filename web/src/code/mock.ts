@@ -327,6 +327,7 @@ export function importCsv(_file: File): Promise<ImportResult> {
 export function startReview(
   processingId: string,
   _criteria: unknown,
+  _name: string,
 ): Promise<StartReviewResult> {
   statusPolls = 0;
   return delay({ processingId });

@@ -234,7 +234,7 @@ export function UploadScreen({ flow }: { flow: ReviewFlow }) {
               {configured ? (
                 <button
                   type="button"
-                  onClick={flow.submit}
+                  onClick={flow.openRunName}
                   disabled={flow.submitting}
                   style={{
                     all: 'unset',

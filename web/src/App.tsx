@@ -4,6 +4,7 @@ import { ConcludeDialog } from './ConcludeDialog';
 import { CriteriaModal } from './CriteriaModal';
 import { DoneScreen } from './DoneScreen';
 import { ListScreen } from './ListScreen';
+import { RunNameDialog } from './RunNameDialog';
 import { UploadScreen } from './UploadScreen';
 import { isCriteriaComplete } from './code/criteria';
 import { LIST_TAB, tabCounts } from './code/listView';
@@ -203,6 +204,7 @@ export default function App() {
 
       {concludeOpen && (
         <ConcludeDialog
+          campaignName={flow.campaignName}
           approved={counts[LIST_TAB.approved]}
           rejected={counts[LIST_TAB.rejected]}
           manual={counts[LIST_TAB.manual]}
@@ -211,6 +213,15 @@ export default function App() {
             setConcludeOpen(false);
             flow.conclude();
           }}
+        />
+      )}
+
+      {flow.runNameOpen && flow.imported && (
+        <RunNameDialog
+          defaultName={flow.campaignName}
+          profileCount={flow.imported.validProfiles}
+          onCancel={flow.closeRunName}
+          onConfirm={(name) => flow.submit(name)}
         />
       )}
     </div>

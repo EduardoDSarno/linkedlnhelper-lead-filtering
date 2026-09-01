@@ -44,11 +44,12 @@ export interface StartReviewResult {
 export async function startReview(
     processingId: string,
     criteria: unknown,
+    name: string,
 ): Promise<StartReviewResult> {
     const response = await fetch('/run_filter', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ processingId, criteria }),
+        body: JSON.stringify({ processingId, criteria, name }),
     });
 
     if (!response.ok) {

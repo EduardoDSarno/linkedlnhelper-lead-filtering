@@ -54,6 +54,9 @@ export function useReviewFlow() {
   const [configured, setConfigured] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
+  const [campaignName, setCampaignName] = useState('');
+  const [runNameOpen, setRunNameOpen] = useState(false);
+
   const [status, setStatus] = useState<RunStatus | undefined>(undefined);
   const [results, setResults] = useState<ProfileResult[]>([]);
   const [overrides, setOverrides] = useState<OverrideMap>({});
@@ -73,6 +76,8 @@ export function useReviewFlow() {
       const result = await importCsv(chosen);
       setFile(chosen);
       setImported(result);
+      // Default the campaign name to the file name without its .csv extension.
+      setCampaignName(chosen.name.replace(/\.csv$/i, ''));
     } catch (cause) {
       setError(messageOf(cause));
     } finally {
@@ -85,14 +90,16 @@ export function useReviewFlow() {
     setCriteria((current) => ({ ...current, ...patch }));
   }, []);
 
-  /** Starts the run and moves to the list screen to watch it. */
-  const submit = useCallback(async () => {
+  /** Starts the run under the given campaign name and watches it on the list. */
+  const submit = useCallback(async (name: string) => {
     if (!processingId) return;
 
+    setRunNameOpen(false);
+    setCampaignName(name);
     setSubmitting(true);
     setError(undefined);
     try {
-      await startReview(processingId, toEvaluationCriteria(criteria));
+      await startReview(processingId, toEvaluationCriteria(criteria), name);
       setStatus({ processingId, status: 'running' });
       setResults([]);
       setOverrides({});
@@ -238,6 +245,12 @@ export function useReviewFlow() {
 
     submit,
     submitting,
+
+    campaignName,
+    setCampaignName,
+    runNameOpen,
+    openRunName: () => setRunNameOpen(true),
+    closeRunName: () => setRunNameOpen(false),
 
     status,
     loading: status?.status === 'queued' || status?.status === 'running',
