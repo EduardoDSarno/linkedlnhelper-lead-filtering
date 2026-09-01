@@ -207,4 +207,38 @@ export async function getResults(processingId: string): Promise<RunResults>
     return (await response.json()) as RunResults;
 }
 
+/** Outcome of saving human decisions for one run. */
+export interface DecisionsResult {
+    processingId: string;
+    finalApprovedCount: number;
+    overridesApplied: number;
+}
+
+/**
+ * Saves the reviewer's decisions, which rebuilds the approved CSV and report.
+ *
+ * Only the overrides are sent; profiles left untouched keep their automatic
+ * decision, and re-submitting replaces the previous set entirely.
+ */
+export async function submitDecisions(
+    processingId: string,
+    overrides: ManualOverride[],
+): Promise<DecisionsResult> {
+    const response = await fetch(`/run_filter/${processingId}/decisions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ overrides }),
+    });
+
+    if (!response.ok) {
+        const message = await response
+            .json()
+            .then((body: { error?: string }) => body.error)
+            .catch(() => undefined);
+        throw new Error(message ?? `Request failed: ${response.status}`);
+    }
+
+    return (await response.json()) as DecisionsResult;
+}
+
 
