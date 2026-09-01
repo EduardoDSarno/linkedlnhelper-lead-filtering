@@ -224,11 +224,12 @@ export interface DecisionsResult {
 export async function submitDecisions(
     processingId: string,
     overrides: ManualOverride[],
+    name: string,
 ): Promise<DecisionsResult> {
     const response = await fetch(`/run_filter/${processingId}/decisions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ overrides }),
+        body: JSON.stringify({ overrides, name }),
     });
 
     if (!response.ok) {

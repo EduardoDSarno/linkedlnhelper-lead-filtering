@@ -62,6 +62,7 @@ export function initializeDatabase(db: DatabaseSync): void {
     CREATE TABLE IF NOT EXISTS ${PROCESSING_RUN_TABLE_NAME} (
       id TEXT PRIMARY KEY NOT NULL,
       status TEXT NOT NULL,
+      name TEXT,
       original_csv_path TEXT NOT NULL,
       approved_csv_path TEXT,
       evaluation_report_path TEXT,
@@ -75,27 +76,28 @@ export function initializeDatabase(db: DatabaseSync): void {
     );
   `);
 
-  addManualOverridesColumnIfMissing(db);
+  addColumnIfMissing(db, 'manual_overrides_json', "TEXT CHECK (manual_overrides_json IS NULL OR json_valid(manual_overrides_json))");
+  addColumnIfMissing(db, 'name', 'TEXT');
 }
 
 /**
- * Adds the manual-overrides column to a database created before it existed.
- *
- * CREATE TABLE IF NOT EXISTS never alters an existing table, so older files
- * need this one-time migration to accept human decision overrides.
+ * Adds one column to the processing-runs table when an older database predates
+ * it. CREATE TABLE IF NOT EXISTS never alters an existing table, so each added
+ * column needs this one-time migration.
  */
-function addManualOverridesColumnIfMissing(db: DatabaseSync): void {
+function addColumnIfMissing(
+  db: DatabaseSync,
+  column: string,
+  definition: string,
+): void {
   const columns = db
     .prepare(`SELECT name FROM pragma_table_info('${PROCESSING_RUN_TABLE_NAME}')`)
     .all() as Array<{ name: string }>;
 
-  if (!columns.some((column) => column.name === 'manual_overrides_json')) {
-    db.exec(`
-      ALTER TABLE ${PROCESSING_RUN_TABLE_NAME}
-      ADD COLUMN manual_overrides_json TEXT CHECK (
-        manual_overrides_json IS NULL OR json_valid(manual_overrides_json)
-      )
-    `);
+  if (!columns.some((existing) => existing.name === column)) {
+    db.exec(
+      `ALTER TABLE ${PROCESSING_RUN_TABLE_NAME} ADD COLUMN ${column} ${definition}`,
+    );
   }
 }
 
@@ -103,6 +105,7 @@ function addManualOverridesColumnIfMissing(db: DatabaseSync): void {
 function processingRunFromRow(row: {
   id: string;
   status: string;
+  name: string | null;
   original_csv_path: string;
   approved_csv_path: string | null;
   evaluation_report_path: string | null;
@@ -117,6 +120,7 @@ function processingRunFromRow(row: {
     status: row.status as ProcessingRun['status'],
     originalCsvPath: row.original_csv_path,
     createdAt: row.created_at,
+    ...(row.name ? { name: row.name } : {}),
     ...(row.approved_csv_path ? { approvedCsvPath: row.approved_csv_path } : {}),
     ...(row.evaluation_report_path
       ? { evaluationReportPath: row.evaluation_report_path }
@@ -151,6 +155,7 @@ export function dbInsertProcessingRun(
     INSERT INTO ${PROCESSING_RUN_TABLE_NAME} (
       id,
       status,
+      name,
       original_csv_path,
       approved_csv_path,
       evaluation_report_path,
@@ -160,9 +165,10 @@ export function dbInsertProcessingRun(
       completed_at,
       manual_overrides_json
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       status = excluded.status,
+      name = coalesce(excluded.name, ${PROCESSING_RUN_TABLE_NAME}.name),
       original_csv_path = excluded.original_csv_path,
       approved_csv_path = excluded.approved_csv_path,
       evaluation_report_path = excluded.evaluation_report_path,
@@ -173,6 +179,7 @@ export function dbInsertProcessingRun(
   `).run(
     run.id,
     run.status,
+    run.name ?? null,
     run.originalCsvPath,
     run.approvedCsvPath ?? null,
     run.evaluationReportPath ?? null,
@@ -200,6 +207,7 @@ export function dbUpdateProcessingRun(
     UPDATE ${PROCESSING_RUN_TABLE_NAME}
     SET
       status = ?,
+      name = coalesce(?, name),
       original_csv_path = ?,
       approved_csv_path = ?,
       evaluation_report_path = ?,
@@ -210,6 +218,7 @@ export function dbUpdateProcessingRun(
     WHERE id = ?
   `).run(
     run.status,
+    run.name ?? null,
     run.originalCsvPath,
     run.approvedCsvPath ?? null,
     run.evaluationReportPath ?? null,
@@ -233,6 +242,7 @@ export function dbGetProcessingRunById(
       SELECT
         id,
         status,
+        name,
         original_csv_path,
         approved_csv_path,
         evaluation_report_path,
@@ -287,6 +297,7 @@ export function dbListFinishedRunsBefore(
       SELECT
         id,
         status,
+        name,
         original_csv_path,
         approved_csv_path,
         evaluation_report_path,

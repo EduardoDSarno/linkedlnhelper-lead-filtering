@@ -113,6 +113,7 @@ function registerGetProccessByIdRoute(server: FastifyInstance)
             return reply.status(HTTP_STATUS.ok).send({
                 processingId: run.id,
                 status: run.status,
+                ...(run.name ? { name: run.name } : {}),
                 ...(run.evaluationRunId ? { evaluationRunId: run.evaluationRunId } : {}),
                 ...(run.error ? { error: run.error } : {}),
                 ...(run.completedAt ? { completedAt: run.completedAt } : {}),
@@ -207,8 +208,17 @@ function registerDecisionsRoute(server: FastifyInstance)
                 overrides,
             );
 
-            // Each submission replaces the previous overrides entirely.
-            dbUpdateProcessingRun({ ...run, manualOverrides: overrides }, db);
+            // Each submission replaces the previous overrides entirely, and an
+            // optional name persists a rename made during review.
+            const renamed = asString(body[API_FIELD.name]);
+            dbUpdateProcessingRun(
+                {
+                    ...run,
+                    manualOverrides: overrides,
+                    ...(renamed ? { name: renamed } : {}),
+                },
+                db,
+            );
 
             return reply.status(HTTP_STATUS.ok).send({
                 processingId,
@@ -385,7 +395,9 @@ function registerFilterRoute(server: FastifyInstance)
         // Start the pipeline in the background; the response is already sent, so
         // the failure is only logged. The run is marked failed in the database
         // and the client learns the outcome by polling the status route.
-        void runPipeline(processingId, paths, validCriteria, request.log as Logger)
+        const name = asString(body[API_FIELD.name]);
+
+        void runPipeline(processingId, paths, validCriteria, request.log as Logger, name)
         .catch((error) =>
         {
             request.log.error({ err: error }, 'Review run failed');

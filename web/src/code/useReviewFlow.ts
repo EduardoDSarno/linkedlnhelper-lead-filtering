@@ -199,14 +199,14 @@ export function useReviewFlow() {
         publicId,
         decision,
       }));
-      const result = await submitDecisions(processingId, payload);
+      const result = await submitDecisions(processingId, payload, campaignName);
       setSavedApprovedCount(result.finalApprovedCount);
     } catch (cause) {
       setError(messageOf(cause));
     } finally {
       setSaving(false);
     }
-  }, [processingId, overrides]);
+  }, [processingId, overrides, campaignName]);
 
   /** Moves to the final page once decisions are saved. */
   const conclude = useCallback(() => setScreen('done'), []);

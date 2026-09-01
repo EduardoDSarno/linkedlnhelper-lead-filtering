@@ -396,3 +396,62 @@ test('lists only finished runs completed before the cutoff', () => {
     db.close();
   }
 });
+
+test('keeps the campaign name across status upserts and applies renames', () => {
+  const db = openDatabase(':memory:');
+
+  try {
+    // Import inserts the run without a name.
+    dbInsertProcessingRun(
+      {
+        id: 'proc-name',
+        status: PROCESSING_STATUS.queued,
+        originalCsvPath: 'x/original.csv',
+        createdAt: '2026-01-01T00:00:00.000Z',
+      },
+      db,
+    );
+
+    // The run starts with a name (upsert on the same id).
+    dbInsertProcessingRun(
+      {
+        id: 'proc-name',
+        status: PROCESSING_STATUS.running,
+        name: 'Campanha SaaS',
+        originalCsvPath: 'x/original.csv',
+        createdAt: '2026-01-01T00:00:00.000Z',
+      },
+      db,
+    );
+    assert.equal(dbGetProcessingRunById('proc-name', db)?.name, 'Campanha SaaS');
+
+    // A later status write without a name must not wipe it (coalesce).
+    dbUpdateProcessingRun(
+      {
+        id: 'proc-name',
+        status: PROCESSING_STATUS.completed,
+        originalCsvPath: 'x/original.csv',
+        createdAt: '2026-01-01T00:00:00.000Z',
+        completedAt: '2026-01-01T00:05:00.000Z',
+      },
+      db,
+    );
+    assert.equal(dbGetProcessingRunById('proc-name', db)?.name, 'Campanha SaaS');
+
+    // An explicit name renames the run.
+    dbUpdateProcessingRun(
+      {
+        id: 'proc-name',
+        status: PROCESSING_STATUS.completed,
+        name: 'Campanha renomeada',
+        originalCsvPath: 'x/original.csv',
+        createdAt: '2026-01-01T00:00:00.000Z',
+        completedAt: '2026-01-01T00:05:00.000Z',
+      },
+      db,
+    );
+    assert.equal(dbGetProcessingRunById('proc-name', db)?.name, 'Campanha renomeada');
+  } finally {
+    db.close();
+  }
+});

@@ -47,6 +47,10 @@ export interface ManualOverride {
 export interface ProcessingRun {
   readonly id: string;
   readonly status: ProcessingStatus;
+
+  /** Human-facing campaign name for this run, chosen at start and renamable. */
+  readonly name?: string;
+
   readonly originalCsvPath: string;
   readonly approvedCsvPath?: string;
   readonly evaluationReportPath?: string;

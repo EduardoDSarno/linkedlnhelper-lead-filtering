@@ -55,13 +55,21 @@ export async function runPipeline(
   paths: ProcessingPaths,
   criteria: FullEvaluationCriteria,
   logger: Logger,
+  name?: string,
 ): Promise<{
   approvedCsvPath: string;
   evaluationReportPath: string;
   evaluationRunId: string;
 }> {
   const createdAt = new Date().toISOString();
-  const baseRun = { id, originalCsvPath: paths.original, createdAt };
+  // Carry the campaign name through every status write so it is never wiped;
+  // coalesce in the DB keeps an existing name when this call omits it.
+  const baseRun = {
+    id,
+    originalCsvPath: paths.original,
+    createdAt,
+    ...(name ? { name } : {}),
+  };
 
   recordProcessingRun(
     (db) =>

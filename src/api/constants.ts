@@ -28,6 +28,7 @@ export const API_FIELD = {
   publicId: 'publicId',
   decision: 'decision',
   reason: 'reason',
+  name: 'name',
 } as const;
 
 /** Artifact types that can be downloaded. */

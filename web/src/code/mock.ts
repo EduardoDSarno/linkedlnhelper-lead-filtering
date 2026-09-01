@@ -361,6 +361,7 @@ export function getResults(processingId: string): Promise<RunResults> {
 export function submitDecisions(
   processingId: string,
   overrides: ManualOverride[],
+  _name: string,
 ): Promise<DecisionsResult> {
   const autoApproved = MOCK_PROFILES.filter(
     (profile) => profile.modelDecision === 'approved',
