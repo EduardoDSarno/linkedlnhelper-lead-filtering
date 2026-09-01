@@ -320,6 +320,7 @@ let mockRuns: CampaignSummary[] = [
     name: 'Gestores comerciais SaaS — ago/2026',
     status: 'completed',
     createdAt: '2026-08-20T14:00:00.000Z',
+    updatedAt: '2026-08-21T10:15:00.000Z',
     completedAt: '2026-08-20T14:08:00.000Z',
     systemPrompt:
       'Gestores comerciais e de Customer Success em SaaS B2B, com carreira consultiva e progressão de analista a gestão.',
@@ -329,6 +330,7 @@ let mockRuns: CampaignSummary[] = [
     name: 'Relacionamento bancário PJ — jul/2026',
     status: 'completed',
     createdAt: '2026-07-11T09:30:00.000Z',
+    updatedAt: '2026-07-11T09:41:00.000Z',
     completedAt: '2026-07-11T09:41:00.000Z',
     systemPrompt:
       'Profissionais de relacionamento e contas PJ em bancos e fintechs, foco em ticket alto.',
@@ -361,6 +363,7 @@ export function startReview(
       name,
       status: 'completed',
       createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
       completedAt: new Date().toISOString(),
       ...(systemPrompt ? { systemPrompt } : {}),
     },
@@ -451,7 +454,9 @@ export function listRuns(): Promise<CampaignSummary[]> {
 /** Mock of renameRun: updates the campaign name in the store. */
 export function renameRun(processingId: string, name: string): Promise<void> {
   mockRuns = mockRuns.map((run) =>
-    run.processingId === processingId ? { ...run, name } : run,
+    run.processingId === processingId
+      ? { ...run, name, updatedAt: new Date().toISOString() }
+      : run,
   );
   return delay(undefined, 150);
 }

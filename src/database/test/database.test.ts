@@ -251,7 +251,10 @@ test('inserts a running processing run and reads it back', () => {
     };
     dbInsertProcessingRun(run, db);
 
-    assert.deepEqual(dbGetProcessingRunById('proc-1', db), run);
+    // The database stamps updatedAt on every write; compare the rest.
+    const stored = dbGetProcessingRunById('proc-1', db);
+    assert.ok(stored?.updatedAt);
+    assert.deepEqual(stored, { ...run, updatedAt: stored?.updatedAt });
   } finally {
     db.close();
   }
@@ -283,7 +286,9 @@ test('updates a processing run to completed with its artifact paths', () => {
     };
     dbUpdateProcessingRun(completed, db);
 
-    assert.deepEqual(dbGetProcessingRunById('proc-2', db), completed);
+    const stored = dbGetProcessingRunById('proc-2', db);
+    assert.ok(stored?.updatedAt);
+    assert.deepEqual(stored, { ...completed, updatedAt: stored?.updatedAt });
   } finally {
     db.close();
   }

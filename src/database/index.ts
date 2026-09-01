@@ -69,6 +69,7 @@ export function initializeDatabase(db: DatabaseSync): void {
       evaluation_run_id TEXT,
       error TEXT,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT,
       completed_at TEXT,
       manual_overrides_json TEXT CHECK (
         manual_overrides_json IS NULL OR json_valid(manual_overrides_json)
@@ -78,6 +79,7 @@ export function initializeDatabase(db: DatabaseSync): void {
 
   addColumnIfMissing(db, 'manual_overrides_json', "TEXT CHECK (manual_overrides_json IS NULL OR json_valid(manual_overrides_json))");
   addColumnIfMissing(db, 'name', 'TEXT');
+  addColumnIfMissing(db, 'updated_at', 'TEXT');
 }
 
 /**
@@ -112,6 +114,7 @@ function processingRunFromRow(row: {
   evaluation_run_id: string | null;
   error: string | null;
   created_at: string;
+  updated_at: string | null;
   completed_at: string | null;
   manual_overrides_json: string | null;
 }): ProcessingRun {
@@ -121,6 +124,7 @@ function processingRunFromRow(row: {
     originalCsvPath: row.original_csv_path,
     createdAt: row.created_at,
     ...(row.name ? { name: row.name } : {}),
+    ...(row.updated_at ? { updatedAt: row.updated_at } : {}),
     ...(row.approved_csv_path ? { approvedCsvPath: row.approved_csv_path } : {}),
     ...(row.evaluation_report_path
       ? { evaluationReportPath: row.evaluation_report_path }
@@ -162,10 +166,11 @@ export function dbInsertProcessingRun(
       evaluation_run_id,
       error,
       created_at,
+      updated_at,
       completed_at,
       manual_overrides_json
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       status = excluded.status,
       name = coalesce(excluded.name, ${PROCESSING_RUN_TABLE_NAME}.name),
@@ -174,6 +179,7 @@ export function dbInsertProcessingRun(
       evaluation_report_path = excluded.evaluation_report_path,
       evaluation_run_id = excluded.evaluation_run_id,
       error = excluded.error,
+      updated_at = excluded.updated_at,
       completed_at = excluded.completed_at,
       manual_overrides_json = excluded.manual_overrides_json
   `).run(
@@ -186,6 +192,7 @@ export function dbInsertProcessingRun(
     run.evaluationRunId ?? null,
     run.error ?? null,
     run.createdAt,
+    new Date().toISOString(),
     run.completedAt ?? null,
     run.manualOverrides ? JSON.stringify(run.manualOverrides) : null,
   );
@@ -213,6 +220,7 @@ export function dbUpdateProcessingRun(
       evaluation_report_path = ?,
       evaluation_run_id = ?,
       error = ?,
+      updated_at = ?,
       completed_at = ?,
       manual_overrides_json = ?
     WHERE id = ?
@@ -224,6 +232,7 @@ export function dbUpdateProcessingRun(
     run.evaluationReportPath ?? null,
     run.evaluationRunId ?? null,
     run.error ?? null,
+    new Date().toISOString(),
     run.completedAt ?? null,
     run.manualOverrides ? JSON.stringify(run.manualOverrides) : null,
     run.id,
@@ -249,6 +258,7 @@ export function dbGetProcessingRunById(
         evaluation_run_id,
         error,
         created_at,
+        updated_at,
         completed_at,
         manual_overrides_json
       FROM ${PROCESSING_RUN_TABLE_NAME}
@@ -275,6 +285,7 @@ export function dbListProcessingRuns(db: DatabaseSync): ProcessingRun[] {
         evaluation_run_id,
         error,
         created_at,
+        updated_at,
         completed_at,
         manual_overrides_json
       FROM ${PROCESSING_RUN_TABLE_NAME}
@@ -342,6 +353,7 @@ export function dbListFinishedRunsBefore(
         evaluation_run_id,
         error,
         created_at,
+        updated_at,
         completed_at,
         manual_overrides_json
       FROM ${PROCESSING_RUN_TABLE_NAME}

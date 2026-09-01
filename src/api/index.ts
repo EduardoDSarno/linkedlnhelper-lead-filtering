@@ -512,6 +512,7 @@ function registerRunsListRoute(server: FastifyInstance)
                     name: run.name ?? '',
                     status: run.status,
                     createdAt: run.createdAt,
+                    ...(run.updatedAt ? { updatedAt: run.updatedAt } : {}),
                     ...(run.completedAt ? { completedAt: run.completedAt } : {}),
                     ...(evaluationRun
                         ? { systemPrompt: evaluationRun.criteria.systemPrompt }

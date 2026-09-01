@@ -34,6 +34,9 @@ function DownloadCell({ label, primary, disabled, onClick }: {
       style={{
         all: 'unset',
         cursor: disabled ? 'not-allowed' : 'pointer',
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 5,
         fontSize: 12,
         fontWeight: 600,
         padding: '5px 10px',
@@ -44,6 +47,11 @@ function DownloadCell({ label, primary, disabled, onClick }: {
         opacity: disabled ? 0.7 : 1,
       }}
     >
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flex: 'none' }}>
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+        <polyline points="7 10 12 15 17 10" />
+        <line x1="12" y1="15" x2="12" y2="3" />
+      </svg>
       {label}
     </button>
   );
@@ -92,23 +100,21 @@ function NameCell({ name, onRename }: { name: string; onRename: (name: string) =
         setDraft(name);
         setEditing(true);
       }}
-      title="Editar nome"
+      title="Clique para editar o nome"
       style={{
         all: 'unset',
         cursor: 'pointer',
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: 6,
+        display: 'block',
+        maxWidth: '100%',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap',
         fontSize: 13.5,
         fontWeight: 600,
         color: '#0f172a',
       }}
     >
       {name || 'Sem nome'}
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <path d="M12 20h9" />
-        <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
-      </svg>
     </button>
   );
 }
@@ -199,7 +205,7 @@ export function CampaignsScreen() {
             <div
               style={{
                 display: 'grid',
-                gridTemplateColumns: 'minmax(0,1.1fr) minmax(0,1.6fr) 120px 220px',
+                gridTemplateColumns: 'minmax(0,1fr) minmax(0,1.5fr) 110px 104px 210px',
                 gap: 14,
                 padding: '11px 18px',
                 fontSize: 11.5,
@@ -212,6 +218,7 @@ export function CampaignsScreen() {
               <span>Campanha</span>
               <span>Perfil ideal (prompt)</span>
               <span>Status</span>
+              <span>Atualizada em</span>
               <span style={{ textAlign: 'right' }}>Ações</span>
             </div>
 
@@ -223,7 +230,7 @@ export function CampaignsScreen() {
                   key={run.processingId}
                   style={{
                     display: 'grid',
-                    gridTemplateColumns: 'minmax(0,1.1fr) minmax(0,1.6fr) 120px 220px',
+                    gridTemplateColumns: 'minmax(0,1fr) minmax(0,1.5fr) 110px 104px 210px',
                     gap: 14,
                     padding: '13px 18px',
                     alignItems: 'center',
@@ -250,6 +257,10 @@ export function CampaignsScreen() {
                     >
                       {status.text}
                     </span>
+                  </span>
+
+                  <span style={{ fontSize: 12.5, color: '#64748b', whiteSpace: 'nowrap' }}>
+                    {new Date(run.updatedAt ?? run.createdAt).toLocaleDateString('pt-BR')}
                   </span>
 
                   <span style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', alignItems: 'center' }}>

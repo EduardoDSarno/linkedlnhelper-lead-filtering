@@ -57,6 +57,10 @@ export interface ProcessingRun {
   readonly evaluationRunId?: string;
   readonly error?: string;
   readonly createdAt: string;
+
+  /** Set by the database on every write; reflects the last change to the run. */
+  readonly updatedAt?: string;
+
   readonly completedAt?: string;
 
   /** Latest human decisions submitted for this run; replaced on re-submission. */

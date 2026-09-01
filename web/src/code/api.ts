@@ -267,6 +267,7 @@ export interface CampaignSummary {
     name: string;
     status: ProcessingStatus;
     createdAt: string;
+    updatedAt?: string;
     completedAt?: string;
     systemPrompt?: string;
 }
