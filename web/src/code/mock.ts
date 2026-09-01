@@ -8,8 +8,11 @@
  * completes, so the loading screen is exercised too.
  */
 import type {
+  ArtifactKind,
   CompensationMatch,
+  DecisionsResult,
   ImportResult,
+  ManualOverride,
   ProfileDetails,
   ProfileResult,
   RunResults,
@@ -351,4 +354,53 @@ export function getStatus(processingId: string): Promise<RunStatus> {
 /** Mock of getResults: returns the fabricated profiles. */
 export function getResults(processingId: string): Promise<RunResults> {
   return delay({ processingId, results: MOCK_PROFILES });
+}
+
+/** Mock of submitDecisions: reports counts as if the CSVs were rebuilt. */
+export function submitDecisions(
+  processingId: string,
+  overrides: ManualOverride[],
+): Promise<DecisionsResult> {
+  const autoApproved = MOCK_PROFILES.filter(
+    (profile) => profile.modelDecision === 'approved',
+  ).length;
+  const approved = overrides.filter((o) => o.decision === 'approved').length;
+  const rejected = overrides.filter((o) => o.decision === 'rejected').length;
+
+  return delay({
+    processingId,
+    finalApprovedCount: Math.max(0, autoApproved + approved - rejected),
+    overridesApplied: overrides.length,
+  });
+}
+
+/**
+ * Mock of startDownload: builds a small CSV from the fabricated profiles and
+ * downloads it client-side, since there is no backend to stream a file.
+ *
+ * It reflects the model's own decisions (not in-browser overrides), which is
+ * enough to prove the download UX without the real pipeline.
+ */
+export function startDownload(_processingId: string, artifact: ArtifactKind): void {
+  const rows =
+    artifact === 'approved'
+      ? MOCK_PROFILES.filter((profile) => profile.modelDecision === 'approved')
+      : MOCK_PROFILES;
+
+  const header = 'public_id;name;decision;score';
+  const body = rows.map(
+    (profile) =>
+      `${profile.publicId};${profile.name};${profile.modelDecision ?? ''};${profile.matchPercent ?? ''}`,
+  );
+  const csv = `﻿${[header, ...body].join('\r\n')}\r\n`;
+
+  const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download =
+    artifact === 'approved' ? 'approved-linked-helper.csv' : 'evaluation-report.csv';
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
 }

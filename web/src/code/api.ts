@@ -241,4 +241,22 @@ export async function submitDecisions(
     return (await response.json()) as DecisionsResult;
 }
 
+/** Which output file a download refers to. */
+export type ArtifactKind = 'approved' | 'report';
+
+/**
+ * Triggers a browser download of one artifact.
+ *
+ * The server sends the file with a Content-Disposition attachment header, so a
+ * same-origin link click downloads it (with the server's filename) rather than
+ * navigating the page.
+ */
+export function startDownload(processingId: string, artifact: ArtifactKind): void {
+    const anchor = document.createElement('a');
+    anchor.href = `/download/${processingId}/${artifact}`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+}
+
 

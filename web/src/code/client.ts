@@ -14,3 +14,5 @@ export const importCsv = client.importCsv;
 export const startReview = client.startReview;
 export const getStatus = client.getStatus;
 export const getResults = client.getResults;
+export const submitDecisions = client.submitDecisions;
+export const startDownload = client.startDownload;

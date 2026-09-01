@@ -1,7 +1,20 @@
 import { useCallback, useEffect, useState } from 'react';
 
-import { getResults, getStatus, importCsv, startReview } from './client';
-import type { ImportResult, ManualDecision, ProfileResult, RunStatus } from './api';
+import {
+  getResults,
+  getStatus,
+  importCsv,
+  startDownload,
+  startReview,
+  submitDecisions,
+} from './client';
+import type {
+  ArtifactKind,
+  ImportResult,
+  ManualDecision,
+  ProfileResult,
+  RunStatus,
+} from './api';
 import {
   DEFAULT_CRITERIA,
   toEvaluationCriteria,
@@ -13,7 +26,7 @@ import { nextOverride, overridesFromResults, type OverrideMap } from './listView
 const POLL_INTERVAL_MS = 2000;
 
 /** Which screen the flow is currently showing. */
-export type Screen = 'upload' | 'list';
+export type Screen = 'upload' | 'list' | 'done';
 
 /** Turns an unknown thrown value into a message. */
 function messageOf(error: unknown): string {
@@ -44,6 +57,9 @@ export function useReviewFlow() {
   const [status, setStatus] = useState<RunStatus | undefined>(undefined);
   const [results, setResults] = useState<ProfileResult[]>([]);
   const [overrides, setOverrides] = useState<OverrideMap>({});
+
+  const [saving, setSaving] = useState(false);
+  const [savedApprovedCount, setSavedApprovedCount] = useState<number | undefined>(undefined);
 
   const processingId = imported?.processingId;
 
@@ -80,6 +96,7 @@ export function useReviewFlow() {
       setStatus({ processingId, status: 'running' });
       setResults([]);
       setOverrides({});
+      setSavedApprovedCount(undefined);
       setScreen('list');
     } catch (cause) {
       setError(messageOf(cause));
@@ -133,6 +150,7 @@ export function useReviewFlow() {
     setStatus(undefined);
     setResults([]);
     setOverrides({});
+    setSavedApprovedCount(undefined);
     setConfigured(false);
     setError(undefined);
   }, []);
@@ -143,6 +161,9 @@ export function useReviewFlow() {
    */
   const decide = useCallback(
     (publicId: string, action: ManualDecision | 'manual') => {
+      // A new decision invalidates the last save, so the exports re-lock until
+      // the reviewer saves again.
+      setSavedApprovedCount(undefined);
       setOverrides((current) => {
         const next = nextOverride(current[publicId], action);
         if (next === undefined) {
@@ -154,6 +175,44 @@ export function useReviewFlow() {
       });
     },
     [],
+  );
+
+  /**
+   * Saves the current decisions, which rebuilds the approved CSV and report on
+   * the backend. Only explicit overrides are sent; the untouched profiles keep
+   * their automatic decision.
+   */
+  const save = useCallback(async () => {
+    if (!processingId) return;
+
+    setSaving(true);
+    setError(undefined);
+    try {
+      const payload = Object.entries(overrides).map(([publicId, decision]) => ({
+        publicId,
+        decision,
+      }));
+      const result = await submitDecisions(processingId, payload);
+      setSavedApprovedCount(result.finalApprovedCount);
+    } catch (cause) {
+      setError(messageOf(cause));
+    } finally {
+      setSaving(false);
+    }
+  }, [processingId, overrides]);
+
+  /** Moves to the final page once decisions are saved. */
+  const conclude = useCallback(() => setScreen('done'), []);
+
+  /** Returns from the final page to the list, keeping decisions intact. */
+  const backToList = useCallback(() => setScreen('list'), []);
+
+  /** Downloads one output artifact for the current run. */
+  const download = useCallback(
+    (artifact: ArtifactKind) => {
+      if (processingId) startDownload(processingId, artifact);
+    },
+    [processingId],
   );
 
   return {
@@ -185,6 +244,14 @@ export function useReviewFlow() {
     results,
     overrides,
     decide,
+
+    save,
+    saving,
+    savedApprovedCount,
+    decisionsSaved: savedApprovedCount !== undefined,
+    conclude,
+    backToList,
+    download,
 
     processingId,
     restart,
