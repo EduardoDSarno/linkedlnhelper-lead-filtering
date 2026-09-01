@@ -126,6 +126,7 @@ function NameCell({ name, onRename }: { name: string; onRename: (name: string) =
  */
 export function CampaignsScreen() {
   const [runs, setRuns] = useState<CampaignSummary[]>([]);
+  const [pendingDelete, setPendingDelete] = useState<CampaignSummary | undefined>(undefined);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | undefined>(undefined);
 
@@ -155,10 +156,7 @@ export function CampaignsScreen() {
     }
   };
 
-  const remove = async (processingId: string, name: string) => {
-    if (!window.confirm(`Excluir a campanha “${name || processingId}”? Os arquivos serão removidos.`)) {
-      return;
-    }
+  const remove = async (processingId: string) => {
     setRuns((current) => current.filter((run) => run.processingId !== processingId));
     try {
       await deleteRun(processingId);
@@ -277,14 +275,23 @@ export function CampaignsScreen() {
                     />
                     <button
                       type="button"
-                      onClick={() => void remove(run.processingId, run.name)}
+                      onClick={() => setPendingDelete(run)}
                       title="Excluir campanha"
+                      onMouseEnter={(event) => {
+                        event.currentTarget.style.color = '#e11d48';
+                        event.currentTarget.style.background = '#fff1f2';
+                      }}
+                      onMouseLeave={(event) => {
+                        event.currentTarget.style.color = '#94a3b8';
+                        event.currentTarget.style.background = 'transparent';
+                      }}
                       style={{
                         all: 'unset',
                         cursor: 'pointer',
                         color: '#94a3b8',
                         padding: '4px 6px',
                         borderRadius: 6,
+                        transition: 'color .12s, background .12s',
                       }}
                     >
                       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -299,6 +306,95 @@ export function CampaignsScreen() {
           </div>
         )}
       </div>
+
+      {pendingDelete && (
+        <DeleteDialog
+          name={pendingDelete.name || pendingDelete.processingId}
+          onCancel={() => setPendingDelete(undefined)}
+          onConfirm={() => {
+            void remove(pendingDelete.processingId);
+            setPendingDelete(undefined);
+          }}
+        />
+      )}
     </main>
+  );
+}
+
+/** Confirmation for the irreversible deletion of one campaign. */
+function DeleteDialog({ name, onCancel, onConfirm }: {
+  name: string;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: 60,
+        background: 'rgba(15,23,42,.42)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '20px',
+      }}
+    >
+      <div
+        style={{
+          width: '100%',
+          maxWidth: 420,
+          background: '#fff',
+          borderRadius: 16,
+          boxShadow: '0 24px 60px rgba(15,23,42,.28)',
+          padding: '22px',
+        }}
+      >
+        <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, letterSpacing: '-0.02em' }}>
+          Excluir campanha?
+        </h2>
+        <p style={{ margin: '10px 0 0', fontSize: 13.5, lineHeight: 1.55, color: '#475569' }}>
+          “{name}” e seus arquivos (CSV aprovado e relatório) serão removidos
+          permanentemente. Esta ação não pode ser desfeita.
+        </p>
+
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 20 }}>
+          <button
+            type="button"
+            onClick={onCancel}
+            style={{
+              all: 'unset',
+              cursor: 'pointer',
+              fontSize: 13,
+              fontWeight: 600,
+              color: '#475569',
+              padding: '9px 14px',
+              border: '1px solid #e2e8f0',
+              borderRadius: 9,
+              background: '#fff',
+            }}
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            style={{
+              all: 'unset',
+              cursor: 'pointer',
+              fontSize: 13,
+              fontWeight: 600,
+              color: '#fff',
+              background: '#e11d48',
+              padding: '10px 18px',
+              borderRadius: 9,
+              boxShadow: '0 1px 2px rgba(225,29,72,.35)',
+            }}
+          >
+            Excluir
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
