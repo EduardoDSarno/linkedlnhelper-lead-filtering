@@ -296,6 +296,7 @@ function registerResultsRoute(server: FastifyInstance)
                 const model = modelByPublicId.get(publicId);
                 const override = overrideByPublicId.get(publicId);
                 const currentRole = profile?.experience?.[0];
+                const about = asString(asRecord(profile?.raw)?.['about']);
 
                 return {
                     publicId,
@@ -313,6 +314,16 @@ function registerResultsRoute(server: FastifyInstance)
                     ...(profile?.imageAnalysis?.assessment?.apparentAge
                         ? { apparentAge: profile.imageAnalysis.assessment.apparentAge }
                         : {}),
+
+                    // Extra fields the review list shows only when a row is expanded.
+                    details: {
+                        ...(about ? { about } : {}),
+                        ...(profile?.openToWork !== undefined
+                            ? { openToWork: profile.openToWork }
+                            : {}),
+                        experience: profile?.experience ?? [],
+                        education: profile?.education ?? [],
+                    },
 
                     ...(model
                         ? {

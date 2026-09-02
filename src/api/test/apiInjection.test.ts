@@ -11,6 +11,7 @@ import {
   dbGetProcessingRunById,
   dbInsertEvaluationRun,
   dbInsertProcessingRun,
+  dbInsertProfile,
   openDatabase,
   PROCESSING_STATUS,
 } from '../../database/index.js';
@@ -87,6 +88,24 @@ async function seedCompletedRun(processingId: string): Promise<void> {
   try {
     const evaluationRunId = `evaluation-${processingId}`;
     dbInsertEvaluationRun(storedEvaluationRun(evaluationRunId), db);
+    // A profile with the fields the expanded review view reads from `details`.
+    dbInsertProfile(
+      {
+        id: 'profile-auto-yes',
+        linkedinUrl: 'https://www.linkedin.com/in/ada/',
+        linkedHelperPublicId: 'auto-yes',
+        firstName: 'Ada',
+        lastName: 'Lovelace',
+        headline: 'Engineer',
+        openToWork: true,
+        experience: [
+          { position: 'CTO', companyName: 'Analytical Engines', endDate: { text: 'Present' } },
+        ],
+        education: [{ schoolName: 'Cambridge', degree: 'BSc', fieldOfStudy: 'Math' }],
+        raw: { linkedinUrl: 'https://www.linkedin.com/in/ada/', about: 'Pioneer of computing.' },
+      },
+      db,
+    );
     dbInsertProcessingRun(
       {
         id: processingId,
@@ -230,7 +249,16 @@ test('GET results returns per-profile decisions as JSON', async () => {
 
     assert.equal(response.statusCode, HTTP_STATUS.ok);
     const body = response.json() as {
-      results: Array<{ publicId: string; modelDecision?: string }>;
+      results: Array<{
+        publicId: string;
+        modelDecision?: string;
+        details?: {
+          about?: string;
+          openToWork?: boolean;
+          experience: Array<{ position: string; companyName: string }>;
+          education: Array<{ schoolName: string }>;
+        };
+      }>;
     };
     assert.equal(body.results.length, 2);
     assert.deepEqual(
@@ -240,6 +268,17 @@ test('GET results returns per-profile decisions as JSON', async () => {
         ['review-me', 'manual_review'],
       ],
     );
+
+    // The seeded profile's expandable details reach the client.
+    const ada = body.results.find((entry) => entry.publicId === 'auto-yes');
+    assert.equal(ada?.details?.about, 'Pioneer of computing.');
+    assert.equal(ada?.details?.openToWork, true);
+    assert.equal(ada?.details?.experience[0]?.position, 'CTO');
+    assert.equal(ada?.details?.education[0]?.schoolName, 'Cambridge');
+
+    // A profile the pipeline never stored still yields empty detail arrays.
+    const bob = body.results.find((entry) => entry.publicId === 'review-me');
+    assert.deepEqual(bob?.details, { experience: [], education: [] });
   } finally {
     await rm(processingPaths(processingId).dir, { recursive: true, force: true });
     await rm(databasePath, { force: true });
