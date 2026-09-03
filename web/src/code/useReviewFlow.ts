@@ -250,8 +250,8 @@ export function useReviewFlow() {
    * the backend. Only explicit overrides are sent; the untouched profiles keep
    * their automatic decision.
    */
-  const save = useCallback(async () => {
-    if (!processingId) return;
+  const save = useCallback(async (): Promise<boolean> => {
+    if (!processingId) return false;
 
     setSaving(true);
     setError(undefined);
