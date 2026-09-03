@@ -285,3 +285,37 @@ test('GET results returns per-profile decisions as JSON', async () => {
     delete process.env['DATABASE_PATH'];
   }
 });
+
+test('GET /runs reports final decision counts that follow overrides', async () => {
+  const databasePath = join(tmpdir(), `api-test-${randomUUID()}.sqlite`);
+  process.env['DATABASE_PATH'] = databasePath;
+  const processingId = randomUUID();
+
+  try {
+    await seedCompletedRun(processingId);
+    const app = await buildServer();
+
+    // Before any override: one approved, one still in manual review.
+    const before = await app.inject({ method: 'GET', url: API_ROUTES.runs });
+    assert.equal(before.statusCode, HTTP_STATUS.ok);
+    const beforeRun = (before.json() as { runs: Array<{ processingId: string; counts?: unknown }> })
+      .runs.find((run) => run.processingId === processingId);
+    assert.deepEqual(beforeRun?.counts, { approved: 1, rejected: 0, manual: 1, failed: 0 });
+
+    // Resolving the manual-review profile clears the pending-manual warning.
+    await app.inject({
+      method: 'POST',
+      url: API_ROUTES.decisions.replace(':processingId', processingId),
+      payload: { overrides: [{ publicId: 'review-me', decision: 'rejected' }] },
+    });
+
+    const after = await app.inject({ method: 'GET', url: API_ROUTES.runs });
+    const afterRun = (after.json() as { runs: Array<{ processingId: string; counts?: unknown }> })
+      .runs.find((run) => run.processingId === processingId);
+    assert.deepEqual(afterRun?.counts, { approved: 1, rejected: 1, manual: 0, failed: 0 });
+  } finally {
+    await rm(processingPaths(processingId).dir, { recursive: true, force: true });
+    await rm(databasePath, { force: true });
+    delete process.env['DATABASE_PATH'];
+  }
+});

@@ -21,6 +21,7 @@ import type {
   StartReviewResult,
 } from './api';
 import { DEFAULT_CRITERIA } from './criteria';
+import { LIST_TAB, tabCounts, type OverrideMap } from './listView';
 
 /** Whether the mock backend is active for this session. */
 export const MOCK_ENABLED =
@@ -391,17 +392,55 @@ export function getStatus(processingId: string): Promise<RunStatus> {
   );
 }
 
-/** Mock of getResults: returns the fabricated profiles. */
-export function getResults(processingId: string): Promise<RunResults> {
-  return delay({ processingId, results: MOCK_PROFILES });
+/** Decisions saved per run, so reopening a run restores them like the backend. */
+const mockOverrides: Record<string, ManualOverride[]> = {};
+
+/** Builds the run's profiles with any saved decisions merged back in. */
+function resultsFor(processingId: string): ProfileResult[] {
+  const saved = mockOverrides[processingId];
+  const byId = new Map((saved ?? []).map((override) => [override.publicId, override]));
+  return MOCK_PROFILES.map((profile) => {
+    const override = byId.get(profile.publicId);
+    return override ? { ...profile, override } : profile;
+  });
 }
 
-/** Mock of submitDecisions: reports counts as if the CSVs were rebuilt. */
+/** Tallies a run's final decisions the way the backend's /runs route does. */
+function countsFor(processingId: string) {
+  const saved = mockOverrides[processingId] ?? [];
+  const overrides: OverrideMap = Object.fromEntries(
+    saved.map((override) => [override.publicId, override.decision]),
+  );
+  const counts = tabCounts(resultsFor(processingId), overrides);
+  return {
+    approved: counts[LIST_TAB.approved],
+    rejected: counts[LIST_TAB.rejected],
+    manual: counts[LIST_TAB.manual],
+    failed: counts[LIST_TAB.failed],
+  };
+}
+
+/**
+ * Mock of getResults: returns the fabricated profiles, with any decisions
+ * previously saved for this run merged back in so a reopened run shows them.
+ */
+export function getResults(processingId: string): Promise<RunResults> {
+  return delay({ processingId, results: resultsFor(processingId) });
+}
+
+/** Mock of submitDecisions: stores the decisions and reports rebuilt counts. */
 export function submitDecisions(
   processingId: string,
   overrides: ManualOverride[],
   _name: string,
 ): Promise<DecisionsResult> {
+  mockOverrides[processingId] = overrides;
+  mockRuns = mockRuns.map((run) =>
+    run.processingId === processingId
+      ? { ...run, updatedAt: new Date().toISOString() }
+      : run,
+  );
+
   const autoApproved = MOCK_PROFILES.filter(
     (profile) => profile.modelDecision === 'approved',
   ).length;
@@ -446,9 +485,14 @@ export function startDownload(_processingId: string, artifact: ArtifactKind): vo
   URL.revokeObjectURL(url);
 }
 
-/** Mock of listRuns: returns the in-memory campaigns store. */
+/** Mock of listRuns: returns the campaigns store with fresh decision counts. */
 export function listRuns(): Promise<CampaignSummary[]> {
-  return delay([...mockRuns], 200);
+  const runs = mockRuns.map((run) =>
+    run.status === 'completed'
+      ? { ...run, counts: countsFor(run.processingId) }
+      : run,
+  );
+  return delay(runs, 200);
 }
 
 /** Mock of renameRun: updates the campaign name in the store. */

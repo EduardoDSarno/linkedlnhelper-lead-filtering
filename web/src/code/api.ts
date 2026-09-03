@@ -261,6 +261,14 @@ export function startDownload(processingId: string, artifact: ArtifactKind): voi
     anchor.remove();
 }
 
+/** Final per-profile decision totals for a concluded campaign. */
+export interface DecisionCounts {
+    approved: number;
+    rejected: number;
+    manual: number;
+    failed: number;
+}
+
 /** One campaign row in the campaigns table. */
 export interface CampaignSummary {
     processingId: string;
@@ -270,6 +278,7 @@ export interface CampaignSummary {
     updatedAt?: string;
     completedAt?: string;
     systemPrompt?: string;
+    counts?: DecisionCounts;
 }
 
 /** Lists every campaign (processing run), newest first. */

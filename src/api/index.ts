@@ -25,7 +25,11 @@ import {
     API_FIELD,
 } from './constants.js';
 import { asRecord, asString } from '../helpers/type_guards.js';
-import { parseFullEvaluationCriteria } from '../evaluation/index.js';
+import {
+    BROAD_DECISION,
+    MODEL_EVALUATION_DECISION,
+    parseFullEvaluationCriteria,
+} from '../evaluation/index.js';
 import { runPipeline } from '../app.js';
 import type { Logger } from '../logging/index.js';
 import { createReadStream } from 'node:fs';
@@ -504,6 +508,61 @@ async function registerCsvParser(server: FastifyInstance)
 }
 
 
+/** Final per-profile decision totals shown on a campaign row. */
+interface DecisionCounts {
+    approved: number;
+    rejected: number;
+    manual: number;
+    failed: number;
+}
+
+/**
+ * The final decision for one profile, mirroring the review list's
+ * `effectiveStatus`: a human override wins, then an enrichment failure, then the
+ * deterministic filter, then the model's own decision.
+ */
+function finalDecision(
+    broadDecision: string,
+    modelDecision: string | undefined,
+    override: string | undefined,
+): keyof DecisionCounts {
+    if (override === MANUAL_DECISION.approved) return 'approved';
+    if (override === MANUAL_DECISION.rejected) return 'rejected';
+    if (broadDecision !== BROAD_DECISION.Failed && modelDecision == null) return 'failed';
+    if (broadDecision === BROAD_DECISION.Failed) return 'rejected';
+    if (modelDecision === MODEL_EVALUATION_DECISION.approved) return 'approved';
+    if (modelDecision === MODEL_EVALUATION_DECISION.rejected) return 'rejected';
+    if (modelDecision === MODEL_EVALUATION_DECISION.manualReview) return 'manual';
+    return 'failed';
+}
+
+/** Tallies every evaluated profile's final decision for one campaign. */
+function countRunDecisions(
+    evaluationRun: NonNullable<ReturnType<typeof dbGetEvaluationRunById>>,
+    overrides: readonly ManualOverride[] | undefined,
+): DecisionCounts {
+    const modelByPublicId = new Map(
+        evaluationRun.evaluation.modelEvaluation.evaluations
+            .filter((evaluation) => evaluation.linkedHelperPublicId)
+            .map((evaluation) => [evaluation.linkedHelperPublicId as string, evaluation]),
+    );
+    const overrideByPublicId = new Map(
+        (overrides ?? []).map((override) => [override.publicId, override]),
+    );
+
+    const counts: DecisionCounts = { approved: 0, rejected: 0, manual: 0, failed: 0 };
+    for (const broad of evaluationRun.evaluation.broadFilter.evaluations) {
+        const publicId = broad.linkedHelperPublicId ?? '';
+        const bucket = finalDecision(
+            broad.decision,
+            modelByPublicId.get(publicId)?.decision,
+            overrideByPublicId.get(publicId)?.decision,
+        );
+        counts[bucket] += 1;
+    }
+    return counts;
+}
+
 /** Lists every campaign (processing run) with its shortened system prompt. */
 function registerRunsListRoute(server: FastifyInstance)
 {
@@ -526,7 +585,10 @@ function registerRunsListRoute(server: FastifyInstance)
                     ...(run.updatedAt ? { updatedAt: run.updatedAt } : {}),
                     ...(run.completedAt ? { completedAt: run.completedAt } : {}),
                     ...(evaluationRun
-                        ? { systemPrompt: evaluationRun.criteria.systemPrompt }
+                        ? {
+                            systemPrompt: evaluationRun.criteria.systemPrompt,
+                            counts: countRunDecisions(evaluationRun, run.manualOverrides),
+                          }
                         : {}),
                 };
             });

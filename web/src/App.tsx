@@ -10,12 +10,35 @@ import { isCriteriaComplete } from './code/criteria';
 import { LIST_TAB, tabCounts } from './code/listView';
 import { useReviewFlow } from './code/useReviewFlow';
 
+/** Shared look for the low-emphasis navigation buttons in the top bar. */
+const navButtonStyle = {
+  all: 'unset',
+  cursor: 'pointer',
+  fontSize: 13,
+  color: '#475569',
+  padding: '6px 11px',
+  border: '1px solid #e2e8f0',
+  borderRadius: 8,
+  background: '#fff',
+} as const;
+
 /** The application shell: top bar, error banner, the active screen, and the modal. */
 export default function App() {
   const flow = useReviewFlow();
   const [concludeOpen, setConcludeOpen] = useState(false);
 
   const counts = tabCounts(flow.results, flow.overrides);
+
+  /** Warns before abandoning unsaved decisions, then runs the navigation. */
+  const leaveList = (go: () => void) => {
+    if (
+      flow.dirty &&
+      !window.confirm('Sair da revisão? As decisões não salvas serão perdidas.')
+    ) {
+      return;
+    }
+    go();
+  };
 
   return (
     <div
@@ -98,48 +121,35 @@ export default function App() {
                 </button>
               )}
 
-              {/* Gap keeps the destructive "new import" away from the primary action. */}
+              {/* Gap keeps the navigation away from the primary action. */}
               <span style={{ width: 12 }} />
 
               <button
                 type="button"
-                onClick={() => {
-                  const confirmed = window.confirm(
-                    'Iniciar uma nova importação? As decisões não salvas desta lista serão perdidas.',
-                  );
-                  if (confirmed) flow.restart();
-                }}
-                style={{
-                  all: 'unset',
-                  cursor: 'pointer',
-                  fontSize: 13,
-                  color: '#475569',
-                  padding: '6px 11px',
-                  border: '1px solid #e2e8f0',
-                  borderRadius: 8,
-                  background: '#fff',
-                }}
+                onClick={() => leaveList(flow.goToCampaigns)}
+                style={navButtonStyle}
+              >
+                Campanhas
+              </button>
+
+              <button
+                type="button"
+                onClick={() => leaveList(flow.restart)}
+                style={navButtonStyle}
               >
                 Nova importação
               </button>
             </>
           )}
 
-          {flow.screen === 'done' && (
-            <button
-              type="button"
-              onClick={flow.restart}
-              style={{
-                all: 'unset',
-                cursor: 'pointer',
-                fontSize: 13,
-                color: '#475569',
-                padding: '6px 11px',
-                border: '1px solid #e2e8f0',
-                borderRadius: 8,
-                background: '#fff',
-              }}
-            >
+          {flow.screen === 'upload' && (
+            <button type="button" onClick={flow.goToCampaigns} style={navButtonStyle}>
+              Campanhas
+            </button>
+          )}
+
+          {flow.screen === 'campaigns' && (
+            <button type="button" onClick={flow.restart} style={navButtonStyle}>
               Nova importação
             </button>
           )}
@@ -189,7 +199,7 @@ export default function App() {
 
       {flow.screen === 'upload' && <UploadScreen flow={flow} />}
       {flow.screen === 'list' && <ListScreen flow={flow} />}
-      {flow.screen === 'done' && <CampaignsScreen />}
+      {flow.screen === 'campaigns' && <CampaignsScreen flow={flow} />}
 
       {flow.criteriaOpen && (
         <CriteriaModal

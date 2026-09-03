@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 
 import { deleteRun, listRuns, renameRun, startDownload } from './code/client';
-import type { CampaignSummary } from './code/api';
+import type { CampaignSummary, DecisionCounts } from './code/api';
+import type { ReviewFlow } from './code/useReviewFlow';
 
 /** Human labels + colors for a run status. */
 const STATUS_LABEL: Record<string, { text: string; color: string; bg: string }> = {
@@ -119,12 +120,75 @@ function NameCell({ name, onRename }: { name: string; onRename: (name: string) =
   );
 }
 
+/** One colored count chip in the results cell. */
+function Tally({ icon, value, color, bg, title, emphasize }: {
+  icon: string;
+  value: number;
+  color: string;
+  bg: string;
+  title: string;
+  emphasize?: boolean;
+}) {
+  return (
+    <span
+      title={title}
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 3,
+        fontSize: 11.5,
+        fontWeight: 700,
+        color,
+        background: bg,
+        padding: '2px 7px',
+        borderRadius: 999,
+        border: `1px solid ${emphasize ? color : 'transparent'}`,
+        whiteSpace: 'nowrap',
+      }}
+    >
+      <span aria-hidden="true" style={{ fontWeight: 400 }}>{icon}</span>
+      {value}
+    </span>
+  );
+}
+
+/**
+ * Compact tally of a campaign's final decisions. When any profiles are still in
+ * manual review, that chip turns into an outlined warning so unfinished
+ * campaigns stand out.
+ */
+function CountsCell({ counts }: { counts?: DecisionCounts }) {
+  if (!counts) {
+    return <span style={{ fontSize: 12.5, color: '#94a3b8' }}>—</span>;
+  }
+
+  const pending = counts.manual > 0;
+  return (
+    <span style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap' }}>
+      <Tally icon="✓" value={counts.approved} color="#047857" bg="#ecfdf5" title={`${counts.approved} aprovados`} />
+      <Tally
+        icon={pending ? '⚠' : '◐'}
+        value={counts.manual}
+        color="#92400e"
+        bg="#fffbeb"
+        emphasize={pending}
+        title={
+          pending
+            ? `${counts.manual} perfis ainda em revisão manual`
+            : 'Nenhum perfil em revisão manual'
+        }
+      />
+      <Tally icon="✕" value={counts.rejected} color="#9f1239" bg="#fff1f2" title={`${counts.rejected} reprovados`} />
+    </span>
+  );
+}
+
 /**
  * The campaigns table: every past run with its shortened prompt, status,
  * inline rename, delete, and the two labeled downloads. This is the app's
  * home once a review is concluded.
  */
-export function CampaignsScreen() {
+export function CampaignsScreen({ flow }: { flow: ReviewFlow }) {
   const [runs, setRuns] = useState<CampaignSummary[]>([]);
   const [pendingDelete, setPendingDelete] = useState<CampaignSummary | undefined>(undefined);
   const [loading, setLoading] = useState(true);
@@ -170,7 +234,7 @@ export function CampaignsScreen() {
       className="sc"
       style={{ flex: 1, overflow: 'auto', display: 'flex', justifyContent: 'center', padding: '40px 24px 80px' }}
     >
-      <div style={{ width: '100%', maxWidth: 1040 }}>
+      <div style={{ width: '100%', maxWidth: 1120 }}>
         <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, letterSpacing: '-0.02em' }}>
           Campanhas
         </h1>
@@ -203,7 +267,7 @@ export function CampaignsScreen() {
             <div
               style={{
                 display: 'grid',
-                gridTemplateColumns: 'minmax(0,1fr) minmax(0,1.5fr) 110px 104px 210px',
+                gridTemplateColumns: 'minmax(0,1fr) minmax(0,1fr) 104px 168px 92px 300px',
                 gap: 14,
                 padding: '11px 18px',
                 fontSize: 11.5,
@@ -216,6 +280,7 @@ export function CampaignsScreen() {
               <span>Campanha</span>
               <span>Perfil ideal (prompt)</span>
               <span>Status</span>
+              <span>Resultados</span>
               <span>Atualizada em</span>
               <span style={{ textAlign: 'right' }}>Ações</span>
             </div>
@@ -228,7 +293,7 @@ export function CampaignsScreen() {
                   key={run.processingId}
                   style={{
                     display: 'grid',
-                    gridTemplateColumns: 'minmax(0,1fr) minmax(0,1.5fr) 110px 104px 210px',
+                    gridTemplateColumns: 'minmax(0,1fr) minmax(0,1fr) 104px 168px 92px 300px',
                     gap: 14,
                     padding: '13px 18px',
                     alignItems: 'center',
@@ -257,11 +322,40 @@ export function CampaignsScreen() {
                     </span>
                   </span>
 
+                  <CountsCell counts={run.counts} />
+
                   <span style={{ fontSize: 12.5, color: '#64748b', whiteSpace: 'nowrap' }}>
                     {new Date(run.updatedAt ?? run.createdAt).toLocaleDateString('pt-BR')}
                   </span>
 
                   <span style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', alignItems: 'center' }}>
+                    <button
+                      type="button"
+                      disabled={!done}
+                      onClick={() => void flow.reopen(run)}
+                      title={done ? 'Reabrir para revisar as decisões' : 'Disponível quando a campanha concluir'}
+                      style={{
+                        all: 'unset',
+                        cursor: done ? 'pointer' : 'not-allowed',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 5,
+                        fontSize: 12,
+                        fontWeight: 600,
+                        padding: '5px 10px',
+                        borderRadius: 7,
+                        border: '1px solid #cbd5e1',
+                        background: done ? '#fff' : '#f1f5f9',
+                        color: done ? '#2563eb' : '#94a3b8',
+                        opacity: done ? 1 : 0.7,
+                      }}
+                    >
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flex: 'none' }}>
+                        <path d="M12 20h9" />
+                        <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                      </svg>
+                      Revisar
+                    </button>
                     <DownloadCell
                       label="Aprovados"
                       primary
