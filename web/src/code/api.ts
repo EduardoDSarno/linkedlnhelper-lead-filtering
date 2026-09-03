@@ -162,6 +162,13 @@ export interface ApparentAgeEstimate {
     confidence: 'high' | 'medium' | 'low' | 'unassessable';
 }
 
+/** A short, categorized signal shown as a colored chip in the review row. */
+export type ProfileHighlightKind = 'strength' | 'warning' | 'info';
+export interface ProfileHighlight {
+    kind: ProfileHighlightKind;
+    text: string;
+}
+
 /** Everything the review list knows about one evaluated profile. */
 export interface ProfileResult {
     publicId: string;
@@ -186,6 +193,7 @@ export interface ProfileResult {
     reasons?: string[];
     evidence?: string[];
     uncertainties?: string[];
+    highlights?: ProfileHighlight[];
     compensation?: Compensation;
     compensationMatch?: CompensationMatch;
 

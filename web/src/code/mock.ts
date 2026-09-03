@@ -15,6 +15,7 @@ import type {
   ImportResult,
   ManualOverride,
   ProfileDetails,
+  ProfileHighlight,
   ProfileResult,
   RunResults,
   RunStatus,
@@ -193,6 +194,7 @@ function mockProfile(row: (typeof SAMPLE)[number], index: number): ProfileResult
     ...base,
     modelDecision: decision,
     matchPercent: score,
+    highlights: mockHighlights(index, decision),
     reasons: [MOCK_REASONS[index % MOCK_REASONS.length]!],
     evidence: [`Cargo atual: ${position} na ${company}.`],
     uncertainties: mockUncertainties(index),
@@ -281,6 +283,37 @@ function mockPhoto(name: string, index: number): string {
   const background = MOCK_PHOTO_BACKGROUNDS[index % MOCK_PHOTO_BACKGROUNDS.length]!;
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="160" height="160"><rect width="160" height="160" rx="80" fill="${background}"/><text x="80" y="94" text-anchor="middle" font-family="Arial" font-size="48" font-weight="700" fill="#334155">${initials}</text></svg>`;
   return `data:image/svg+xml,${encodeURIComponent(svg)}`;
+}
+
+/** Fabricated strength/warning/info one-liners cycled into the row chips. */
+const MOCK_STRENGTHS = [
+  'Progressão consistente em vendas B2B',
+  'Gestão de contas estratégicas (key account)',
+  'Experiência consultiva em SaaS',
+];
+const MOCK_WARNINGS = [
+  'Pouco tempo na posição atual',
+  'Foco recente em marketing, não vendas',
+  'Senioridade acima da faixa da campanha',
+];
+const MOCK_INFOS = ['Baseado em Goiânia, GO', 'MBA Executivo (FGV)'];
+
+/** Builds 1–3 categorized highlights whose mix matches the model decision. */
+function mockHighlights(
+  index: number,
+  decision: 'approved' | 'manual_review' | 'rejected',
+): ProfileHighlight[] {
+  const strength: ProfileHighlight = { kind: 'strength', text: MOCK_STRENGTHS[index % MOCK_STRENGTHS.length]! };
+  const warning: ProfileHighlight = { kind: 'warning', text: MOCK_WARNINGS[index % MOCK_WARNINGS.length]! };
+  const info: ProfileHighlight = { kind: 'info', text: MOCK_INFOS[index % MOCK_INFOS.length]! };
+
+  if (decision === 'approved') {
+    return index % 2 === 0 ? [strength, info] : [strength, info, warning];
+  }
+  if (decision === 'rejected') {
+    return [warning, info];
+  }
+  return index % 2 === 0 ? [strength, warning] : [strength, warning, info];
 }
 
 /** Warning-like uncertainties the list turns into chips. */

@@ -1,3 +1,5 @@
+import { useState } from 'react';
+
 import type { PresentedRow } from './code/listView';
 
 /** LinkedIn mark used as the outbound profile link. */
@@ -33,6 +35,8 @@ export function ProfileRow({
 }: ProfileRowProps) {
   const approved = row.override === 'approved';
   const rejected = row.override === 'rejected';
+  const [photoFailed, setPhotoFailed] = useState(false);
+  const showPhoto = row.photo && !photoFailed;
 
   return (
     <div
@@ -40,21 +44,40 @@ export function ProfileRow({
       data-row={row.publicId}
       onClick={onSelect}
     >
-      <span
-        style={{
-          width: 38,
-          height: 38,
-          borderRadius: '50%',
-          background: row.avBg,
-          color: row.avFg,
-          display: 'grid',
-          placeItems: 'center',
-          fontSize: 12.5,
-          fontWeight: 600,
-        }}
-      >
-        {row.initials}
-      </span>
+      {showPhoto ? (
+        <img
+          src={row.photo}
+          alt={`Foto de ${row.name}`}
+          referrerPolicy="no-referrer"
+          loading="lazy"
+          onError={() => setPhotoFailed(true)}
+          style={{
+            width: 38,
+            height: 38,
+            flex: 'none',
+            borderRadius: '50%',
+            objectFit: 'cover',
+            border: '1px solid #e2e8f0',
+          }}
+        />
+      ) : (
+        <span
+          style={{
+            width: 38,
+            height: 38,
+            flex: 'none',
+            borderRadius: '50%',
+            background: row.avBg,
+            color: row.avFg,
+            display: 'grid',
+            placeItems: 'center',
+            fontSize: 12.5,
+            fontWeight: 600,
+          }}
+        >
+          {row.initials}
+        </span>
+      )}
 
       <span style={{ minWidth: 0 }}>
         <span style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
@@ -126,10 +149,12 @@ export function ProfileRow({
             {row.warnings.map((warning) => (
               <span
                 key={warning.key}
+                title={warning.text}
                 style={{
                   display: 'inline-flex',
                   alignItems: 'center',
                   gap: 5,
+                  maxWidth: 260,
                   fontSize: 11,
                   fontWeight: 500,
                   color: warning.fg,
@@ -139,7 +164,10 @@ export function ProfileRow({
                   borderRadius: 6,
                 }}
               >
-                {warning.icon} {warning.text}
+                {warning.icon && <span aria-hidden="true" style={{ flex: 'none' }}>{warning.icon}</span>}
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {warning.text}
+                </span>
               </span>
             ))}
           </span>

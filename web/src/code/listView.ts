@@ -7,7 +7,13 @@
  * model's own decision is used when a profile has no override.
  */
 
-import type { Compensation, CompensationMatch, ManualDecision, ProfileResult } from './api';
+import type {
+  Compensation,
+  CompensationMatch,
+  ManualDecision,
+  ProfileHighlightKind,
+  ProfileResult,
+} from './api';
 
 /** Tabs on the review list, in display order. */
 export const LIST_TAB = {
@@ -76,6 +82,7 @@ export interface PresentedRow {
   publicId: string;
   name: string;
   url: string;
+  photo?: string;
   initials: string;
   avBg: string;
   avFg: string;
@@ -97,12 +104,20 @@ export interface PresentedRow {
   override?: ManualDecision;
 }
 
-/** Chip colours by warning kind, matching the design. */
+/** Chip colours by chip kind, matching the design. */
 const WARN_TONE = {
+  good: { fg: '#047857', bg: '#ecfdf5', bd: '#a7f3d0' },
   warn: { fg: '#92400e', bg: '#fffbeb', bd: '#fde68a' },
   info: { fg: '#1e40af', bg: '#eff6ff', bd: '#bfdbfe' },
   bad: { fg: '#9f1239', bg: '#fff1f2', bd: '#fecdd3' },
 } as const;
+
+/** Row chip icon and tone for each highlight category the model returns. */
+const HIGHLIGHT_STYLE: Record<ProfileHighlightKind, { icon: string; tone: keyof typeof WARN_TONE }> = {
+  strength: { icon: '✓', tone: 'good' },
+  warning: { icon: '!', tone: 'warn' },
+  info: { icon: '', tone: 'info' },
+};
 
 /** Status badge look, matching the design. */
 const STATUS_TONE = {
@@ -173,6 +188,7 @@ export function presentRow(
     publicId: profile.publicId,
     name: profile.name || profile.publicId,
     url: profile.linkedinUrl || '#',
+    ...(profile.photo ? { photo: profile.photo } : {}),
     initials: initialsOf(profile.name || profile.publicId),
     avBg,
     avFg,
@@ -338,31 +354,31 @@ function subtitleOf(profile: ProfileResult): string {
   return [profile.position, profile.company, profile.location].filter(Boolean).join(' · ');
 }
 
-/** Warning chips derived from photo, compensation fit, filter, and uncertainties. */
+/** Maximum chips shown on a row, combining critical flags and model highlights. */
+const MAX_ROW_CHIPS = 3;
+
+/**
+ * Row chips: critical, non-model flags first (they explain a profile that never
+ * scored), then the model's categorized highlights, capped so the row stays
+ * compact. Photo, compensation, and raw uncertainties are shown elsewhere.
+ */
 function warningsOf(profile: ProfileResult): PresentedWarning[] {
-  const warnings: PresentedWarning[] = [];
-
-  if (!profile.photo && !isProcessingFailure(profile) && profile.broadDecision !== BROAD_FAILED) {
-    warnings.push(chip('photo', '◐', 'Sem foto de perfil', 'warn'));
-  }
-
-  if (profile.compensationMatch?.outcome === 'not_matched') {
-    warnings.push(chip('comp', '$', compensationFitLabel(profile.compensationMatch), 'info'));
-  }
+  const chips: PresentedWarning[] = [];
 
   if (profile.broadDecision === BROAD_FAILED) {
-    warnings.push(chip('filter', '×', `Excluído no filtro: ${profile.broadDecisionMessage}`, 'bad'));
+    chips.push(chip('filter', '×', `Excluído no filtro: ${profile.broadDecisionMessage}`, 'bad'));
   }
 
   if (isProcessingFailure(profile)) {
-    warnings.push(chip('fail', '!', profile.broadDecisionMessage || 'Falha no processamento do perfil', 'bad'));
+    chips.push(chip('fail', '!', profile.broadDecisionMessage || 'Falha no processamento do perfil', 'bad'));
   }
 
-  for (const [index, text] of (profile.uncertainties ?? []).entries()) {
-    warnings.push(chip(`u-${index}`, '?', text, 'warn'));
+  for (const [index, highlight] of (profile.highlights ?? []).entries()) {
+    const style = HIGHLIGHT_STYLE[highlight.kind];
+    chips.push(chip(`h-${index}`, style.icon, highlight.text, style.tone));
   }
 
-  return warnings;
+  return chips.slice(0, MAX_ROW_CHIPS);
 }
 
 /** One styled chip. */
@@ -373,11 +389,6 @@ function chip(
   kind: keyof typeof WARN_TONE,
 ): PresentedWarning {
   return { key, icon, text, ...WARN_TONE[kind] };
-}
-
-/** Human label for a compensation mismatch. */
-function compensationFitLabel(match: CompensationMatch): string {
-  return match.explanation || 'Remuneração estimada fora da faixa';
 }
 
 /** Amount line plus the "est. · conf." meta line. */
