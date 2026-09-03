@@ -1,5 +1,6 @@
 import { getLinkedlnProfileDataFromExternalProvidor } from '../dataCollector/csv/csvdata.js';
 import type { ImportedCsvData } from '../dataCollector/csv/csvdata.js';
+import { asRecord, asString } from '../helpers/index.js';
 import { linkedinProfileKey } from '../linkedin/index.js';
 import type { Logger } from '../logging/index.js';
 import { mapApifyProfile } from '../mapper/index.js';
@@ -39,33 +40,58 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+/** The Linked Helper identity a provider record is correlated back to. */
+interface LinkedHelperIdentity {
+  publicId: string;
+  /** The exact profile_url from the Linked Helper CSV. */
+  profileUrl: string;
+}
+
+/** Reads the URL the provider was asked to scrape, echoed back on the record. */
+function providerQueryUrl(rawProfile: Record<string, unknown>): string | undefined {
+  return asString(asRecord(rawProfile['originalQuery'])?.['query']);
+}
+
 /** Maps provider records independently so one malformed profile cannot cancel a run. */
 async function normalizeProfiles(
   rawProfiles: readonly Record<string, unknown>[],
-  linkedHelperPublicIds: ReadonlyMap<string, string>,
+  linkedHelperIdentities: ReadonlyMap<string, LinkedHelperIdentity>,
   logger: Logger,
 ): Promise<ProfileNormalizationOutcome> {
   const profiles: FullProfile[] = [];
   const failures: ProfileMappingFailure[] = [];
+
+  const identityFor = (url: string | undefined): LinkedHelperIdentity | undefined => {
+    const profileKey = url ? linkedinProfileKey(url) : undefined;
+    return profileKey ? linkedHelperIdentities.get(profileKey) : undefined;
+  };
 
   // Map profiles independently. One malformed provider record is reported and
   // skipped without preventing the remaining records from being processed.
   for (const [providerRecordIndex, rawProfile] of rawProfiles.entries()) {
     try {
       const profile = mapApifyProfile(rawProfile);
-      const profileKey = linkedinProfileKey(profile.linkedinUrl);
-      const linkedHelperPublicId = profileKey
-        ? linkedHelperPublicIds.get(profileKey)
-        : undefined;
 
-      if (!linkedHelperPublicId) {
+      // The provider canonicalizes to a profile's custom vanity URL, which can
+      // differ from the alias Linked Helper exported. Correlate on the URL we
+      // asked it to scrape first, then fall back to the returned URL.
+      const identity =
+        identityFor(providerQueryUrl(rawProfile)) ??
+        identityFor(profile.linkedinUrl);
+
+      if (!identity) {
         throw new Error(
           `Could not correlate ${profile.linkedinUrl} with a Linked Helper public_id.`,
         );
       }
 
+      // Keep the Linked Helper URL as the profile's link: it is the one the
+      // operator exported and re-imports, so it must stay usable downstream.
       profiles.push(
-        attachLinkedHelperPublicId(profile, linkedHelperPublicId),
+        attachLinkedHelperPublicId(
+          { ...profile, linkedinUrl: identity.profileUrl },
+          identity.publicId,
+        ),
       );
     } catch (error: unknown) {
       const failure = {
@@ -80,20 +106,21 @@ async function normalizeProfiles(
   return { profiles, failures };
 }
 
-/** Indexes exact CSV public IDs by normalized LinkedIn profile identity. */
-function linkedHelperPublicIdsByProfileKey(
+/** Indexes each Linked Helper identity by its normalized LinkedIn profile key. */
+function linkedHelperIdentitiesByProfileKey(
   importedData: ImportedCsvData,
-): ReadonlyMap<string, string> {
-  const publicIds = new Map<string, string>();
+): ReadonlyMap<string, LinkedHelperIdentity> {
+  const identities = new Map<string, LinkedHelperIdentity>();
 
   for (const importedProfile of Object.values(importedData.records)) {
-    const profileKey = linkedinProfileKey(importedProfile.summary.profileUrl);
-    if (!profileKey || publicIds.has(profileKey)) continue;
+    const { publicId, profileUrl } = importedProfile.summary;
+    const profileKey = linkedinProfileKey(profileUrl);
+    if (!profileKey || identities.has(profileKey)) continue;
 
-    publicIds.set(profileKey, importedProfile.summary.publicId);
+    identities.set(profileKey, { publicId, profileUrl });
   }
 
-  return publicIds;
+  return identities;
 }
 
 /** Builds the serializable totals and failure details for one completed run. */
@@ -163,8 +190,8 @@ export async function runFullProfilePipelineWithDependencies(
   const profileLinks = getLinkedlnProfileDataFromExternalProvidor(
     importedData.records,
   );
-  const linkedHelperPublicIds =
-    linkedHelperPublicIdsByProfileKey(importedData);
+  const linkedHelperIdentities =
+    linkedHelperIdentitiesByProfileKey(importedData);
 
   // Step 2: reject empty and oversized runs before making paid API calls.
   if (profileLinks.length === 0) {
@@ -234,7 +261,7 @@ export async function runFullProfilePipelineWithDependencies(
     // used for identity, employment, education, location, and manual review.
     const normalized = await normalizeProfiles(
       rawProfiles,
-      linkedHelperPublicIds,
+      linkedHelperIdentities,
       logger,
     );
     logger.info(

@@ -296,6 +296,35 @@ test('correlates exact CSV public IDs by LinkedIn identity, not provider order',
   );
 });
 
+test('correlates by the queried URL when the provider returns a different alias', async () => {
+  // The person has a custom vanity URL the provider canonicalizes to, which
+  // differs from the auto-generated alias Linked Helper exported.
+  const importedUrl = 'https://www.linkedin.com/in/danillo-emanuel-de-moura-8231263a9';
+  const returnedAlias = 'https://www.linkedin.com/in/danilloemanuel';
+  const writer = recordingWriter();
+
+  await runFullProfilePipelineWithDependencies(
+    importedCsvDataFor([importedUrl]),
+    recordingLogger(),
+    dependencies({
+      collectProfiles: async () =>
+        apifyCollectionResult([
+          providerProfile(returnedAlias, { originalQuery: { query: importedUrl } }),
+        ]),
+      extractImages: fakeImageExtractor({}),
+      writeJson: writer.writeJson,
+    }),
+    { outputPaths: OUTPUT_PATHS },
+  );
+
+  const stored = fullProfilesFrom(writer);
+  assert.equal(stored.length, 1);
+  // Correlated despite the alias mismatch, and the Linked Helper URL is kept as
+  // the profile's link so it stays usable when re-imported downstream.
+  assert.equal(stored[0]?.linkedHelperPublicId, 'imported-0');
+  assert.equal(stored[0]?.linkedinUrl, importedUrl);
+});
+
 test('keeps the raw provider payload reachable through the final profile', async () => {
   const url = 'https://www.linkedin.com/in/person-a';
   const raw = { ...completeApifyProfile(), linkedinUrl: url };
