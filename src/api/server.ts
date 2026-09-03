@@ -1,3 +1,5 @@
+import 'dotenv/config';
+
 import { buildServer } from './index.js';
 import {
   CLEANUP_INTERVAL_MS,

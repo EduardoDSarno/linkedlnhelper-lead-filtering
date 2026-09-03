@@ -5,7 +5,7 @@ import { defineConfig } from 'vite'
 const API_SERVER = 'http://localhost:3000'
 
 /** Backend paths this app calls; the dev server forwards them to the API. */
-const API_PATHS = ['/import', '/run_filter', '/download']
+const API_PATHS = ['/import', '/run_filter', '/download', '/runs']
 
 // https://vite.dev/config/
 export default defineConfig({
