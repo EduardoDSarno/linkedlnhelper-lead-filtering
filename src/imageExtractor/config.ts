@@ -16,7 +16,7 @@ const ENVIRONMENT_KEYS = {
 
 /** Defaults used when an image-extraction caller omits an option. */
 export const PROFILE_IMAGE_DEFAULTS = {
-  model: 'gemini-3.7-flash',
+  model: 'gemini-3.8-flash',
   resolution: 'medium' as ProfileImageResolution,
   requestTimeoutMs: 30_000,
   downloadTimeoutMs: 15_000,

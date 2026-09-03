@@ -18,7 +18,7 @@ export const MODEL_EVALUATION_ENVIRONMENT_KEYS = {
 
 /** MVP defaults for Gemini evaluation requests. */
 export const MODEL_EVALUATION_DEFAULTS = {
-  model: 'gemini-3.7-flash',
+  model: 'gemini-3.8-flash',
   profilesPerRequest: 5,
   concurrency: 10,
   requestTimeoutMs: 30_000,

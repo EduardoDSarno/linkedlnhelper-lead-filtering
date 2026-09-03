@@ -233,7 +233,7 @@ defaults or limits change.
 
 | Option | Default | Purpose |
 | --- | ---: | --- |
-| `model` | `gemini-3.7-flash` | Gemini model identifier |
+| `model` | `gemini-3.8-flash` | Gemini model identifier |
 | `resolution` | `medium` | Image tokenization resolution: `low`, `medium`, or `high` |
 | `requestTimeoutMs` | `30000` | Maximum time for one Gemini request |
 | `imageDownloadTimeoutMs` | `15000` | Maximum time for a remote image download |
