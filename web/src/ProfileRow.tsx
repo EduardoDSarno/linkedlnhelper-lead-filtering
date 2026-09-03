@@ -45,21 +45,19 @@ export function ProfileRow({
       onClick={onSelect}
     >
       {showPhoto ? (
-        <img
-          src={row.photo}
-          alt={`Foto de ${row.name}`}
-          referrerPolicy="no-referrer"
-          loading="lazy"
-          onError={() => setPhotoFailed(true)}
-          style={{
-            width: 38,
-            height: 38,
-            flex: 'none',
-            borderRadius: '50%',
-            objectFit: 'cover',
-            border: '1px solid #e2e8f0',
-          }}
-        />
+        <span className="row-avatar">
+          <img
+            src={row.photo}
+            alt={`Foto de ${row.name}`}
+            referrerPolicy="no-referrer"
+            loading="lazy"
+            onError={() => setPhotoFailed(true)}
+          />
+          <span className="profile-photo-preview" aria-hidden="true">
+            <img src={row.photo} alt="" />
+            <span>{row.name}</span>
+          </span>
+        </span>
       ) : (
         <span
           style={{

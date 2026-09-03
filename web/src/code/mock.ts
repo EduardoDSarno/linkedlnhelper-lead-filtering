@@ -114,9 +114,6 @@ const MOCK_CURRENT_ROLE_YEARS = 2;
 /** Typical duration of a previous role in the fabricated histories. */
 const MOCK_PREVIOUS_ROLE_YEARS = 4;
 
-/** Background colours for generated, offline-safe mock profile photos. */
-const MOCK_PHOTO_BACKGROUNDS = ['#dbeafe', '#dcfce7', '#f3e8ff', '#ffedd5'] as const;
-
 /** Index of the row that imitates a keyword-filter exclusion. */
 const FILTERED_INDEX = 25;
 
@@ -273,16 +270,13 @@ function mockDetails(
   };
 }
 
-/** Creates a local SVG avatar so mock mode never depends on image downloads. */
-function mockPhoto(name: string, index: number): string {
-  const initials = name
-    .split(' ')
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase() ?? '')
-    .join('');
-  const background = MOCK_PHOTO_BACKGROUNDS[index % MOCK_PHOTO_BACKGROUNDS.length]!;
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="160" height="160"><rect width="160" height="160" rx="80" fill="${background}"/><text x="80" y="94" text-anchor="middle" font-family="Arial" font-size="48" font-weight="700" fill="#334155">${initials}</text></svg>`;
-  return `data:image/svg+xml,${encodeURIComponent(svg)}`;
+/**
+ * A real face photo per profile so the row avatar is unmistakably a photo, not
+ * an initials circle. If the network is unavailable the row falls back to
+ * initials on its own via the image's onError handler.
+ */
+function mockPhoto(_name: string, index: number): string {
+  return `https://i.pravatar.cc/150?img=${(index % 70) + 1}`;
 }
 
 /** Fabricated strength/warning/info one-liners cycled into the row chips. */
