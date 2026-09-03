@@ -40,6 +40,8 @@ export const MODEL_EVALUATION_LIMITS = {
   reasonsPerProfile: 5,
   evidencePerProfile: 6,
   uncertaintiesPerProfile: 5,
+  highlightsPerProfile: 3,
+  highlightTextMaxLength: 80,
 } as const;
 
 /** Errors that may succeed when the same model request is attempted again. */
@@ -107,6 +109,12 @@ ${MODEL_EVALUATION_PROMPT_SLOTS.systemPrompt}
 - Do not invent missing career facts. Put missing or ambiguous information in
   uncertainties.
 - Explain each result using evidence from that profile.
+- Provide 1 to 3 short "highlights": the most decision-relevant one-liners for a
+  reviewer scanning a list. Each has a "kind" of "strength" (a strong positive
+  fit signal), "warning" (a genuine concern or risk), or "info" (neutral but
+  notable context), and short "text" under 80 characters. Order by importance,
+  and match the mix to the profile: a strong fit should lead with strengths, a
+  weak one with warnings. Do not force all three kinds.
 - Return exactly one structured result for every supplied profile ID.
 `.trim();
 

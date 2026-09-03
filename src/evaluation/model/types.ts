@@ -53,6 +53,15 @@ export interface CompensationRangeMatch {
   readonly explanation: string;
 }
 
+/** How a one-line profile highlight is characterized for the review list. */
+export type ProfileHighlightKind = 'strength' | 'warning' | 'info';
+
+/** A short, categorized signal the review list shows as a colored row chip. */
+export interface ProfileHighlight {
+  readonly kind: ProfileHighlightKind;
+  readonly text: string;
+}
+
 /** One validated professional-fit assessment returned directly by Gemini. */
 export interface ProfileModelAssessment {
   readonly profileId: string;
@@ -61,6 +70,8 @@ export interface ProfileModelAssessment {
   readonly reasons: readonly string[];
   readonly evidence: readonly string[];
   readonly uncertainties: readonly string[];
+  /** Up to three categorized one-liners summarizing the fit in the row. */
+  readonly highlights?: readonly ProfileHighlight[];
 }
 
 /** A model assessment enriched with the application's deterministic decision. */

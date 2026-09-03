@@ -3,8 +3,13 @@ import { MODEL_EVALUATION_LIMITS } from './config.js';
 import {
   type CompensationEstimateConfidence,
   type EstimatedTotalMonthlyCompensation,
+  type ProfileHighlight,
+  type ProfileHighlightKind,
   type ProfileModelAssessment,
 } from './types.js';
+
+/** The categories a profile highlight may use. */
+const HIGHLIGHT_KINDS: readonly ProfileHighlightKind[] = ['strength', 'warning', 'info'];
 
 /**
  * JSON Schema supplied to Gemini for a machine-readable batch response.
@@ -85,6 +90,20 @@ export const MODEL_EVALUATION_JSON_SCHEMA = {
             maxItems: MODEL_EVALUATION_LIMITS.uncertaintiesPerProfile,
             items: { type: 'string' },
           },
+          highlights: {
+            type: 'array',
+            minItems: 1,
+            maxItems: MODEL_EVALUATION_LIMITS.highlightsPerProfile,
+            items: {
+              type: 'object',
+              additionalProperties: false,
+              properties: {
+                kind: { type: 'string', enum: ['strength', 'warning', 'info'] },
+                text: { type: 'string' },
+              },
+              required: ['kind', 'text'],
+            },
+          },
         },
         required: [
           'profileId',
@@ -93,6 +112,7 @@ export const MODEL_EVALUATION_JSON_SCHEMA = {
           'reasons',
           'evidence',
           'uncertainties',
+          'highlights',
         ],
       },
     },
@@ -254,6 +274,31 @@ function estimatedTotalMonthlyCompensation(
   };
 }
 
+/**
+ * Parses up to three categorized highlights, tolerating a missing or partly
+ * malformed list. Invalid items are skipped and text is capped rather than
+ * failing the whole profile, since highlights are a presentation summary.
+ */
+function highlights(value: unknown): ProfileHighlight[] {
+  if (!Array.isArray(value)) return [];
+
+  const parsed: ProfileHighlight[] = [];
+  for (const item of value) {
+    const record = asRecord(item);
+    const kind = asString(record?.['kind']) as ProfileHighlightKind | undefined;
+    const text = asString(record?.['text'])
+      ?.slice(0, MODEL_EVALUATION_LIMITS.highlightTextMaxLength)
+      .trimEnd();
+
+    if (!text || !kind || !HIGHLIGHT_KINDS.includes(kind)) continue;
+
+    parsed.push({ kind, text });
+    if (parsed.length >= MODEL_EVALUATION_LIMITS.highlightsPerProfile) break;
+  }
+
+  return parsed;
+}
+
 /** Parses one profile result before batch-level identity checks run. */
 function profileEvaluation(value: unknown): ProfileModelAssessment {
   const record = asRecord(value);
@@ -287,6 +332,7 @@ function profileEvaluation(value: unknown): ProfileModelAssessment {
       MODEL_EVALUATION_LIMITS.uncertaintiesPerProfile,
       0,
     ),
+    highlights: highlights(record['highlights']),
   };
 }
 

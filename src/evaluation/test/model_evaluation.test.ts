@@ -146,6 +146,65 @@ test('parses a supported total monthly compensation range', () => {
   });
 });
 
+test('parses at most three highlights, dropping invalid kinds and capping text', () => {
+  const longText = 'x'.repeat(120);
+  const evaluations = parseModelEvaluationResponse(
+    JSON.stringify({
+      evaluations: [
+        {
+          profileId: 'profile-1',
+          matchPercent: 88,
+          estimatedTotalMonthlyCompensation: {
+            status: 'insufficient_evidence',
+            reasons: ['n/a'],
+          },
+          reasons: ['Strong fit.'],
+          evidence: ['Headline matches.'],
+          uncertainties: [],
+          highlights: [
+            { kind: 'strength', text: 'Consistent B2B sales progression' },
+            { kind: 'bogus', text: 'invalid kind, skipped' },
+            { kind: 'warning', text: longText },
+            { kind: 'info', text: 'Based in Goiânia' },
+            { kind: 'info', text: 'over the cap, never reached' },
+          ],
+        },
+      ],
+    }),
+    ['profile-1'],
+  );
+
+  const highlights = evaluations[0]?.highlights ?? [];
+  assert.equal(highlights.length, 3);
+  assert.deepEqual(highlights[0], { kind: 'strength', text: 'Consistent B2B sales progression' });
+  assert.equal(highlights[1]?.kind, 'warning');
+  assert.equal(highlights[1]?.text.length, 80);
+  assert.deepEqual(highlights[2], { kind: 'info', text: 'Based in Goiânia' });
+});
+
+test('defaults highlights to an empty list when the model omits them', () => {
+  const evaluations = parseModelEvaluationResponse(
+    JSON.stringify({
+      evaluations: [
+        {
+          profileId: 'profile-1',
+          matchPercent: 60,
+          estimatedTotalMonthlyCompensation: {
+            status: 'insufficient_evidence',
+            reasons: ['n/a'],
+          },
+          reasons: ['Some fit.'],
+          evidence: ['Some evidence.'],
+          uncertainties: [],
+        },
+      ],
+    }),
+    ['profile-1'],
+  );
+
+  assert.deepEqual(evaluations[0]?.highlights, []);
+});
+
 test('parses an explicit insufficient-evidence compensation result', () => {
   const evaluations = parseModelEvaluationResponse(
     JSON.stringify({

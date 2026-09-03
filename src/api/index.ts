@@ -336,6 +336,7 @@ function registerResultsRoute(server: FastifyInstance)
                             reasons: model.reasons,
                             evidence: model.evidence,
                             uncertainties: model.uncertainties,
+                            ...(model.highlights?.length ? { highlights: model.highlights } : {}),
                             compensation: model.estimatedTotalMonthlyCompensation,
                             ...(model.compensationRangeMatch
                                 ? { compensationMatch: model.compensationRangeMatch }
