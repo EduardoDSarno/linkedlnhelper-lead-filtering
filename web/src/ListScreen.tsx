@@ -154,7 +154,7 @@ export function ListScreen({ flow }: { flow: ReviewFlow }) {
           <div>
             <CampaignName
               name={flow.campaignName}
-              onRename={flow.setCampaignName}
+              onRename={flow.renameCampaign}
             />
             <h1 style={{ margin: '2px 0 0', fontSize: 20, fontWeight: 700, letterSpacing: '-0.02em' }}>
               Perfis avaliados

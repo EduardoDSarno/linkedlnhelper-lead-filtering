@@ -5,6 +5,7 @@ import {
   getStatus,
   importCsv,
   listRuns,
+  renameRun,
   startDownload,
   startReview,
   submitDecisions,
@@ -261,12 +262,31 @@ export function useReviewFlow() {
       }));
       const result = await submitDecisions(processingId, payload, campaignName);
       setSavedApprovedCount(result.finalApprovedCount);
+      return true;
     } catch (cause) {
       setError(messageOf(cause));
+      return false;
     } finally {
       setSaving(false);
     }
   }, [processingId, overrides, campaignName]);
+
+  /**
+   * Renames the campaign during review and persists it immediately. Concluding
+   * does not re-send the name, so an in-review rename must be saved on its own
+   * or the campaigns list would keep showing the pre-edit name.
+   */
+  const renameCampaign = useCallback(
+    (name: string) => {
+      const next = name.trim();
+      if (!next || next === campaignName) return;
+      setCampaignName(next);
+      if (processingId) {
+        void renameRun(processingId, next).catch((cause) => setError(messageOf(cause)));
+      }
+    },
+    [campaignName, processingId],
+  );
 
   /** Moves to the campaigns home once decisions are saved. */
   const conclude = useCallback(() => setScreen('campaigns'), []);
@@ -304,7 +324,7 @@ export function useReviewFlow() {
     submitting,
 
     campaignName,
-    setCampaignName,
+    renameCampaign,
     runNameOpen,
     openRunName: () => setRunNameOpen(true),
     closeRunName: () => setRunNameOpen(false),
