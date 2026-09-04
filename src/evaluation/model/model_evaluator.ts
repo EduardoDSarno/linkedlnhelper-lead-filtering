@@ -236,9 +236,13 @@ async function evaluateProfileGroup(
         },
       );
 
-      // Profiles the reply could not score become per-profile failures. They
-      // are not retried: the good siblings are already scored and re-spending
-      // (max) thinking tokens on a schema miss is wasteful.
+      // Profiles the reply could not score become per-profile failures. The
+      // raw reply and token spend are captured on each one, same as a rejected
+      // group, so a person the model silently dropped is fully diagnosable.
+      // This attempt does not loop again here: the good siblings are already
+      // scored, and evaluateProfilesWithModel pools every remaining failure
+      // into one bounded follow-up request instead of re-spending (max)
+      // thinking tokens per person inside this group's own call.
       const partialFailures = parsed.failures.map(
         (failure): ModelEvaluationFailure => ({
           profileIds: [failure.profileId],
@@ -246,6 +250,10 @@ async function evaluateProfileGroup(
           retryable: false,
           retryExhausted: false,
           error: failure.error,
+          ...(lastResponseText
+            ? { responseText: loggedModelResponseText(lastResponseText) }
+            : {}),
+          ...(hasTokenUsage(tokenUsage) ? { tokenUsage: { ...tokenUsage } } : {}),
         }),
       );
 
@@ -322,25 +330,14 @@ function loggedModelResponseText(text: string): string {
   return text.length <= limit ? text : text.slice(0, limit);
 }
 
-/**
- * Evaluates compact profiles through bounded concurrent model requests.
- *
- * Successful groups are retained even when another group fails. Only the
- * transiently failed group is retried, and every returned token count is
- * included in the run total.
- */
-export async function evaluateProfilesWithModel(
-  profiles: readonly EvaluationProfileData[],
+/** Runs profile groups through the model with bounded concurrency. */
+async function runProfileGroups(
+  groups: readonly (readonly EvaluationProfileData[])[],
   criteria: FullEvaluationCriteria,
-  callerOptions: ModelEvaluationOptions = {},
-): Promise<ModelEvaluationOutcome> {
-  const options = resolveModelEvaluationOptions(callerOptions);
-  const generateContent = callerOptions.generateContent ?? resolveModelClient();
-  const wait = callerOptions.wait ?? waitForRetry;
-  const groups = groupProfilesForModelEvaluation(
-    profiles,
-    options.profilesPerRequest,
-  );
+  options: ReturnType<typeof resolveModelEvaluationOptions>,
+  generateContent: NonNullable<ModelEvaluationOptions['generateContent']>,
+  wait: NonNullable<ModelEvaluationOptions['wait']>,
+): Promise<readonly ModelEvaluationGroupResult[]> {
   const groupResults = new Array<ModelEvaluationGroupResult>(groups.length);
   let nextGroupIndex = 0;
 
@@ -369,6 +366,17 @@ export async function evaluateProfilesWithModel(
     ),
   );
 
+  return groupResults;
+}
+
+/** Flattens a batch of group results into one evaluation/failure/usage total. */
+function reduceGroupResults(
+  groupResults: readonly ModelEvaluationGroupResult[],
+): {
+  evaluations: ProfileModelEvaluation[];
+  failures: ModelEvaluationFailure[];
+  tokenUsage: ModelEvaluationTokenUsage;
+} {
   const evaluations: ProfileModelEvaluation[] = [];
   const failures: ModelEvaluationFailure[] = [];
   const tokenUsage = emptyModelEvaluationTokenUsage();
@@ -382,6 +390,79 @@ export async function evaluateProfilesWithModel(
       failures.push(...result.failures);
     } else {
       failures.push(result.failure);
+    }
+  }
+
+  return { evaluations, failures, tokenUsage };
+}
+
+/**
+ * Evaluates compact profiles through bounded concurrent model requests.
+ *
+ * Successful groups are retained even when another group fails, and every
+ * returned token count is included in the run total. A profile that never
+ * scored on the main pass — whether its whole group was rejected or the model
+ * silently dropped it from an otherwise-usable reply — is pooled with every
+ * other unscored profile from this run and re-requested exactly once, in new
+ * groups of the same request size (the last one smaller if the remainder does
+ * not fill it). Already-scored siblings are never re-sent. This mirrors the
+ * Apify collector's pool-and-rebatch retry, but bounded to a single follow-up
+ * round rather than looping: a schema-shaped omission is a content problem,
+ * not a transient one, so repeated rounds would mostly re-spend tokens.
+ */
+export async function evaluateProfilesWithModel(
+  profiles: readonly EvaluationProfileData[],
+  criteria: FullEvaluationCriteria,
+  callerOptions: ModelEvaluationOptions = {},
+): Promise<ModelEvaluationOutcome> {
+  const options = resolveModelEvaluationOptions(callerOptions);
+  const generateContent = callerOptions.generateContent ?? resolveModelClient();
+  const wait = callerOptions.wait ?? waitForRetry;
+
+  const groups = groupProfilesForModelEvaluation(
+    profiles,
+    options.profilesPerRequest,
+  );
+  const primary = reduceGroupResults(
+    await runProfileGroups(groups, criteria, options, generateContent, wait),
+  );
+
+  const tokenUsage = emptyModelEvaluationTokenUsage();
+  addTokenUsage(tokenUsage, primary.tokenUsage);
+
+  let evaluations = primary.evaluations;
+  let failures = primary.failures;
+
+  const failedProfileIds = failures.flatMap((failure) => failure.profileIds);
+  if (failedProfileIds.length > 0) {
+    const profilesById = new Map(
+      profiles.map((profile) => [profile.profileId, profile]),
+    );
+    const retryProfiles = failedProfileIds.flatMap((id) => {
+      const profile = profilesById.get(id);
+      return profile ? [profile] : [];
+    });
+
+    if (retryProfiles.length > 0) {
+      const retryGroups = groupProfilesForModelEvaluation(
+        retryProfiles,
+        options.profilesPerRequest,
+      );
+      const retry = reduceGroupResults(
+        await runProfileGroups(
+          retryGroups,
+          criteria,
+          options,
+          generateContent,
+          wait,
+        ),
+      );
+
+      addTokenUsage(tokenUsage, retry.tokenUsage);
+      evaluations = [...evaluations, ...retry.evaluations];
+      // Every id in failedProfileIds went into this retry, so its outcome
+      // (scored or still failed) fully replaces the main-pass failure list.
+      failures = retry.failures;
     }
   }
 

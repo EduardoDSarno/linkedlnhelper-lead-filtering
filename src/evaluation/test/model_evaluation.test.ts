@@ -433,3 +433,91 @@ test('throws when the JSON envelope itself is unusable', () => {
     ModelEvaluationResponseError,
   );
 });
+
+test('unwraps a markdown-fenced reply', () => {
+  const fenced = '```json\n' + JSON.stringify({ evaluations: [validEvaluation('p1')] }) + '\n```';
+
+  const { assessments, failures } = parseModelEvaluationResponse(fenced, ['p1']);
+
+  assert.deepEqual(assessments.map((a) => a.profileId), ['p1']);
+  assert.equal(failures.length, 0);
+});
+
+test('accepts "results" as an alias for the evaluations array', () => {
+  const { assessments, failures } = parseModelEvaluationResponse(
+    JSON.stringify({ results: [validEvaluation('p1')] }),
+    ['p1'],
+  );
+
+  assert.deepEqual(assessments.map((a) => a.profileId), ['p1']);
+  assert.equal(failures.length, 0);
+});
+
+test('accepts a rationale string when reasons is missing', () => {
+  const { profileId: _drop, ...rest } = validEvaluation('p1') as Record<string, unknown>;
+  const item = { ...rest, profileId: 'p1', rationale: 'Strong commercial trajectory.' };
+  delete (item as Record<string, unknown>)['reasons'];
+
+  const { assessments, failures } = parseModelEvaluationResponse(
+    JSON.stringify({ evaluations: [item] }),
+    ['p1'],
+  );
+
+  assert.equal(failures.length, 0);
+  assert.deepEqual(assessments[0]?.reasons, ['Strong commercial trajectory.']);
+});
+
+test('falls back to highlight text when reasons and evidence are both absent', () => {
+  const item = validEvaluation('p1') as Record<string, unknown>;
+  delete item['reasons'];
+  delete item['evidence'];
+  item['highlights'] = [
+    { kind: 'strength', text: 'Gestor comercial com carteira B2B' },
+    { kind: 'warning', text: 'Pouco tempo na posição atual' },
+  ];
+
+  const { assessments, failures } = parseModelEvaluationResponse(
+    JSON.stringify({ evaluations: [item] }),
+    ['p1'],
+  );
+
+  assert.equal(failures.length, 0);
+  assert.deepEqual(assessments[0]?.reasons, [
+    'Gestor comercial com carteira B2B',
+    'Pouco tempo na posição atual',
+  ]);
+  assert.deepEqual(assessments[0]?.evidence, [
+    'Gestor comercial com carteira B2B',
+    'Pouco tempo na posição atual',
+  ]);
+});
+
+test('recovers a whole batch in the shape a provider actually returned', () => {
+  // Observed in the 604-profile run: fenced, "results" instead of
+  // "evaluations", no reasons/evidence, justification only in highlights.
+  const ids = ['p1', 'p2', 'p3', 'p4', 'p5'];
+  const results = ids.map((id) => {
+    const item = validEvaluation(id) as Record<string, unknown>;
+    delete item['reasons'];
+    delete item['evidence'];
+    item['highlights'] = [{ kind: 'strength', text: `Justification for ${id}` }];
+    return item;
+  });
+  const reply = '```json\n' + JSON.stringify({ results }) + '\n```';
+
+  const { assessments, failures } = parseModelEvaluationResponse(reply, ids);
+
+  assert.deepEqual(assessments.map((a) => a.profileId), ids);
+  assert.equal(failures.length, 0);
+});
+
+test('still fails only the omitted id inside a recovered batch', () => {
+  const ids = ['p1', 'p2', 'p3'];
+  const results = ['p1', 'p3'].map((id) => validEvaluation(id));
+  const reply = '```json\n' + JSON.stringify({ results }) + '\n```';
+
+  const { assessments, failures } = parseModelEvaluationResponse(reply, ids);
+
+  assert.deepEqual(assessments.map((a) => a.profileId), ['p1', 'p3']);
+  assert.deepEqual(failures.map((f) => f.profileId), ['p2']);
+});

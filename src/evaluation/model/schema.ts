@@ -21,9 +21,9 @@ const COMPENSATION_CURRENCY = 'BRL' as const;
 const BRL_CURRENCY_ALIASES = new Set(['brl', 'r$', 'brl$', 'r$brl']);
 
 /**
- * JSON Schema supplied to Gemini for a machine-readable batch response.
+ * JSON Schema supplied to model for a machine-readable batch response.
  *
- * The evaluations array omits maxItems because Gemini rejects this schema
+ * The evaluations array omits maxItems because model rejects this schema
  * when that bound is present. Request grouping and response parsing already
  * enforce group size.
  */
@@ -352,6 +352,77 @@ function highlights(value: unknown): ProfileHighlight[] {
   return parsed;
 }
 
+/**
+ * Reads the justification list, tolerating the shapes providers substitute.
+ *
+ * Preference order is the contract field, then a single "rationale" string, and
+ * finally the highlight text. The fallbacks keep a scored profile whose reply
+ * merged its justification into another field instead of dropping the person.
+ */
+function reasonsList(
+  record: Record<string, unknown>,
+  parsedHighlights: readonly ProfileHighlight[],
+): string[] {
+  if (Array.isArray(record['reasons'])) {
+    return stringList(
+      record['reasons'],
+      'reasons',
+      MODEL_EVALUATION_LIMITS.reasonsPerProfile,
+      1,
+    );
+  }
+
+  const rationale = asString(record['rationale']);
+  if (rationale) return [rationale];
+
+  if (parsedHighlights.length > 0) {
+    return parsedHighlights
+      .slice(0, MODEL_EVALUATION_LIMITS.reasonsPerProfile)
+      .map((highlight) => highlight.text);
+  }
+
+  // Nothing usable: fail this profile with the standard contract message.
+  return stringList(
+    record['reasons'],
+    'reasons',
+    MODEL_EVALUATION_LIMITS.reasonsPerProfile,
+    1,
+  );
+}
+
+/**
+ * Reads the evidence list, falling back to highlight text.
+ *
+ * Highlights are the model's own short justifications, so they are the closest
+ * honest stand-in when a reply omits a separate evidence array.
+ */
+function evidenceList(
+  record: Record<string, unknown>,
+  parsedHighlights: readonly ProfileHighlight[],
+): string[] {
+  if (Array.isArray(record['evidence'])) {
+    return stringList(
+      record['evidence'],
+      'evidence',
+      MODEL_EVALUATION_LIMITS.evidencePerProfile,
+      1,
+    );
+  }
+
+  if (parsedHighlights.length > 0) {
+    return parsedHighlights
+      .slice(0, MODEL_EVALUATION_LIMITS.evidencePerProfile)
+      .map((highlight) => highlight.text);
+  }
+
+  return stringList(
+    record['evidence'],
+    'evidence',
+    MODEL_EVALUATION_LIMITS.evidencePerProfile,
+    1,
+  );
+}
+
 /** Parses one profile result before batch-level identity checks run. */
 function profileEvaluation(value: unknown): ProfileModelAssessment {
   const record = asRecord(value);
@@ -361,38 +432,43 @@ function profileEvaluation(value: unknown): ProfileModelAssessment {
     );
   }
 
+  const parsedHighlights = highlights(record['highlights']);
+
   return {
     profileId: requiredString(record['profileId'], 'profileId'),
     matchPercent: matchPercent(record['matchPercent']),
     estimatedTotalMonthlyCompensation: estimatedTotalMonthlyCompensation(
       record['estimatedTotalMonthlyCompensation'],
     ),
-    reasons: stringList(
-      record['reasons'],
-      'reasons',
-      MODEL_EVALUATION_LIMITS.reasonsPerProfile,
-      1,
-    ),
-    evidence: stringList(
-      record['evidence'],
-      'evidence',
-      MODEL_EVALUATION_LIMITS.evidencePerProfile,
-      1,
-    ),
+    reasons: reasonsList(record, parsedHighlights),
+    evidence: evidenceList(record, parsedHighlights),
     uncertainties: stringList(
       record['uncertainties'],
       'uncertainties',
       MODEL_EVALUATION_LIMITS.uncertaintiesPerProfile,
       0,
     ),
-    highlights: highlights(record['highlights']),
+    highlights: parsedHighlights,
   };
+}
+
+/** A fenced ``` or ```json block wrapping an otherwise valid reply. */
+const MARKDOWN_CODE_FENCE = /^\s*```(?:json)?\s*\r?\n([\s\S]*?)\r?\n?\s*```\s*$/;
+
+/**
+ * Removes a markdown code fence some providers wrap around structured replies.
+ *
+ * The fenced payload is still the model's real answer, so unwrapping it keeps a
+ * paid batch instead of discarding it over formatting.
+ */
+function stripCodeFence(text: string): string {
+  return MARKDOWN_CODE_FENCE.exec(text)?.[1]?.trim() ?? text;
 }
 
 /** Parses response JSON and reports malformed text as a permanent failure. */
 function responseJson(text: string): unknown {
   try {
-    return JSON.parse(text) as unknown;
+    return JSON.parse(stripCodeFence(text)) as unknown;
   } catch {
     throw new ModelEvaluationResponseError(
       'The model returned invalid JSON for the evaluation request.',
@@ -415,7 +491,9 @@ export function parseModelEvaluationResponse(
   expectedProfileIds: readonly string[],
 ): ParsedModelEvaluationResponse {
   const response = asRecord(responseJson(text));
-  const values = response?.['evaluations'];
+  // Some providers name the batch array "results". The rows inside are still
+  // the scored profiles, so accept the alias rather than discarding the batch.
+  const values = response?.['evaluations'] ?? response?.['results'];
 
   if (!Array.isArray(values)) {
     throw new ModelEvaluationResponseError(

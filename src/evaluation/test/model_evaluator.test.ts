@@ -256,7 +256,7 @@ test('retries only the transiently failed group and preserves other successes', 
   assert.equal(result.failedProfiles, 0);
 });
 
-test('does not retry an invalid response and retains successful groups', async () => {
+test('retries an invalid response exactly once and retains successful groups', async () => {
   const profilesPerRequest = MODEL_EVALUATION_DEFAULTS.profilesPerRequest;
   const candidates = profiles(profilesPerRequest * 2);
   const invalidGroupId = candidates[0]?.profileId;
@@ -289,7 +289,10 @@ test('does not retry an invalid response and retains successful groups', async (
     },
   });
 
-  assert.equal(callsByFirstProfile.get(invalidGroupId), 1);
+  // evaluateProfileGroup's own loop does not retry a non-retryable parse
+  // error, but evaluateProfilesWithModel pools the whole failed group and
+  // asks again exactly once, in its own request of the same size.
+  assert.equal(callsByFirstProfile.get(invalidGroupId), 2);
   assert.equal(result.successfulProfiles, profilesPerRequest);
   assert.equal(result.failedProfiles, profilesPerRequest);
   assert.equal(result.failures[0]?.retryable, false);
@@ -325,10 +328,10 @@ test('retries a timed-out group and keeps the later success', async () => {
   assert.equal(result.failedProfiles, 0);
 });
 
-test('keeps sibling scores when one object in a group is malformed', async () => {
+test('keeps sibling scores when one object in a group is malformed, then retries just that profile', async () => {
   const profilesPerRequest = MODEL_EVALUATION_DEFAULTS.profilesPerRequest;
   const candidates = profiles(profilesPerRequest); // a single request-sized group
-  let calls = 0;
+  const requestSizes: number[] = [];
 
   const result = await evaluateProfilesWithModel(candidates, criteria(), {
     profilesPerRequest,
@@ -337,8 +340,10 @@ test('keeps sibling scores when one object in a group is malformed', async () =>
     retryBaseDelayMs: 0,
     wait: async () => undefined,
     generateContent: async (parameters) => {
-      calls += 1;
       const ids = requestedProfileIds(parameters);
+      requestSizes.push(ids.length);
+      // The person requested first in every call comes back malformed, so a
+      // lone-profile retry request still fails the same way.
       const evaluations = ids.map((id, index) =>
         index === 0 ? { ...evaluation(id), reasons: [] } : evaluation(id),
       );
@@ -346,12 +351,16 @@ test('keeps sibling scores when one object in a group is malformed', async () =>
     },
   });
 
-  // A schema miss on one object is not retried, and its siblings still score.
-  assert.equal(calls, 1);
+  // A schema miss on one object does not retry within that group's own call,
+  // but is pooled into a second, smaller request for just that one profile.
+  assert.deepEqual(requestSizes, [profilesPerRequest, 1]);
   assert.equal(result.successfulProfiles, profilesPerRequest - 1);
   assert.equal(result.failedProfiles, 1);
   assert.equal(result.failures.length, 1);
   assert.deepEqual(result.failures[0]?.profileIds, ['profile-0']);
+  // The retry's own reply is what gets captured for diagnosis.
+  assert.ok(result.failures[0]?.responseText);
+  assert.ok(result.failures[0]?.tokenUsage);
 });
 
 test('keeps present profiles and fails missing IDs at profile grain', () => {
@@ -422,4 +431,80 @@ test('restores requested profile order and aggregates usage from every response'
     thinkingTokens: TEST_TOKEN_USAGE.thinkingTokens * 2,
     totalTokens: TEST_TOKEN_USAGE.totalTokens * 2,
   });
+});
+
+test('never retries when every group scores on the main pass', async () => {
+  const profilesPerRequest = MODEL_EVALUATION_DEFAULTS.profilesPerRequest;
+  const candidates = profiles(profilesPerRequest * 2);
+  let calls = 0;
+
+  const result = await evaluateProfilesWithModel(candidates, criteria(), {
+    profilesPerRequest,
+    concurrency: MODEL_EVALUATION_DEFAULTS.concurrency,
+    generateContent: async (parameters) => {
+      calls += 1;
+      return modelResponse(requestedProfileIds(parameters));
+    },
+  });
+
+  assert.equal(calls, 2); // one call per main-pass group, no retry request
+  assert.equal(result.successfulProfiles, candidates.length);
+  assert.equal(result.failedProfiles, 0);
+});
+
+test('recovers a profile the model silently omitted, by retrying it alone', async () => {
+  const profilesPerRequest = MODEL_EVALUATION_DEFAULTS.profilesPerRequest;
+  const candidates = profiles(profilesPerRequest);
+  const droppedId = candidates[candidates.length - 1]?.profileId;
+  assert.ok(droppedId);
+  const requestedIdsByCall: string[][] = [];
+
+  const result = await evaluateProfilesWithModel(candidates, criteria(), {
+    profilesPerRequest,
+    concurrency: 1,
+    generateContent: async (parameters) => {
+      const ids = requestedProfileIds(parameters);
+      requestedIdsByCall.push(ids);
+      // Mirrors the observed GLM behavior: a complete, well-formed reply that
+      // simply never includes one requested id, on either call.
+      const present = ids.filter((id) => id !== droppedId);
+      return modelResponse(present);
+    },
+  });
+
+  assert.deepEqual(requestedIdsByCall, [
+    candidates.map((profile) => profile.profileId),
+    [droppedId],
+  ]);
+  assert.equal(result.successfulProfiles, profilesPerRequest - 1);
+  assert.equal(result.failedProfiles, 1);
+  assert.equal(result.failures[0]?.profileIds[0], droppedId);
+  assert.match(result.failures[0]?.error ?? '', /omitted profile ID/);
+});
+
+test('rescues a profile on retry after its first attempt was dropped', async () => {
+  const profilesPerRequest = MODEL_EVALUATION_DEFAULTS.profilesPerRequest;
+  const candidates = profiles(profilesPerRequest);
+  const droppedId = candidates[candidates.length - 1]?.profileId;
+  assert.ok(droppedId);
+  let attemptsForDroppedProfile = 0;
+
+  const result = await evaluateProfilesWithModel(candidates, criteria(), {
+    profilesPerRequest,
+    concurrency: 1,
+    generateContent: async (parameters) => {
+      const ids = requestedProfileIds(parameters);
+      if (ids.includes(droppedId)) attemptsForDroppedProfile += 1;
+      // Omitted only the first time it was ever requested; present on retry.
+      const present =
+        attemptsForDroppedProfile === 1
+          ? ids.filter((id) => id !== droppedId)
+          : ids;
+      return modelResponse(present);
+    },
+  });
+
+  assert.equal(result.successfulProfiles, profilesPerRequest);
+  assert.equal(result.failedProfiles, 0);
+  assert.ok(result.evaluations.some((item) => item.profileId === droppedId));
 });
