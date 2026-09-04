@@ -10,7 +10,6 @@ import {
   COMPENSATION_RANGE_OUTCOME,
   MODEL_EVALUATION_DECISION,
   MODEL_EVALUATION_DEFAULTS,
-  ModelEvaluationResponseError,
   evaluateProfilesWithModel,
   parseModelEvaluationResponse,
 } from '../model/index.js';
@@ -326,43 +325,71 @@ test('retries a timed-out group and keeps the later success', async () => {
   assert.equal(result.failedProfiles, 0);
 });
 
-test('rejects missing, duplicated, and unexpected response profile IDs', () => {
+test('keeps sibling scores when one object in a group is malformed', async () => {
+  const profilesPerRequest = MODEL_EVALUATION_DEFAULTS.profilesPerRequest;
+  const candidates = profiles(profilesPerRequest); // a single request-sized group
+  let calls = 0;
+
+  const result = await evaluateProfilesWithModel(candidates, criteria(), {
+    profilesPerRequest,
+    concurrency: 1,
+    maximumAttempts: 2,
+    retryBaseDelayMs: 0,
+    wait: async () => undefined,
+    generateContent: async (parameters) => {
+      calls += 1;
+      const ids = requestedProfileIds(parameters);
+      const evaluations = ids.map((id, index) =>
+        index === 0 ? { ...evaluation(id), reasons: [] } : evaluation(id),
+      );
+      return { text: JSON.stringify({ evaluations }), usage: { ...TEST_TOKEN_USAGE } };
+    },
+  });
+
+  // A schema miss on one object is not retried, and its siblings still score.
+  assert.equal(calls, 1);
+  assert.equal(result.successfulProfiles, profilesPerRequest - 1);
+  assert.equal(result.failedProfiles, 1);
+  assert.equal(result.failures.length, 1);
+  assert.deepEqual(result.failures[0]?.profileIds, ['profile-0']);
+});
+
+test('keeps present profiles and fails missing IDs at profile grain', () => {
   const expectedProfileIds = ['profile-1', 'profile-2'];
 
-  assert.throws(
-    () =>
-      parseModelEvaluationResponse(
-        JSON.stringify({ evaluations: [evaluation('profile-1')] }),
-        expectedProfileIds,
-      ),
-    ModelEvaluationResponseError,
-  );
-  assert.throws(
-    () =>
-      parseModelEvaluationResponse(
-        JSON.stringify({
-          evaluations: [
-            evaluation('profile-1'),
-            evaluation('profile-1'),
-          ],
-        }),
-        expectedProfileIds,
-      ),
-    ModelEvaluationResponseError,
-  );
-  assert.throws(
-    () =>
-      parseModelEvaluationResponse(
-        JSON.stringify({
-          evaluations: [
-            evaluation('profile-1'),
-            evaluation('unexpected-profile'),
-          ],
-        }),
-        expectedProfileIds,
-      ),
-    ModelEvaluationResponseError,
-  );
+  // Only profile-1 returned: keep it, fail the omitted profile-2.
+  {
+    const { assessments, failures } = parseModelEvaluationResponse(
+      JSON.stringify({ evaluations: [evaluation('profile-1')] }),
+      expectedProfileIds,
+    );
+    assert.deepEqual(assessments.map((a) => a.profileId), ['profile-1']);
+    assert.deepEqual(failures.map((f) => f.profileId), ['profile-2']);
+  }
+
+  // Duplicated profile-1, profile-2 absent: keep the first, fail profile-2.
+  {
+    const { assessments, failures } = parseModelEvaluationResponse(
+      JSON.stringify({
+        evaluations: [evaluation('profile-1'), evaluation('profile-1')],
+      }),
+      expectedProfileIds,
+    );
+    assert.deepEqual(assessments.map((a) => a.profileId), ['profile-1']);
+    assert.deepEqual(failures.map((f) => f.profileId), ['profile-2']);
+  }
+
+  // Unexpected id ignored (no stolen row), profile-2 still absent -> failed.
+  {
+    const { assessments, failures } = parseModelEvaluationResponse(
+      JSON.stringify({
+        evaluations: [evaluation('profile-1'), evaluation('unexpected-profile')],
+      }),
+      expectedProfileIds,
+    );
+    assert.deepEqual(assessments.map((a) => a.profileId), ['profile-1']);
+    assert.deepEqual(failures.map((f) => f.profileId), ['profile-2']);
+  }
 });
 
 test('restores requested profile order and aggregates usage from every response', async () => {

@@ -30,6 +30,8 @@ type ModelEvaluationGroupResult =
   | {
       readonly status: 'fulfilled';
       readonly evaluations: readonly ProfileModelEvaluation[];
+      /** Per-profile failures from an otherwise-usable reply (partial parse). */
+      readonly failures: readonly ModelEvaluationFailure[];
       readonly tokenUsage: ModelEvaluationTokenUsage;
     }
   | {
@@ -201,11 +203,11 @@ async function evaluateProfileGroup(
       lastResponseText = response.text;
       addTokenUsage(tokenUsage, response.usage);
 
-      const assessments = parseModelEvaluationResponse(
+      const parsed = parseModelEvaluationResponse(
         responseText(response),
         profileIds,
       );
-      const evaluations = assessments.map((assessment) =>
+      const evaluations = parsed.assessments.map((assessment) =>
         applyDecisionPolicy(assessment, criteria.decisionPolicy),
       );
       const desiredCompensation = criteria.desiredMonthlyCompensation;
@@ -234,9 +236,23 @@ async function evaluateProfileGroup(
         },
       );
 
+      // Profiles the reply could not score become per-profile failures. They
+      // are not retried: the good siblings are already scored and re-spending
+      // (max) thinking tokens on a schema miss is wasteful.
+      const partialFailures = parsed.failures.map(
+        (failure): ModelEvaluationFailure => ({
+          profileIds: [failure.profileId],
+          attempts,
+          retryable: false,
+          retryExhausted: false,
+          error: failure.error,
+        }),
+      );
+
       return {
         status: 'fulfilled',
         evaluations: correlatedEvaluations,
+        failures: partialFailures,
         tokenUsage,
       };
     } catch (error: unknown) {
@@ -363,6 +379,7 @@ export async function evaluateProfilesWithModel(
 
     if (result.status === 'fulfilled') {
       evaluations.push(...result.evaluations);
+      failures.push(...result.failures);
     } else {
       failures.push(result.failure);
     }

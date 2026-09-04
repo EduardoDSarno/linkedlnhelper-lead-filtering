@@ -103,11 +103,14 @@ ${MODEL_EVALUATION_PROMPT_SLOTS.systemPrompt}
   only when the supplied career evidence supports a defensible range. This can
   include base pay and typical recurring variable compensation, but not wealth,
   investment income, dividends, equity value, or household income.
-- Put a supported estimate in estimatedTotalMonthlyCompensation with status
-  "estimated", integer bounds, confidence, and a brief evidence basis.
-- When the supplied profile cannot support a range, return
-  estimatedTotalMonthlyCompensation with status "insufficient_evidence" and
-  explain why. Never invent a numeric range to satisfy the response shape.
+- estimatedTotalMonthlyCompensation has exactly one of two shapes, chosen by
+  "status". Do not mix them:
+  - status "estimated": integer "minimumMonthlyCompensation" and
+    "maximumMonthlyCompensation", a "confidence", and a short "basis" array.
+    Send "basis" only on this status.
+  - status "insufficient_evidence": a "reasons" array explaining why, and
+    nothing else — no "basis", no bounds, no "confidence".
+- Never invent a numeric range to satisfy the response shape.
 - Do not compare compensation with a desired campaign range. Application code
   performs that comparison deterministically after validating the response.
 - Do not estimate or use net worth.

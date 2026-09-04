@@ -138,13 +138,34 @@ export class ModelEvaluationResponseError extends Error {
   }
 }
 
+/** One requested profile that a valid envelope still failed to score. */
+export interface ModelEvaluationParseFailure {
+  readonly profileId: string;
+  readonly error: string;
+}
+
+/**
+ * A parsed batch reply split into the profiles that scored and the ones that
+ * did not. The JSON envelope was valid; individual objects are judged on their
+ * own so one bad object never discards its siblings.
+ */
+export interface ParsedModelEvaluationResponse {
+  readonly assessments: readonly ProfileModelAssessment[];
+  readonly failures: readonly ModelEvaluationParseFailure[];
+}
+
+/** Converts an unknown thrown value into a stable per-profile failure message. */
+function parseErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 /** Parses one required, non-empty string field. */
 function requiredString(value: unknown, field: string): string {
   const result = asString(value);
   if (result) return result;
 
   throw new ModelEvaluationResponseError(
-    `Gemini evaluation field "${field}" must be a non-empty string.`,
+    `The evaluation field "${field}" must be a non-empty string.`,
   );
 }
 
@@ -157,13 +178,13 @@ function stringList(
 ): string[] {
   if (!Array.isArray(value)) {
     throw new ModelEvaluationResponseError(
-      `Gemini evaluation field "${field}" must be an array.`,
+      `The evaluation field "${field}" must be an array.`,
     );
   }
 
   if (value.length < minimumItems || value.length > maximumItems) {
     throw new ModelEvaluationResponseError(
-      `Gemini evaluation field "${field}" has an invalid item count.`,
+      `The evaluation field "${field}" has an invalid item count.`,
     );
   }
 
@@ -184,7 +205,7 @@ function matchPercent(value: unknown): number {
   }
 
   throw new ModelEvaluationResponseError(
-    'Gemini returned an invalid match percentage.',
+    'The model returned an invalid match percentage.',
   );
 }
 
@@ -199,7 +220,7 @@ function monthlyCompensation(value: unknown, field: string): number {
   }
 
   throw new ModelEvaluationResponseError(
-    `Gemini returned an invalid ${field} monthly compensation.`,
+    `The model returned an invalid ${field} monthly compensation.`,
   );
 }
 
@@ -213,7 +234,7 @@ function compensationConfidence(
   }
 
   throw new ModelEvaluationResponseError(
-    'Gemini returned an invalid compensation confidence.',
+    'The model returned an invalid compensation confidence.',
   );
 }
 
@@ -224,16 +245,24 @@ function estimatedTotalMonthlyCompensation(
   const record = asRecord(value);
   if (!record) {
     throw new ModelEvaluationResponseError(
-      'Gemini evaluation field "estimatedTotalMonthlyCompensation" must be an object.',
+      'The evaluation field "estimatedTotalMonthlyCompensation" must be an object.',
     );
   }
 
   const status = asString(record['status']);
   if (status === 'insufficient_evidence') {
+    // Some replies (seen at max thinking) put the explanation in `basis`, the
+    // `estimated` field, instead of `reasons`. Accept it as an alias for the
+    // explanation list; any numeric bounds or confidence on this status are
+    // ignored. Do NOT invent a range — only the field name is aliased.
+    const explanation =
+      Array.isArray(record['reasons']) && record['reasons'].length > 0
+        ? record['reasons']
+        : record['basis'];
     return {
       status,
       reasons: stringList(
-        record['reasons'],
+        explanation,
         'estimatedTotalMonthlyCompensation.reasons',
         MODEL_EVALUATION_LIMITS.compensationReasonItems,
         1,
@@ -243,7 +272,7 @@ function estimatedTotalMonthlyCompensation(
 
   if (status !== 'estimated') {
     throw new ModelEvaluationResponseError(
-      'Gemini returned an unsupported compensation-estimate status.',
+      'The model returned an unsupported compensation-estimate status.',
     );
   }
 
@@ -260,7 +289,7 @@ function estimatedTotalMonthlyCompensation(
 
   if (maximumMonthlyCompensation < minimumMonthlyCompensation) {
     throw new ModelEvaluationResponseError(
-      'Gemini returned an inverted estimated compensation range.',
+      'The model returned an inverted estimated compensation range.',
     );
   }
 
@@ -328,7 +357,7 @@ function profileEvaluation(value: unknown): ProfileModelAssessment {
   const record = asRecord(value);
   if (!record) {
     throw new ModelEvaluationResponseError(
-      'Each Gemini evaluation must be an object.',
+      'Each evaluation must be an object.',
     );
   }
 
@@ -366,62 +395,67 @@ function responseJson(text: string): unknown {
     return JSON.parse(text) as unknown;
   } catch {
     throw new ModelEvaluationResponseError(
-      'Gemini returned invalid JSON for the evaluation request.',
+      'The model returned invalid JSON for the evaluation request.',
     );
   }
 }
 
 /**
- * Validates one Gemini response and correlates it with the requested profiles.
+ * Validates a batch reply at profile grain and correlates it with the request.
  *
- * The identity checks prevent a syntactically valid response from silently
- * dropping, duplicating, or inventing a profile result.
+ * The JSON envelope must be usable (that still throws), but each profile object
+ * is judged on its own: a valid object scores, an invalid one fails only that
+ * profile, and its siblings survive. Identity is kept strict without discarding
+ * good results — the first object for a requested id wins, extra duplicates are
+ * ignored, objects for unrequested ids are ignored (never stealing a row), and
+ * any requested id that never appears is failed individually.
  */
 export function parseModelEvaluationResponse(
   text: string,
   expectedProfileIds: readonly string[],
-): readonly ProfileModelAssessment[] {
+): ParsedModelEvaluationResponse {
   const response = asRecord(responseJson(text));
   const values = response?.['evaluations'];
 
   if (!Array.isArray(values)) {
     throw new ModelEvaluationResponseError(
-      'Gemini evaluation response must contain an evaluations array.',
+      'The evaluation response must contain an evaluations array.',
     );
   }
 
-  const evaluations = values.map(profileEvaluation);
   const expectedIds = new Set(expectedProfileIds);
-  const returnedIds = new Set<string>();
+  const outcomeById = new Map<string, ProfileModelAssessment | { error: string }>();
 
-  for (const evaluation of evaluations) {
-    if (returnedIds.has(evaluation.profileId)) {
-      throw new ModelEvaluationResponseError(
-        `Gemini duplicated profile ID "${evaluation.profileId}".`,
-      );
+  for (const value of values) {
+    const record = asRecord(value);
+    const id = record ? asString(record['profileId']) : undefined;
+
+    // Ignore objects without a requested id: never fail a real person because
+    // the model added an unexpected or malformed row, and never steal a slot.
+    if (!id || !expectedIds.has(id)) continue;
+    // Keep the first result for an id; drop later duplicates of the same id.
+    if (outcomeById.has(id)) continue;
+
+    try {
+      outcomeById.set(id, profileEvaluation(value));
+    } catch (error: unknown) {
+      outcomeById.set(id, { error: parseErrorMessage(error) });
     }
-    if (!expectedIds.has(evaluation.profileId)) {
-      throw new ModelEvaluationResponseError(
-        `Gemini returned unexpected profile ID "${evaluation.profileId}".`,
-      );
-    }
-    returnedIds.add(evaluation.profileId);
   }
 
-  const missingIds = expectedProfileIds.filter((id) => !returnedIds.has(id));
-  if (missingIds.length > 0) {
-    throw new ModelEvaluationResponseError(
-      `Gemini omitted profile IDs: ${missingIds.join(', ')}.`,
-    );
+  const assessments: ProfileModelAssessment[] = [];
+  const failures: ModelEvaluationParseFailure[] = [];
+
+  for (const id of expectedProfileIds) {
+    const outcome = outcomeById.get(id);
+    if (!outcome) {
+      failures.push({ profileId: id, error: `The model omitted profile ID "${id}".` });
+    } else if ('error' in outcome) {
+      failures.push({ profileId: id, error: outcome.error });
+    } else {
+      assessments.push(outcome);
+    }
   }
 
-  return expectedProfileIds.map((id) => {
-    const evaluation = evaluations.find((item) => item.profileId === id);
-    if (!evaluation) {
-      throw new ModelEvaluationResponseError(
-        `Gemini omitted profile ID "${id}".`,
-      );
-    }
-    return evaluation;
-  });
+  return { assessments, failures };
 }

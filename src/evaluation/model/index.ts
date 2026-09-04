@@ -37,6 +37,10 @@ export {
   ModelEvaluationResponseError,
   parseModelEvaluationResponse,
 } from './schema.js';
+export type {
+  ModelEvaluationParseFailure,
+  ParsedModelEvaluationResponse,
+} from './schema.js';
 
 export {
   COMPENSATION_RANGE_OUTCOME,

@@ -145,7 +145,7 @@ test('accepts BRL-equivalent currency spellings on an estimated range', () => {
   };
 
   for (const currency of ['BRL', 'brl', 'R$', undefined]) {
-    const evaluations = parseModelEvaluationResponse(
+    const { assessments } = parseModelEvaluationResponse(
       JSON.stringify({
         evaluations: [compensationEvaluation({ currency })],
       }),
@@ -153,27 +153,28 @@ test('accepts BRL-equivalent currency spellings on an estimated range', () => {
     );
 
     assert.deepEqual(
-      evaluations[0]?.estimatedTotalMonthlyCompensation,
+      assessments[0]?.estimatedTotalMonthlyCompensation,
       expected,
     );
   }
 });
 
-test('rejects a compensation currency that is not reais', () => {
-  assert.throws(
-    () =>
-      parseModelEvaluationResponse(
-        JSON.stringify({
-          evaluations: [compensationEvaluation({ currency: 'USD' })],
-        }),
-        ['profile-1'],
-      ),
-    /must use BRL, got "USD"/,
+test('fails only the profile whose compensation currency is not reais', () => {
+  const { assessments, failures } = parseModelEvaluationResponse(
+    JSON.stringify({
+      evaluations: [compensationEvaluation({ currency: 'USD' })],
+    }),
+    ['profile-1'],
   );
+
+  assert.equal(assessments.length, 0);
+  assert.equal(failures.length, 1);
+  assert.equal(failures[0]?.profileId, 'profile-1');
+  assert.match(failures[0]?.error ?? '', /must use BRL, got "USD"/);
 });
 
 test('parses a supported total monthly compensation range', () => {
-  const evaluations = parseModelEvaluationResponse(
+  const { assessments } = parseModelEvaluationResponse(
     JSON.stringify({
       evaluations: [
         {
@@ -196,7 +197,7 @@ test('parses a supported total monthly compensation range', () => {
     ['profile-1'],
   );
 
-  assert.deepEqual(evaluations[0]?.estimatedTotalMonthlyCompensation, {
+  assert.deepEqual(assessments[0]?.estimatedTotalMonthlyCompensation, {
     status: 'estimated',
     currency: 'BRL',
     minimumMonthlyCompensation: 9_000,
@@ -208,7 +209,7 @@ test('parses a supported total monthly compensation range', () => {
 
 test('parses at most three highlights, dropping invalid kinds and capping text', () => {
   const longText = 'x'.repeat(120);
-  const evaluations = parseModelEvaluationResponse(
+  const { assessments } = parseModelEvaluationResponse(
     JSON.stringify({
       evaluations: [
         {
@@ -234,7 +235,7 @@ test('parses at most three highlights, dropping invalid kinds and capping text',
     ['profile-1'],
   );
 
-  const highlights = evaluations[0]?.highlights ?? [];
+  const highlights = assessments[0]?.highlights ?? [];
   assert.equal(highlights.length, 3);
   assert.deepEqual(highlights[0], { kind: 'strength', text: 'Consistent B2B sales progression' });
   assert.equal(highlights[1]?.kind, 'warning');
@@ -243,7 +244,7 @@ test('parses at most three highlights, dropping invalid kinds and capping text',
 });
 
 test('defaults highlights to an empty list when the model omits them', () => {
-  const evaluations = parseModelEvaluationResponse(
+  const { assessments } = parseModelEvaluationResponse(
     JSON.stringify({
       evaluations: [
         {
@@ -262,11 +263,11 @@ test('defaults highlights to an empty list when the model omits them', () => {
     ['profile-1'],
   );
 
-  assert.deepEqual(evaluations[0]?.highlights, []);
+  assert.deepEqual(assessments[0]?.highlights, []);
 });
 
 test('parses an explicit insufficient-evidence compensation result', () => {
-  const evaluations = parseModelEvaluationResponse(
+  const { assessments } = parseModelEvaluationResponse(
     JSON.stringify({
       evaluations: [
         {
@@ -285,37 +286,150 @@ test('parses an explicit insufficient-evidence compensation result', () => {
     ['profile-1'],
   );
 
-  assert.deepEqual(evaluations[0]?.estimatedTotalMonthlyCompensation, {
+  assert.deepEqual(assessments[0]?.estimatedTotalMonthlyCompensation, {
     status: 'insufficient_evidence',
     reasons: ['The supplied profile has no role or seniority details.'],
   });
 });
 
-test('rejects an inverted estimated compensation range', () => {
+test('fails only the profile whose estimated compensation range is inverted', () => {
+  const { assessments, failures } = parseModelEvaluationResponse(
+    JSON.stringify({
+      evaluations: [
+        {
+          profileId: 'profile-1',
+          matchPercent: 50,
+          estimatedTotalMonthlyCompensation: {
+            status: 'estimated',
+            currency: 'BRL',
+            minimumMonthlyCompensation: 20_000,
+            maximumMonthlyCompensation: 8_000,
+            confidence: 'low',
+            basis: ['The profile contains limited professional evidence.'],
+          },
+          reasons: ['Range is invalid.'],
+          evidence: ['Salary bounds are inverted.'],
+          uncertainties: [],
+        },
+      ],
+    }),
+    ['profile-1'],
+  );
+
+  assert.equal(assessments.length, 0);
+  assert.equal(failures.length, 1);
+  assert.match(failures[0]?.error ?? '', /inverted estimated compensation range/);
+});
+
+/** A minimal valid evaluation object for one id. */
+function validEvaluation(profileId: string): Record<string, unknown> {
+  return {
+    profileId,
+    matchPercent: 70,
+    estimatedTotalMonthlyCompensation: {
+      status: 'insufficient_evidence',
+      reasons: ['No salary evidence in the profile.'],
+    },
+    reasons: ['Fits the campaign.'],
+    evidence: ['Headline matches.'],
+    uncertainties: [],
+    highlights: [{ kind: 'strength', text: 'Relevant experience' }],
+  };
+}
+
+test('keeps the valid profiles when one object in the group is malformed', () => {
+  const ids = ['p1', 'p2', 'p3', 'p4', 'p5'];
+  const evaluations = ids.map((id) =>
+    id === 'p3' ? { ...validEvaluation(id), reasons: [] } : validEvaluation(id),
+  );
+
+  const { assessments, failures } = parseModelEvaluationResponse(
+    JSON.stringify({ evaluations }),
+    ids,
+  );
+
+  assert.deepEqual(assessments.map((a) => a.profileId), ['p1', 'p2', 'p4', 'p5']);
+  assert.equal(failures.length, 1);
+  assert.equal(failures[0]?.profileId, 'p3');
+});
+
+test('fails only the omitted id and keeps the profiles that were returned', () => {
+  const ids = ['p1', 'p2', 'p3', 'p4', 'p5'];
+
+  const { assessments, failures } = parseModelEvaluationResponse(
+    JSON.stringify({
+      evaluations: ids.filter((id) => id !== 'p3').map(validEvaluation),
+    }),
+    ids,
+  );
+
+  assert.deepEqual(assessments.map((a) => a.profileId), ['p1', 'p2', 'p4', 'p5']);
+  assert.equal(failures.length, 1);
+  assert.equal(failures[0]?.profileId, 'p3');
+  assert.match(failures[0]?.error ?? '', /omitted profile ID "p3"/);
+});
+
+test('accepts basis as an alias for reasons on insufficient_evidence', () => {
+  const { assessments, failures } = parseModelEvaluationResponse(
+    JSON.stringify({
+      evaluations: [
+        {
+          ...validEvaluation('p1'),
+          estimatedTotalMonthlyCompensation: {
+            status: 'insufficient_evidence',
+            basis: ['No salary evidence in the profile.'],
+            minimumMonthlyCompensation: 0,
+            maximumMonthlyCompensation: 0,
+            confidence: 'low',
+          },
+        },
+      ],
+    }),
+    ['p1'],
+  );
+
+  assert.equal(failures.length, 0);
+  assert.deepEqual(assessments[0]?.estimatedTotalMonthlyCompensation, {
+    status: 'insufficient_evidence',
+    reasons: ['No salary evidence in the profile.'],
+  });
+});
+
+test('ignores an object for an unrequested id without stealing a row', () => {
+  const { assessments, failures } = parseModelEvaluationResponse(
+    JSON.stringify({
+      evaluations: [validEvaluation('p1'), validEvaluation('ghost')],
+    }),
+    ['p1'],
+  );
+
+  assert.deepEqual(assessments.map((a) => a.profileId), ['p1']);
+  assert.equal(failures.length, 0);
+});
+
+test('keeps the first result when an id is duplicated', () => {
+  const { assessments, failures } = parseModelEvaluationResponse(
+    JSON.stringify({
+      evaluations: [
+        { ...validEvaluation('p1'), matchPercent: 70 },
+        { ...validEvaluation('p1'), matchPercent: 20 },
+      ],
+    }),
+    ['p1'],
+  );
+
+  assert.equal(assessments.length, 1);
+  assert.equal(assessments[0]?.matchPercent, 70);
+  assert.equal(failures.length, 0);
+});
+
+test('throws when the JSON envelope itself is unusable', () => {
   assert.throws(
-    () =>
-      parseModelEvaluationResponse(
-        JSON.stringify({
-          evaluations: [
-            {
-              profileId: 'profile-1',
-              matchPercent: 50,
-              estimatedTotalMonthlyCompensation: {
-                status: 'estimated',
-                currency: 'BRL',
-                minimumMonthlyCompensation: 20_000,
-                maximumMonthlyCompensation: 8_000,
-                confidence: 'low',
-                basis: ['The profile contains limited professional evidence.'],
-              },
-              reasons: ['Range is invalid.'],
-              evidence: ['Salary bounds are inverted.'],
-              uncertainties: [],
-            },
-          ],
-        }),
-        ['profile-1'],
-      ),
+    () => parseModelEvaluationResponse('not json', ['p1']),
+    ModelEvaluationResponseError,
+  );
+  assert.throws(
+    () => parseModelEvaluationResponse(JSON.stringify({ nope: [] }), ['p1']),
     ModelEvaluationResponseError,
   );
 });
