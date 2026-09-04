@@ -81,6 +81,9 @@ test('forwards text, system, schema, thinking, and timeout to OpenRouter', async
       strict: false,
     },
   });
+  // Routes to whichever backend currently has the best throughput, since
+  // measured provider speed for this model spans roughly 10x.
+  assert.deepEqual(chatRequest?.provider, { sort: 'throughput' });
 });
 
 test('defaults omitted thinking to OpenRouter high effort', async () => {

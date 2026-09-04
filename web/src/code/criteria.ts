@@ -52,16 +52,40 @@ export type ThinkingMode = (typeof THINKING_MODE)[keyof typeof THINKING_MODE];
 export const EVALUATION_PROFILES_PER_REQUEST = 5;
 
 /**
- * Evaluation requests allowed in flight. Kept in lockstep with the backend
- * evaluation defaults so the time estimate uses the same wave size.
+ * Evaluation requests allowed in flight. Kept in lockstep with the backend's
+ * EVALUATION_CONCURRENCY env value so the time estimate uses the same wave
+ * size. Update this constant by hand if that value changes — there is no live
+ * link between them.
  */
-export const EVALUATION_CONCURRENCY = 10;
+export const EVALUATION_CONCURRENCY = 50;
+
+/**
+ * Photo-analysis requests allowed in flight. Kept in lockstep with the
+ * backend's IMAGE_ANALYSIS_CONCURRENCY env value, same caveat as above.
+ */
+export const IMAGE_ANALYSIS_CONCURRENCY = 50;
 
 /** Measured wall time of one parallel evaluation wave at default thinking. */
 export const DEFAULT_THINKING_WAVE_SECONDS = 25;
 
 /** Measured wall time of one parallel evaluation wave at max thinking. */
 export const MAX_THINKING_WAVE_SECONDS = 80;
+
+/**
+ * Estimated wall time of one parallel photo-analysis wave.
+ *
+ * Not a measured figure like the evaluation waves above — image calls have no
+ * per-wave timing captured yet. Refine this once real durationMs logs from the
+ * image stage are available.
+ */
+export const IMAGE_ANALYSIS_WAVE_SECONDS = 12;
+
+/**
+ * Profiles per second Apify collects, from the collector's own production
+ * benchmark (750 profiles in ~80s at the configured concurrency).
+ * See src/dataCollector/apify_profile_collector/APIFY_COLLECTOR_CONFIG.md.
+ */
+export const APIFY_PROFILES_PER_SECOND = 750 / 80;
 
 /**
  * How many times slower a max-thinking wave is than a default wave.
@@ -127,6 +151,9 @@ export interface CriteriaForm {
   /** When true, profiles without a photo are excluded before the model. */
   requirePhoto: boolean;
 
+  /** When true, skips photo analysis: faster and cheaper, no apparent-age signal. */
+  skipImageAnalysis: boolean;
+
   openToWork: OpenToWork;
 
   /** Automatic applies the thresholds; manual sends every scored profile to review. */
@@ -152,6 +179,7 @@ export const DEFAULT_CRITERIA: CriteriaForm = {
   compMin: 10000,
   compMax: 30000,
   requirePhoto: false,
+  skipImageAnalysis: true,
   openToWork: OPEN_TO_WORK.ignore,
   automatic: true,
   approveMin: 75,
@@ -220,6 +248,12 @@ export function evaluationWaveCount(profileCount: number): number {
   return Math.ceil(groups / EVALUATION_CONCURRENCY);
 }
 
+/** Counts how many sequential photo-analysis waves a profile count needs. */
+export function imageAnalysisWaveCount(profileCount: number): number {
+  const profiles = Math.max(profileCount, 1);
+  return Math.ceil(profiles / IMAGE_ANALYSIS_CONCURRENCY);
+}
+
 /** Estimates scoring wall time from profile count and the chosen thinking mode. */
 export function estimateEvaluationSeconds(
   profileCount: number,
@@ -230,6 +264,36 @@ export function estimateEvaluationSeconds(
       ? MAX_THINKING_WAVE_SECONDS
       : DEFAULT_THINKING_WAVE_SECONDS;
   return evaluationWaveCount(profileCount) * waveSeconds;
+}
+
+/** Estimates photo-analysis wall time, or zero when the campaign skips it. */
+export function estimateImageAnalysisSeconds(
+  profileCount: number,
+  skipImageAnalysis: boolean,
+): number {
+  if (skipImageAnalysis) return 0;
+  return imageAnalysisWaveCount(profileCount) * IMAGE_ANALYSIS_WAVE_SECONDS;
+}
+
+/** Estimates Apify collection wall time from the collector's measured rate. */
+export function estimateCollectionSeconds(profileCount: number): number {
+  return Math.max(profileCount, 1) / APIFY_PROFILES_PER_SECOND;
+}
+
+/**
+ * Estimates total run wall time: collection, then photo analysis (unless
+ * skipped), then scoring — the same three stages the pipeline runs in order.
+ */
+export function estimatePipelineSeconds(
+  profileCount: number,
+  mode: ThinkingMode,
+  skipImageAnalysis: boolean,
+): number {
+  return (
+    estimateCollectionSeconds(profileCount) +
+    estimateImageAnalysisSeconds(profileCount, skipImageAnalysis) +
+    estimateEvaluationSeconds(profileCount, mode)
+  );
 }
 
 /** Formats a duration as short Portuguese estimate copy. */
@@ -250,20 +314,24 @@ export function formatDurationEstimate(seconds: number): string {
 /**
  * Builds the upload-screen estimate shown above the send-to-AI button.
  *
- * Max thinking names itself in the sentence so the slower path is obvious.
+ * Covers the whole run — collection, photo analysis, and scoring — not just
+ * scoring. Max thinking and a skipped photo analysis each name themselves in
+ * the sentence so either time-affecting choice is obvious.
  */
-export function evaluationTimeEstimateMessage(
+export function pipelineTimeEstimateMessage(
   profileCount: number,
   mode: ThinkingMode,
+  skipImageAnalysis: boolean,
 ): string {
   const duration = formatDurationEstimate(
-    estimateEvaluationSeconds(profileCount, mode),
+    estimatePipelineSeconds(profileCount, mode, skipImageAnalysis),
   );
   const profiles = profileCount === 1 ? '1 perfil' : `${profileCount} perfis`;
-  if (mode === THINKING_MODE.max) {
-    return `Com raciocínio máximo, a pontuação com IA deve levar ${duration} para ${profiles}.`;
-  }
-  return `A pontuação com IA deve levar ${duration} para ${profiles}.`;
+  const reasoning = mode === THINKING_MODE.max ? ' com raciocínio máximo' : '';
+  const photos = skipImageAnalysis
+    ? ', sem análise de foto'
+    : '';
+  return `A avaliação${reasoning}${photos} deve levar ${duration} para ${profiles}.`;
 }
 
 /**
@@ -303,6 +371,10 @@ export function toEvaluationCriteria(form: CriteriaForm): Record<string, unknown
     },
 
     requirePhoto: form.requirePhoto,
+
+    // Always explicit: the backend defaults an omitted criterion to skipped,
+    // so "Analisar" (false) must be sent, not left out.
+    skipImageAnalysis: form.skipImageAnalysis,
 
     ...(form.openToWork === OPEN_TO_WORK.only
       ? { openToWork: true }

@@ -61,6 +61,7 @@ export async function runReviewPipelineWithDependencies(
 
   const profilePipeline = await acquireProfilesForReview(
     importedData,
+    criteria,
     logger,
     dependencies,
     options,
@@ -120,6 +121,7 @@ export async function runReviewPipelineWithDependencies(
  */
 async function acquireProfilesForReview(
   importedData: ImportedCsvData,
+  criteria: FullEvaluationCriteria,
   logger: Logger,
   dependencies: ReviewPipelineDependencies,
   options: ReviewPipelineOptions,
@@ -129,7 +131,12 @@ async function acquireProfilesForReview(
       importedData,
       logger,
       dependencies.profilePipeline,
-      options.profilePipeline,
+      {
+        ...options.profilePipeline,
+        // Photo analysis is opt-in: an unset criterion defaults to skipping it,
+        // so a caller must explicitly ask for the slower, costlier photo signal.
+        skipImageAnalysis: criteria.skipImageAnalysis ?? true,
+      },
     );
   }
 

@@ -252,12 +252,12 @@ test('clamps concurrency to the module ceiling', async () => {
     return extractionResult('done');
   };
 
-  await extractProfileImagesWithExecutor(jobs(80), executor, {
+  await extractProfileImagesWithExecutor(jobs(150), executor, {
     concurrency: 5_000,
   });
 
   // MAX_BATCH_CONCURRENCY is the hard ceiling regardless of what is requested.
-  assert.equal(peak, 50);
+  assert.equal(peak, 100);
 });
 
 test('clamps a too-small concurrency to a single worker', async () => {

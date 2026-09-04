@@ -46,6 +46,10 @@ function payloadsFor(
 function criteria(): FullEvaluationCriteria {
   return {
     requirePhoto: true,
+    // Photo analysis now defaults to skipped; these tests exercise the full
+    // acquisition path (including the injected extractImages dependency), so
+    // they opt back in explicitly.
+    skipImageAnalysis: false,
     desiredMonthlyCompensation: {
       minimumMonthlyCompensation: 7_000,
       maximumMonthlyCompensation: 15_000,
@@ -248,6 +252,42 @@ test('connects stable full profiles to broad filtering, Gemini, and SQLite', asy
   assert.equal(modelLogs[0]?.['linkedinUrl'], urls[0]);
   assert.equal(modelLogs[0]?.['decision'], 'approved');
   assert.equal(modelLogs[0]?.['matchPercent'], 85);
+});
+
+test('skips photo analysis by default when the criterion is omitted', async () => {
+  const urls = ['https://linkedin.com/in/profile-with-photo'];
+  const logger = recordingLogger();
+  let extractCalls = 0;
+
+  const result = await runReviewPipelineWithDependencies(
+    importedCsvDataFor(urls),
+    {
+      systemPrompt: 'Grade experienced commercial profiles for this campaign.',
+      decisionPolicy: { mode: 'manual' },
+      // skipImageAnalysis intentionally omitted: must default to skipped.
+    },
+    logger,
+    reviewDependencies(
+      profilePipelineDependencies({
+        extractImages: async () => {
+          extractCalls += 1;
+          throw new Error('extractImages must not be called by default.');
+        },
+      }),
+      () => undefined,
+    ),
+    { modelEvaluation: { generateContent: async () => successfulModelResponse() } },
+  );
+
+  assert.equal(extractCalls, 0);
+  assert.ok(
+    result.profilePipeline.profiles.every(
+      (profile) => profile.imageAnalysis === undefined,
+    ),
+  );
+
+  const imageLogs = payloadsFor(logger, 'Profile image analysis outcome.');
+  assert.equal(imageLogs[0]?.['status'], 'skipped_by_criteria');
 });
 
 test('persists isolated model failures as a completed review run', async () => {

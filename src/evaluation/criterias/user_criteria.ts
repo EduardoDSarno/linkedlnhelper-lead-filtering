@@ -114,6 +114,13 @@ export interface FullEvaluationCriteria {
    * Unknown profile values still go to AI.
    */
   openToWork?: boolean;
+  /**
+   * When true or omitted, skips the photo-analysis model call entirely: no
+   * apparent-age estimate or photo-quality signal reaches the evaluation, but
+   * the run finishes faster and spends no image-model tokens. Analysis is
+   * opt-in — set false explicitly to analyze every available photo.
+   */
+  skipImageAnalysis?: boolean;
   systemPrompt: string;
   userPrompt?: string;
 }

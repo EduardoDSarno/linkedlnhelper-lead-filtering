@@ -24,6 +24,7 @@ const FULL_CRITERIA_FIELDS = [
   'decisionPolicy',
   'requirePhoto',
   'openToWork',
+  'skipImageAnalysis',
   'systemPrompt',
   'userPrompt',
 ] as const;
@@ -336,6 +337,10 @@ export function parseFullEvaluationCriteria(
   const userPrompt = optionalString(record['userPrompt'], 'userPrompt');
   const requirePhoto = optionalBoolean(record['requirePhoto'], 'requirePhoto');
   const openToWork = optionalBoolean(record['openToWork'], 'openToWork');
+  const skipImageAnalysis = optionalBoolean(
+    record['skipImageAnalysis'],
+    'skipImageAnalysis',
+  );
 
   return {
     systemPrompt: requiredString(record['systemPrompt'], 'systemPrompt'),
@@ -366,6 +371,7 @@ export function parseFullEvaluationCriteria(
         }),
     ...(requirePhoto === undefined ? {} : { requirePhoto }),
     ...(openToWork === undefined ? {} : { openToWork }),
+    ...(skipImageAnalysis === undefined ? {} : { skipImageAnalysis }),
   };
 }
 

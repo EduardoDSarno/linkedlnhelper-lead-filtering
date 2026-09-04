@@ -216,6 +216,72 @@ function EffortSegment({
   );
 }
 
+/** Whether photo analysis runs for this campaign, and its hover explanation. */
+const PHOTO_ANALYSIS_HINTS = {
+  analyze: {
+    title: 'Analisar',
+    body: 'A IA avalia cada foto: idade aparente, nitidez, enquadramento e outros sinais neutros entram na avaliação do perfil.',
+  },
+  skip: {
+    title: 'Pular',
+    body: 'Avaliação mais rápida e mais barata, mas sem estimativa de idade aparente nem os outros sinais da foto.',
+  },
+} as const;
+
+/** Same pill toggle as the reasoning selector, for whether photos are analyzed. */
+function PhotoAnalysisToggle({
+  skip,
+  onChange,
+}: {
+  skip: boolean;
+  onChange: (skip: boolean) => void;
+}) {
+  return (
+    <div className="effort-toggle" role="group" aria-label="Análise de foto">
+      <PhotoAnalysisSegment mode="skip" selected={skip} onSelect={() => onChange(true)}>
+        Pular
+      </PhotoAnalysisSegment>
+      <PhotoAnalysisSegment mode="analyze" selected={!skip} onSelect={() => onChange(false)}>
+        Analisar
+      </PhotoAnalysisSegment>
+    </div>
+  );
+}
+
+/** One photo-analysis option plus its hover card explaining the tradeoff. */
+function PhotoAnalysisSegment({
+  mode,
+  selected,
+  onSelect,
+  children,
+}: {
+  mode: keyof typeof PHOTO_ANALYSIS_HINTS;
+  selected: boolean;
+  onSelect: () => void;
+  children: React.ReactNode;
+}) {
+  const hint = PHOTO_ANALYSIS_HINTS[mode];
+  const tipId = `photo-tip-${mode}`;
+
+  return (
+    <div className="effort-seg-wrap">
+      <button
+        type="button"
+        className={`effort-seg${selected ? ' is-on' : ''}`}
+        aria-pressed={selected}
+        aria-describedby={tipId}
+        onClick={onSelect}
+      >
+        {children}
+      </button>
+      <div id={tipId} className="effort-tip" role="tooltip">
+        <strong>{hint.title}</strong>
+        <span>{hint.body}</span>
+      </div>
+    </div>
+  );
+}
+
 /**
  * The evaluation-criteria modal.
  *
@@ -570,7 +636,14 @@ export function CriteriaModal({ form, update, onClose, onConfirm }: CriteriaModa
 
           {/* Photo + open to work */}
           <div style={{ borderTop: '1px solid #eef1f5', paddingTop: 18 }}>
-            <SectionTitle>Foto de perfil</SectionTitle>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+              <span style={{ fontSize: 13, fontWeight: 600 }}>Foto de perfil</span>
+              <AiPill />
+              <PhotoAnalysisToggle
+                skip={form.skipImageAnalysis}
+                onChange={(skip) => update({ skipImageAnalysis: skip })}
+              />
+            </div>
             <label style={{ display: 'flex', alignItems: 'flex-start', gap: 9, fontSize: 13, cursor: 'pointer', color: '#334155' }}>
               <input
                 type="checkbox"

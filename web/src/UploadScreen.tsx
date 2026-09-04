@@ -1,4 +1,4 @@
-import { criteriaSummary, evaluationTimeEstimateMessage } from './code/criteria';
+import { criteriaSummary, pipelineTimeEstimateMessage } from './code/criteria';
 import type { ReviewFlow } from './code/useReviewFlow';
 
 /** Circled "i" used to flag the run-time estimate chip. */
@@ -258,9 +258,10 @@ export function UploadScreen({ flow }: { flow: ReviewFlow }) {
               >
                 <InfoIcon />
                 <span>
-                  {evaluationTimeEstimateMessage(
+                  {pipelineTimeEstimateMessage(
                     imported.validProfiles,
                     criteria.thinkingMode,
+                    criteria.skipImageAnalysis,
                   )}
                 </span>
               </div>

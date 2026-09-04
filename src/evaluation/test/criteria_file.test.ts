@@ -69,6 +69,19 @@ test('parses every currently supported evaluation criterion', () => {
   });
 });
 
+test('parses skipImageAnalysis and omits it when absent', () => {
+  const withFlag = parseFullEvaluationCriteria({
+    systemPrompt: 'Evaluate this campaign.',
+    skipImageAnalysis: true,
+  });
+  assert.equal(withFlag.skipImageAnalysis, true);
+
+  const withoutFlag = parseFullEvaluationCriteria({
+    systemPrompt: 'Evaluate this campaign.',
+  });
+  assert.equal('skipImageAnalysis' in withoutFlag, false);
+});
+
 test('parses an explicit manual decision policy without score thresholds', () => {
   const parsed = parseFullEvaluationCriteria({
     systemPrompt: 'Evaluate this campaign.',
@@ -108,6 +121,7 @@ test('rejects missing prompts, unknown fields, invalid types, and ranges', () =>
     { systemPrompt: 'Valid prompt.', unsupportedCriterion: true },
     { systemPrompt: 'Valid prompt.', ageCompensationBands: [] },
     { systemPrompt: 'Valid prompt.', requirePhoto: 'true' },
+    { systemPrompt: 'Valid prompt.', skipImageAnalysis: 'true' },
     {
       systemPrompt: 'Valid prompt.',
       location: { locations: ['Goiás'], fields: ['timezone'], match: 'any' },

@@ -111,6 +111,10 @@ export function attachSuccessfulImageAnalyses(
  * @param logger - Structured logger for stage progress and failures.
  * @param concurrencyOverride - Explicit limit; the environment is read when
  * this is omitted.
+ * @param skipAnalysis - When true, every profile passes through unanalyzed
+ * and no model call is made. Set from the campaign's `skipImageAnalysis`
+ * criterion so a reviewer can trade the apparent-age/photo-quality signal for
+ * a faster, cheaper run.
  * @returns Full profiles plus the totals the run summary reports.
  */
 export async function analyzeProfileImages(
@@ -118,7 +122,31 @@ export async function analyzeProfileImages(
   analyze: ProfileImageAnalyzer,
   logger: Logger,
   concurrencyOverride?: number,
+  skipAnalysis?: boolean,
 ): Promise<ProfileImageAnalysisOutcome> {
+  if (skipAnalysis) {
+    logger.info(
+      { profiles: profiles.length },
+      PIPELINE_PROGRESS_MESSAGE.imageSkipped,
+    );
+    return {
+      fullProfiles: profiles.map((profile) => ({ ...profile })),
+      profilesWithoutPhoto: profiles.filter(
+        (profile) => !profile.photo,
+      ).length,
+      successfulImageAnalyses: 0,
+      failedImageAnalyses: 0,
+      failures: [],
+      tokenUsage: {
+        promptTokens: 0,
+        outputTokens: 0,
+        thinkingTokens: 0,
+        totalTokens: 0,
+      },
+      analysisSkipped: true,
+    };
+  }
+
   // Only profiles that have a photo URL need a Gemini request; profiles
   // without photos still continue through the run.
   const profilesWithPhoto = profiles.filter(
@@ -181,5 +209,6 @@ export async function analyzeProfileImages(
     failedImageAnalyses: failures.length,
     failures,
     tokenUsage: totalImageTokenUsage(imageResults),
+    analysisSkipped: false,
   };
 }

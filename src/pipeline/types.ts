@@ -44,6 +44,8 @@ export interface ProfileImageAnalysisOutcome {
   failedImageAnalyses: number;
   failures: ImageAnalysisFailure[];
   tokenUsage: ImageTokenUsageTotal;
+  /** True when the stage never ran because the campaign's criteria skipped it. */
+  analysisSkipped: boolean;
 }
 
 /** One provider record that could not be mapped into an application profile. */
@@ -87,6 +89,8 @@ export interface FullProfilePipelineDependencies {
 /** Runtime settings a caller may override, such as test output paths. */
 export interface FullProfilePipelineOptions {
   imageConcurrency?: number;
+  /** When true, skips the image-analysis stage entirely; see analyzeProfileImages. */
+  skipImageAnalysis?: boolean;
   outputPaths?: FullProfilePipelineOutputPaths;
 }
 

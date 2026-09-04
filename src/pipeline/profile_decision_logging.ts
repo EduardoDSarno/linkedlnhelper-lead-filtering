@@ -8,11 +8,14 @@ export const PROFILE_IMAGE_LOG_STATUS = {
   succeeded: 'succeeded',
   failed: 'failed',
   skippedMissingPhoto: 'skipped_missing_photo',
+  skippedByCriteria: 'skipped_by_criteria',
 } as const;
 
 const MISSING_PHOTO_REASON = 'No profile photo is available.';
 const MISSING_IMAGE_RESULT_REASON =
   'Image analysis did not return a successful result.';
+const SKIPPED_BY_CRITERIA_REASON =
+  "The campaign's criteria skipped photo analysis for this run.";
 
 /** Builds a profile lookup for attaching persisted links to evaluation results. */
 function profilesById(
@@ -40,11 +43,18 @@ function imageFailuresByLink(
 function imageLogResult(
   profile: FullProfile,
   failureReason: string | undefined,
+  analysisSkipped: boolean,
 ): { status: string; reason?: string } {
   if (!profile.photo) {
     return {
       status: PROFILE_IMAGE_LOG_STATUS.skippedMissingPhoto,
       reason: MISSING_PHOTO_REASON,
+    };
+  }
+  if (analysisSkipped) {
+    return {
+      status: PROFILE_IMAGE_LOG_STATUS.skippedByCriteria,
+      reason: SKIPPED_BY_CRITERIA_REASON,
     };
   }
   if (failureReason) {
@@ -71,6 +81,7 @@ export function logProfileImageOutcomes(
     const result = imageLogResult(
       profile,
       failuresByLink.get(profile.linkedinUrl),
+      outcome.analysisSkipped,
     );
     const payload = {
       profileId: profile.id,

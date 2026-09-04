@@ -28,7 +28,7 @@ export const PROFILE_IMAGE_DEFAULTS = {
 
 /** Safety ceilings and schema bounds shared by runtime code and validation. */
 export const PROFILE_IMAGE_LIMITS = {
-  batchConcurrency: 50,
+  batchConcurrency: 100,
   faceCount: 20,
   observationCount: 5,
 } as const;

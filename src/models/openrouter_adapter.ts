@@ -19,6 +19,9 @@ import type {
 /** JSON Schema replies stay advisory so the eval compensation union is accepted. */
 const OPENROUTER_JSON_SCHEMA_STRICT = false;
 
+/** Routes every request to the fastest backend provider for the model. */
+const OPENROUTER_PROVIDER_SORT = 'throughput';
+
 /** Stable schema name required by OpenRouter's json_schema response format. */
 const OPENROUTER_JSON_SCHEMA_NAME = 'result';
 
@@ -152,6 +155,11 @@ function toChatRequest(request: ModelRequest): ChatRequest {
         strict: OPENROUTER_JSON_SCHEMA_STRICT,
       },
     },
+    // GLM-5.3-Flash alone is served by ~20 backend providers whose measured
+    // throughput spans roughly 10x. Sorting by throughput keeps every request
+    // on the fastest available backend instead of OpenRouter's default
+    // (price-weighted) routing.
+    provider: { sort: OPENROUTER_PROVIDER_SORT },
   };
 }
 

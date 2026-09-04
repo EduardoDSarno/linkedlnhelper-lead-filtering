@@ -280,6 +280,7 @@ export async function runFullProfilePipelineWithDependencies(
       dependencies.extractImages,
       logger,
       options.imageConcurrency,
+      options.skipImageAnalysis,
     );
 
     // Step 9: persist completed profiles before writing them. An existing

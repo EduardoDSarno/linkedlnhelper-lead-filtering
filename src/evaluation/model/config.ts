@@ -33,7 +33,7 @@ export const MODEL_EVALUATION_DEFAULTS = {
 /** Safety ceilings for request scheduling and structured responses. */
 export const MODEL_EVALUATION_LIMITS = {
   profilesPerRequest: 20,
-  concurrency: 50,
+  concurrency: 100,
   matchPercentMinimum: 0,
   matchPercentMaximum: 100,
   monthlyCompensationMinimum: 0,

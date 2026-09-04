@@ -241,6 +241,35 @@ test('analyzes nothing when no profile has a photo', async () => {
   });
 });
 
+test('skips the analyzer entirely when skipAnalysis is set', async () => {
+  let calls = 0;
+  const outcome = await analyzeProfileImages(
+    [profile('a', 'https://example.invalid/a.jpg'), profile('b')],
+    async () => {
+      calls += 1;
+      return [];
+    },
+    recordingLogger(),
+    5,
+    true,
+  );
+
+  // Not even called with an empty job list: no model request happens at all.
+  assert.equal(calls, 0);
+  assert.equal(outcome.successfulImageAnalyses, 0);
+  assert.equal(outcome.failedImageAnalyses, 0);
+  assert.deepEqual(outcome.failures, []);
+  // Reflects who actually lacks a photo, independent of the skip decision.
+  assert.equal(outcome.profilesWithoutPhoto, 1);
+  assert.equal(outcome.fullProfiles.length, 2);
+  assert.deepEqual(outcome.tokenUsage, {
+    promptTokens: 0,
+    outputTokens: 0,
+    thinkingTokens: 0,
+    totalTokens: 0,
+  });
+});
+
 test('handles an empty profile list', async () => {
   const outcome = await analyzeProfileImages(
     [],
@@ -463,7 +492,7 @@ test('imageConcurrencyFromEnvironment clamps a numeric value into range', async 
   for (const [value, expected] of [
     ['0', 1],
     ['-3', 1],
-    ['500', 50],
+    ['500', 100],
   ] as const) {
     await withEnvironment(value, () => {
       assert.equal(imageConcurrencyFromEnvironment(), expected);
