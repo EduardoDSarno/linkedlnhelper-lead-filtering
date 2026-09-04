@@ -31,3 +31,18 @@ export type {
   ModelResponse,
   ModelClient,
 } from './model_client.js';
+
+export {
+  DEFAULT_MODEL_PROVIDER,
+  DEFAULT_OPENROUTER_MODEL,
+  MODEL_PROVIDER_ENVIRONMENT_KEY,
+  MODEL_PROVIDERS,
+  OPENROUTER_MODEL_ENVIRONMENT_KEY,
+  resolveModelClient,
+  resolveModelProvider,
+  resolveProviderModelId,
+} from './model_provider.js';
+export type {
+  ModelProvider,
+  ProviderModelIdInput,
+} from './model_provider.js';

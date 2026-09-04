@@ -50,7 +50,7 @@ const GEMINI_MEDIA_RESOLUTION: Readonly<
 };
 
 /**
- * Production Gemini client used by eval and image once those stages are rewired.
+ * Production Gemini client used when MODEL_PROVIDER selects Gemini.
  *
  * Built from the shared SDK wrapper so credential lookup stays in one place.
  */

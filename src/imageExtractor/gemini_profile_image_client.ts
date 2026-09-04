@@ -1,4 +1,4 @@
-import { DEFAULT_THINKING_EFFORT, geminiModelClient } from '../models/index.js';
+import { DEFAULT_THINKING_EFFORT, resolveModelClient } from '../models/index.js';
 import type {
   ModelClient,
   ModelResponse,
@@ -45,8 +45,8 @@ export interface GeminiProfileImageRequest {
   maxRetries: number;
 
   /**
-   * Performs the model call. Production omits this and gets the Gemini
-   * adapter; tests supply a stand-in so no provider request is ever made.
+   * Performs the model call. Production omits this and gets the configured
+   * provider adapter; tests supply a stand-in so no provider request is ever made.
    */
   generateContent?: ModelClient;
 }
@@ -83,7 +83,7 @@ export class GeminiImageError extends Error {
  * assessment text.
  *
  * @param request - Image, model, resolution, timeout, and an optional model
- * call to use instead of the Gemini adapter.
+ * call to use instead of the configured provider adapter.
  * @returns The response text and any token usage the model reported.
  * @throws {GeminiImageError} When a response arrived but was blocked or empty;
  * it carries the tokens that response was billed for. Failures of the model
@@ -92,7 +92,7 @@ export class GeminiImageError extends Error {
 export async function recognizeProfileImageWithGemini(
   request: GeminiProfileImageRequest,
 ): Promise<GeminiProfileImageResponse> {
-  const generateContent = request.generateContent ?? geminiModelClient;
+  const generateContent = request.generateContent ?? resolveModelClient();
   const response = await generateContent({
     model: request.model,
     parts: [

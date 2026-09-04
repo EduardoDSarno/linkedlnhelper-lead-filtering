@@ -2,6 +2,11 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  DEFAULT_OPENROUTER_MODEL,
+  MODEL_PROVIDER_ENVIRONMENT_KEY,
+  OPENROUTER_MODEL_ENVIRONMENT_KEY,
+} from '../../models/index.js';
+import {
   PROFILE_IMAGE_DEFAULTS,
   PROFILE_IMAGE_LIMITS,
   resolveProfileImageBatchConcurrency,
@@ -9,7 +14,7 @@ import {
 } from '../config.js';
 
 test('resolves the documented image defaults when options are absent', () => {
-  assert.deepEqual(resolveProfileImageExtractionOptions(), {
+  assert.deepEqual(resolveProfileImageExtractionOptions({}, {}), {
     model: PROFILE_IMAGE_DEFAULTS.model,
     resolution: PROFILE_IMAGE_DEFAULTS.resolution,
     requestTimeoutMs: PROFILE_IMAGE_DEFAULTS.requestTimeoutMs,
@@ -42,13 +47,16 @@ test('normalizes valid extraction options into SDK-safe values', () => {
 
 test('falls back when extraction limits are unusable at runtime', () => {
   assert.deepEqual(
-    resolveProfileImageExtractionOptions({
-      model: ' ',
-      requestTimeoutMs: Number.NaN,
-      imageDownloadTimeoutMs: -1,
-      maxImageBytes: 0.4,
-      maxRetries: -1,
-    }),
+    resolveProfileImageExtractionOptions(
+      {
+        model: ' ',
+        requestTimeoutMs: Number.NaN,
+        imageDownloadTimeoutMs: -1,
+        maxImageBytes: 0.4,
+        maxRetries: -1,
+      },
+      {},
+    ),
     {
       model: PROFILE_IMAGE_DEFAULTS.model,
       resolution: PROFILE_IMAGE_DEFAULTS.resolution,
@@ -57,6 +65,26 @@ test('falls back when extraction limits are unusable at runtime', () => {
       maxImageBytes: PROFILE_IMAGE_DEFAULTS.maximumBytes,
       maxRetries: PROFILE_IMAGE_DEFAULTS.maxRetries,
     },
+  );
+});
+
+test('uses the shared OpenRouter model when that provider is selected', () => {
+  assert.equal(
+    resolveProfileImageExtractionOptions(
+      {},
+      {
+        [MODEL_PROVIDER_ENVIRONMENT_KEY]: 'openrouter',
+        [OPENROUTER_MODEL_ENVIRONMENT_KEY]: 'openrouter/image-model',
+      },
+    ).model,
+    'openrouter/image-model',
+  );
+  assert.equal(
+    resolveProfileImageExtractionOptions(
+      {},
+      { [MODEL_PROVIDER_ENVIRONMENT_KEY]: 'openrouter' },
+    ).model,
+    DEFAULT_OPENROUTER_MODEL,
   );
 });
 

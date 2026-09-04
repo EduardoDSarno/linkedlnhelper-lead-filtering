@@ -1,5 +1,5 @@
 import { asHttpStatus, asRecord, asString } from '../../helpers/index.js';
-import { geminiModelClient } from '../../models/index.js';
+import { resolveModelClient } from '../../models/index.js';
 import type { ModelResponse, ModelTokenUsage } from '../../models/index.js';
 import type { FullEvaluationCriteria } from '../criterias/index.js';
 import type { EvaluationProfileData } from '../context.js';
@@ -268,7 +268,7 @@ export async function evaluateProfilesWithModel(
   callerOptions: ModelEvaluationOptions = {},
 ): Promise<ModelEvaluationOutcome> {
   const options = resolveModelEvaluationOptions(callerOptions);
-  const generateContent = callerOptions.generateContent ?? geminiModelClient;
+  const generateContent = callerOptions.generateContent ?? resolveModelClient();
   const wait = callerOptions.wait ?? waitForRetry;
   const groups = groupProfilesForModelEvaluation(
     profiles,

@@ -6,6 +6,7 @@ import {
   CONFIG_NUMBER_MINIMUMS,
   resolveConfigNumber,
 } from '../helpers/index.js';
+import { resolveProviderModelId } from '../models/index.js';
 
 /** Environment variables this module reads when caller options are absent. */
 const ENVIRONMENT_KEYS = {
@@ -51,7 +52,8 @@ export interface ResolvedProfileImageExtractionOptions {
 
 /**
  * Resolves untrusted extraction options into values safe for downloads and the
- * Gemini SDK. The optional injected model call remains outside this result.
+ * configured model provider. The optional injected model call remains outside
+ * this result.
  */
 export function resolveProfileImageResolution(
   value: unknown,
@@ -66,11 +68,15 @@ export function resolveProfileImageExtractionOptions(
   options: ProfileImageExtractionOptions = {},
   environment: NodeJS.ProcessEnv = process.env,
 ): ResolvedProfileImageExtractionOptions {
-  // Precedence for each setting: caller option, environment, module default.
-  const model =
-    options.model?.trim() ||
-    environment[ENVIRONMENT_KEYS.model]?.trim() ||
-    PROFILE_IMAGE_DEFAULTS.model;
+  // Precedence for each setting: caller option, provider model, module default.
+  const model = resolveProviderModelId(
+    {
+      callerModel: options.model,
+      geminiEnvironmentModel: environment[ENVIRONMENT_KEYS.model],
+      geminiDefault: PROFILE_IMAGE_DEFAULTS.model,
+    },
+    environment,
+  );
   const resolution = resolveProfileImageResolution(
     options.resolution ?? environment[ENVIRONMENT_KEYS.resolution],
   );

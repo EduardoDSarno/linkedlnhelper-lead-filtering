@@ -50,8 +50,7 @@ export type OpenRouterChatSender = (
 let cachedClient: CachedOpenRouterClient | undefined;
 
 /**
- * Production OpenRouter client. Eval and image will use this once provider
- * selection is wired; until then it is unused by those stages.
+ * Production OpenRouter client used when MODEL_PROVIDER selects OpenRouter.
  */
 export const openRouterModelClient: ModelClient = createOpenRouterModelClient();
 

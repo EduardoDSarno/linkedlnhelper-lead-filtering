@@ -2,7 +2,10 @@ import {
   CONFIG_NUMBER_MINIMUMS,
   resolveConfigNumber,
 } from '../../helpers/index.js';
-import { DEFAULT_THINKING_EFFORT } from '../../models/index.js';
+import {
+  DEFAULT_THINKING_EFFORT,
+  resolveProviderModelId,
+} from '../../models/index.js';
 import type { ModelEvaluationOptions } from './types.js';
 
 /** Environment variables understood by the model-evaluation stage. */
@@ -144,18 +147,24 @@ export interface ResolvedModelEvaluationOptions {
 /**
  * Resolves caller and environment settings into bounded model-evaluation values.
  *
- * Caller values take precedence over environment values. Blank or otherwise
- * unusable values fall back to the module defaults.
+ * Caller values take precedence over environment values. The model id follows
+ * the configured provider. Blank or otherwise unusable values fall back to the
+ * module defaults.
  */
 export function resolveModelEvaluationOptions(
   options: ModelEvaluationOptions = {},
   environment: NodeJS.ProcessEnv = process.env,
 ): ResolvedModelEvaluationOptions {
   return {
-    model:
-      options.model?.trim() ||
-      environment[MODEL_EVALUATION_ENVIRONMENT_KEYS.model]?.trim() ||
-      MODEL_EVALUATION_DEFAULTS.model,
+    model: resolveProviderModelId(
+      {
+        callerModel: options.model,
+        geminiEnvironmentModel:
+          environment[MODEL_EVALUATION_ENVIRONMENT_KEYS.model],
+        geminiDefault: MODEL_EVALUATION_DEFAULTS.model,
+      },
+      environment,
+    ),
     profilesPerRequest: resolveConfigNumber(
       options.profilesPerRequest ??
         environment[MODEL_EVALUATION_ENVIRONMENT_KEYS.profilesPerRequest],
