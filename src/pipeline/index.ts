@@ -1,4 +1,13 @@
 export {
+  DEFAULT_CACHED_PROFILES_PATH,
+  buildCachedProfilePipelineResult,
+  matchCachedProfilesToImport,
+  parseCachedFullProfiles,
+  readCachedProfilesFile,
+  resolveCachedProfilesForImport,
+} from './cached_profiles.js';
+export type { CachedProfileSource } from './cached_profiles.js';
+export {
   createFullProfilePipelineSummary,
   runFullProfilePipeline,
   runFullProfilePipelineWithDependencies,

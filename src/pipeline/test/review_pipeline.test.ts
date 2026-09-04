@@ -286,6 +286,113 @@ test('persists isolated model failures as a completed review run', async () => {
     'https://linkedin.com/in/profile-with-photo',
   );
   assert.match(String(failureLogs[0]?.['reason']), /valid JSON/);
+  assert.equal(failureLogs[0]?.['responseText'], '{invalid-json');
+});
+
+test('scores cached profiles without calling the collection provider', async () => {
+  const urls = [
+    'https://linkedin.com/in/profile-with-photo',
+    'https://linkedin.com/in/profile-without-photo',
+  ];
+  let collectionCalls = 0;
+  let modelCalls = 0;
+  let readCacheCalls = 0;
+  let storedRun: StoredEvaluationRun | undefined;
+
+  const result = await runReviewPipelineWithDependencies(
+    importedCsvDataFor(urls),
+    criteria(),
+    recordingLogger(),
+    {
+      ...reviewDependencies(
+        profilePipelineDependencies({
+          collectProfiles: async () => {
+            collectionCalls += 1;
+            throw new Error('Collection must not run when skipCollection is set.');
+          },
+        }),
+        (run) => {
+          storedRun = run;
+        },
+      ),
+      readCachedProfiles: async () => {
+        readCacheCalls += 1;
+        throw new Error('In-memory cached profiles should skip the file read.');
+      },
+    },
+    {
+      skipCollection: true,
+      cachedProfiles: [
+        {
+          id: 'cached-with-photo',
+          linkedinUrl: urls[0]!,
+          firstName: 'Photo',
+          photo: 'https://example.invalid/profile-with-photo.jpg',
+          experience: [],
+          education: [],
+          raw: {},
+        },
+        {
+          id: 'cached-without-photo',
+          linkedinUrl: urls[1]!,
+          firstName: 'No Photo',
+          experience: [],
+          education: [],
+          raw: {},
+        },
+      ],
+      modelEvaluation: {
+        generateContent: async () => {
+          modelCalls += 1;
+          return successfulModelResponse();
+        },
+      },
+    },
+  );
+
+  assert.equal(collectionCalls, 0);
+  assert.equal(readCacheCalls, 0);
+  assert.equal(modelCalls, 1);
+  assert.equal(result.profilePipeline.summary.providerCollection.actorRuns, 0);
+  assert.equal(result.evaluationRun.evaluation.broadFilter.evaluations.length, 2);
+  assert.deepEqual(storedRun, result.evaluationRun);
+});
+
+test('fails a cached review when the artifact does not cover the import', async () => {
+  let collectionCalls = 0;
+
+  await assert.rejects(
+    () =>
+      runReviewPipelineWithDependencies(
+        importedCsvDataFor(['https://linkedin.com/in/profile-with-photo']),
+        criteria(),
+        recordingLogger(),
+        reviewDependencies(
+          profilePipelineDependencies({
+            collectProfiles: async () => {
+              collectionCalls += 1;
+              throw new Error('Collection must not run when skipCollection is set.');
+            },
+          }),
+          () => undefined,
+        ),
+        {
+          skipCollection: true,
+          cachedProfiles: [
+            {
+              id: 'other-cached-profile',
+              linkedinUrl: 'https://linkedin.com/in/someone-else',
+              experience: [],
+              education: [],
+              raw: {},
+            },
+          ],
+        },
+      ),
+    /cover 0 of 1 imported LinkedIn URLs/,
+  );
+
+  assert.equal(collectionCalls, 0);
 });
 
 test('does not create an evaluation run when profile acquisition fails', async () => {

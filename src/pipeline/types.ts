@@ -122,6 +122,18 @@ export interface FullProfilePipelineResult {
 export interface ReviewPipelineOptions {
   profilePipeline?: FullProfilePipelineOptions;
   modelEvaluation?: ModelEvaluationOptions;
+
+  /**
+   * When true, reuse already-collected full profiles instead of calling Apify
+   * and the image model. Intended for API-only bake-offs; the UI never sets it.
+   */
+  skipCollection?: boolean;
+
+  /** In-memory full profiles used when tests skip the on-disk cache artifact. */
+  cachedProfiles?: readonly FullProfile[];
+
+  /** Override for the default `output/full-profiles.json` cache path. */
+  cachedProfilesPath?: string;
 }
 
 /** External boundaries replaced by deterministic review-pipeline tests. */
@@ -134,6 +146,9 @@ export interface ReviewPipelineDependencies {
   ) => StoredEvaluationRun;
   createRunId: () => string;
   now: () => Date;
+
+  /** Reads the cached full-profile artifact when a review skips collection. */
+  readCachedProfiles?: (path: string) => Promise<unknown>;
 }
 
 /** Complete acquisition and evaluation result returned to a future interface. */

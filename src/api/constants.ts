@@ -31,6 +31,7 @@ export const API_FIELD = {
   decision: 'decision',
   reason: 'reason',
   name: 'name',
+  skipCollection: 'skipCollection',
 } as const;
 
 /** Artifact types that can be downloaded. */

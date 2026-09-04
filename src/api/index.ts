@@ -396,6 +396,11 @@ function registerFilterRoute(server: FastifyInstance)
             db.close();
         }
 
+        const skipCollection = body[API_FIELD.skipCollection];
+        if (skipCollection !== undefined && typeof skipCollection !== 'boolean') {
+            return reply.status(HTTP_STATUS.badRequest).send({ error: 'Invalid skipCollection' });
+        }
+
         // Check if the criteria is a valid JSON object
         const criteria = body[API_FIELD.criteria];
         let validCriteria;
@@ -419,7 +424,14 @@ function registerFilterRoute(server: FastifyInstance)
         // and the client learns the outcome by polling the status route.
         const name = asString(body[API_FIELD.name]);
 
-        void runPipeline(processingId, paths, validCriteria, request.log as Logger, name)
+        void runPipeline(
+            processingId,
+            paths,
+            validCriteria,
+            request.log as Logger,
+            name,
+            { skipCollection: skipCollection === true },
+        )
         .catch((error) =>
         {
             request.log.error({ err: error }, 'Review run failed');

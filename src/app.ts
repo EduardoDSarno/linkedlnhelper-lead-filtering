@@ -42,6 +42,11 @@ export async function prepRun(
   return { originalPath, importedData };
 }
 
+/** Optional review-pipeline flags that the API can pass without changing the UI. */
+export interface RunPipelineOptions {
+  skipCollection?: boolean;
+}
+
 /**
  * Reviews an already-saved upload and writes both output artifacts.
  *
@@ -56,6 +61,7 @@ export async function runPipeline(
   criteria: FullEvaluationCriteria,
   logger: Logger,
   name?: string,
+  options: RunPipelineOptions = {},
 ): Promise<{
   approvedCsvPath: string;
   evaluationReportPath: string;
@@ -81,7 +87,12 @@ export async function runPipeline(
 
   try {
     const importedData = await loadProfilesFromCsv(paths.original);
-    const result = await runReviewPipeline(importedData, criteria, logger);
+    const result = await runReviewPipeline(
+      importedData,
+      criteria,
+      logger,
+      options.skipCollection === true ? { skipCollection: true } : {},
+    );
     const artifacts = await writeReviewArtifacts(paths.original, paths, result);
 
     recordProcessingRun((db) =>
