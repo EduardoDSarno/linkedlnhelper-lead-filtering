@@ -713,10 +713,11 @@ test('keeps every profile when all image analyses fail', async () => {
 test('passes the configured image concurrency to the analyzer', async () => {
   const url = 'https://www.linkedin.com/in/person-a';
   const seen: unknown[] = [];
+  const logger = recordingLogger();
 
   await runFullProfilePipelineWithDependencies(
     importedCsvDataFor([url]),
-    recordingLogger(),
+    logger,
     dependencies({
       collectProfiles: async () =>
         apifyCollectionResult([providerProfile(url)]),
@@ -733,7 +734,11 @@ test('passes the configured image concurrency to the analyzer', async () => {
     { outputPaths: OUTPUT_PATHS, imageConcurrency: 7 },
   );
 
-  assert.deepEqual(seen, [{ concurrency: 7, resolution: 'medium' }]);
+  assert.equal(seen.length, 1);
+  const options = seen[0] as Record<string, unknown>;
+  assert.equal(options['concurrency'], 7);
+  assert.equal(options['resolution'], 'medium');
+  assert.equal(options['logger'], logger);
 });
 
 test('surfaces an artifact write failure', async () => {

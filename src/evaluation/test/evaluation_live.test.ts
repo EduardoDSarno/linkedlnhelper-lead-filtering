@@ -322,6 +322,7 @@ test(
         profilesPerRequest: LIVE_EVALUATION_PROFILES_PER_REQUEST,
         requestTimeoutMs: LIVE_EVALUATION_REQUEST_TIMEOUT_MS,
         maximumAttempts: LIVE_EVALUATION_MAXIMUM_ATTEMPTS,
+        logger,
       });
 
       logEvaluationRun(logger, result);

@@ -3,7 +3,10 @@ import {
   resolveProfileImageResolution,
 } from '../imageExtractor/index.js';
 import type { ProfileImageJobResult } from '../imageExtractor/index.js';
-import type { Logger } from '../logging/index.js';
+import {
+  PIPELINE_PROGRESS_MESSAGE,
+  type Logger,
+} from '../logging/index.js';
 import { attachProfileImageAnalysis } from '../profile/index.js';
 import type { FullProfile, Profile } from '../profile/index.js';
 import { PIPELINE_ENVIRONMENT_KEYS } from './config.js';
@@ -132,7 +135,7 @@ export async function analyzeProfileImages(
       profilesWithoutPhoto,
       concurrency,
     },
-    'Starting profile image analysis.',
+    PIPELINE_PROGRESS_MESSAGE.imageStarted,
   );
 
   // The batch analyzer returns one fulfilled or rejected result per photo.
@@ -144,6 +147,7 @@ export async function analyzeProfileImages(
     {
       concurrency,
       resolution: imageResolutionFromEnvironment(),
+      logger,
     },
   );
 
@@ -164,7 +168,7 @@ export async function analyzeProfileImages(
       successfulImageAnalyses,
       failedImageAnalyses: failures.length,
     },
-    'Completed profile image analysis.',
+    PIPELINE_PROGRESS_MESSAGE.imageCompleted,
   );
 
   return {

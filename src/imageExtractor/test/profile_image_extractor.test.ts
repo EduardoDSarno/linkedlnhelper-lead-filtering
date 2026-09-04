@@ -12,6 +12,8 @@ import type {
   ProfileImageJob,
 } from '../profile_image_types.js';
 import { validImageAssessment } from '../../test_support/image_assessment_fixtures.js';
+import { recordingLogger } from '../../test_support/pipeline_fakes.js';
+import { PIPELINE_PROGRESS_MESSAGE } from '../../logging/index.js';
 
 /** Builds jobs whose source URL encodes the job ID, for easy correlation. */
 function jobs(count: number): ProfileImageJob[] {
@@ -343,6 +345,7 @@ test('starts no more workers than there are jobs', async () => {
 
 test('passes the extraction options through and withholds concurrency', async () => {
   const seen: unknown[] = [];
+  const logger = recordingLogger();
   const executor: ProfileImageExecutor = async (_source, options) => {
     seen.push(options);
     return extractionResult('done');
@@ -350,14 +353,15 @@ test('passes the extraction options through and withholds concurrency', async ()
 
   await extractProfileImagesWithExecutor(jobs(1), executor, {
     concurrency: 4,
+    logger,
     model: 'configured-model',
     resolution: 'high',
     requestTimeoutMs: 1_234,
     maxRetries: 1,
   });
 
-  // Concurrency belongs to the batch, not to a single image, so it must not
-  // leak into the per-image options.
+  // Concurrency and the batch logger belong to the pool, not to a single
+  // image, so they must not leak into the per-image options.
   assert.deepEqual(seen, [
     {
       model: 'configured-model',
@@ -382,4 +386,44 @@ test('runs every job exactly once', async () => {
 
   assert.equal(seen.length, 30);
   assert.equal(new Set(seen).size, 30);
+});
+
+test('logs per-image progress and includes the error on failure', async () => {
+  const logger = recordingLogger();
+  const executor: ProfileImageExecutor = async (source) => {
+    if (source.kind === 'url' && source.url.endsWith('/0.png')) {
+      throw new Error('download timed out');
+    }
+
+    return extractionResult('ok');
+  };
+
+  await extractProfileImagesWithExecutor(jobs(2), executor, {
+    concurrency: 1,
+    logger,
+  });
+
+  const failed = logger.entries.filter(
+    (entry) => entry.message === PIPELINE_PROGRESS_MESSAGE.imageJobFailed,
+  );
+  const succeeded = logger.entries.filter(
+    (entry) => entry.message === PIPELINE_PROGRESS_MESSAGE.imageJobProgress,
+  );
+
+  assert.equal(failed.length, 1);
+  assert.equal(succeeded.length, 1);
+
+  const failedPayload = failed[0]?.payload as Record<string, unknown>;
+  assert.equal(failedPayload['completed'], 1);
+  assert.equal(failedPayload['total'], 2);
+  assert.equal(failedPayload['profileIndex'], 1);
+  assert.equal(failedPayload['profileId'], 'profile-0');
+  assert.equal(failedPayload['error'], 'download timed out');
+  assert.equal(failedPayload['status'], 'rejected');
+
+  const succeededPayload = succeeded[0]?.payload as Record<string, unknown>;
+  assert.equal(succeededPayload['completed'], 2);
+  assert.equal(succeededPayload['total'], 2);
+  assert.equal(succeededPayload['profileIndex'], 2);
+  assert.equal(succeededPayload['status'], 'fulfilled');
 });

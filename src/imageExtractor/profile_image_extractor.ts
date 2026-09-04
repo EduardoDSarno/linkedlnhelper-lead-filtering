@@ -1,3 +1,9 @@
+import type { Logger } from '../logging/index.js';
+import {
+  PIPELINE_PROGRESS_MESSAGE,
+  PIPELINE_STAGE,
+  displayIndex,
+} from '../logging/index.js';
 import type { Profile } from '../profile/index.js';
 import {
   resolveProfileImageBatchConcurrency,
@@ -116,7 +122,11 @@ export async function extractProfileImagesWithExecutor(
   executor: ProfileImageExecutor,
   options: ProfileImageBatchOptions = {},
 ): Promise<ProfileImageJobResult[]> {
-  const { concurrency: requestedConcurrency, ...extractionOptions } = options;
+  const {
+    concurrency: requestedConcurrency,
+    logger,
+    ...extractionOptions
+  } = options;
 
   // A non-finite request carries no usable value, so it is treated the same as
   // omitting one. Clamping it instead would leave NaN intact all the way to the
@@ -125,6 +135,7 @@ export async function extractProfileImagesWithExecutor(
   const concurrency = resolveProfileImageBatchConcurrency(requestedConcurrency);
   const results = new Array<ProfileImageJobResult>(jobs.length);
   let nextJobIndex = 0;
+  let completed = 0;
 
   /** Claims and processes jobs until the shared batch queue is empty. */
   async function worker(): Promise<void> {
@@ -150,6 +161,16 @@ export async function extractProfileImagesWithExecutor(
           ...(usage ? { usage } : {}),
         };
       }
+
+      completed += 1;
+      logProfileImageJobProgress(
+        logger,
+        job,
+        jobIndex,
+        results[jobIndex],
+        completed,
+        jobs.length,
+      );
     }
   }
 
@@ -161,4 +182,50 @@ export async function extractProfileImagesWithExecutor(
   );
 
   return results;
+}
+
+/**
+ * Emits one N-of-total line after an image job settles.
+ *
+ * Failures are warnings and include the error so a bad download or parse is
+ * visible immediately instead of only in the end-of-stage summary.
+ */
+function logProfileImageJobProgress(
+  logger: Logger | undefined,
+  job: ProfileImageJob,
+  jobIndex: number,
+  result: ProfileImageJobResult | undefined,
+  completed: number,
+  total: number,
+): void {
+  if (!logger || !result) return;
+
+  const payload = {
+    stage: PIPELINE_STAGE.images,
+    completed,
+    total,
+    profileIndex: displayIndex(jobIndex),
+    profileId: job.id,
+    status: result.status,
+    ...imageJobSourceFields(job.source),
+  };
+
+  if (result.status === 'rejected') {
+    logger.warn(
+      { ...payload, error: result.error },
+      PIPELINE_PROGRESS_MESSAGE.imageJobFailed,
+    );
+    return;
+  }
+
+  logger.info(payload, PIPELINE_PROGRESS_MESSAGE.imageJobProgress);
+}
+
+/** Adds a locatable source label without dumping image bytes into the log. */
+function imageJobSourceFields(
+  source: ProfileImageSource,
+): { sourceUrl?: string; sourcePath?: string } {
+  if (source.kind === 'url') return { sourceUrl: source.url };
+  if (source.kind === 'file') return { sourcePath: source.path };
+  return {};
 }

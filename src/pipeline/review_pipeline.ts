@@ -69,10 +69,10 @@ export async function runReviewPipelineWithDependencies(
     profilePipeline.profiles,
     criteria,
   );
-  const evaluation = await evaluateProfiles(
-    context,
-    options.modelEvaluation,
-  );
+  const evaluation = await evaluateProfiles(context, {
+    ...options.modelEvaluation,
+    logger,
+  });
   const evaluationRun = {
     id: dependencies.createRunId(),
     createdAt: dependencies.now().toISOString(),

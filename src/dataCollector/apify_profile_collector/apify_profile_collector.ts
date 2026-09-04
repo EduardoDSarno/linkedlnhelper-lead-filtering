@@ -19,6 +19,11 @@ import {
 import type { FailureDescriptor } from './error_handling.js';
 import { normalizeLinkedinUrl } from '../../linkedin/index.js';
 import { asRecord, asString, deduplicateBy } from '../../helpers/index.js';
+import {
+  PIPELINE_PROGRESS_MESSAGE,
+  PIPELINE_STAGE,
+  displayIndex,
+} from '../../logging/index.js';
 import type { Logger } from '../../logging/index.js';
 import type {
   ApifyBatchContext,
@@ -168,11 +173,13 @@ async function executeRound(
   batchSize: number,
   concurrency: number,
   executeBatch: ApifyBatchExecutor,
-  logger?: Logger,
+  logger: Logger | undefined,
+  runRequestedProfiles: number,
 ): Promise<BatchOutcome[]> {
   const batches = chunkProfiles(profiles, batchSize);
   const outcomes = new Array<BatchOutcome>(batches.length);
   let nextBatchIndex = 0;
+  let completedBatches = 0;
 
   /** Claims and executes Actor batches until the current round is exhausted. */
   async function worker(): Promise<void> {
@@ -188,15 +195,14 @@ async function executeRound(
         totalBatches: batches.length,
       };
       const startedAt = Date.now();
-
-      logger?.info(
-        {
-          ...context,
-          batchSize: batch.length,
-          concurrency,
-        },
-        'Starting Apify collection batch.',
+      const progress = apifyBatchProgress(
+        batch,
+        context,
+        concurrency,
+        runRequestedProfiles,
       );
+
+      logger?.info(progress, PIPELINE_PROGRESS_MESSAGE.apifyBatchStarted);
 
       try {
         const execution = await executeBatch(
@@ -210,16 +216,18 @@ async function executeRound(
           durationMs,
           execution,
         };
+        completedBatches += 1;
 
         logger?.info(
           {
-            ...context,
+            ...progress,
+            completed: completedBatches,
             durationMs,
             requestedProfiles: batch.length,
             receivedRecords: execution.records.length,
             actorRunId: execution.actorRunId,
           },
-          'Completed Apify collection batch.',
+          PIPELINE_PROGRESS_MESSAGE.apifyBatchCompleted,
         );
       } catch (error: unknown) {
         const durationMs = Date.now() - startedAt;
@@ -229,15 +237,18 @@ async function executeRound(
           durationMs,
           error,
         };
+        completedBatches += 1;
 
         logger?.warn(
           {
-            ...context,
+            ...progress,
+            completed: completedBatches,
             durationMs,
             requestedProfiles: batch.length,
+            linkedinUrls: batch.map((profile) => profile.linkedinUrl),
             err: error,
           },
-          'Apify collection batch failed.',
+          PIPELINE_PROGRESS_MESSAGE.apifyBatchFailed,
         );
       }
     }
@@ -297,6 +308,17 @@ export async function collectApifyProfilesWithExecutor(
     throw new Error('At least one LinkedIn profile URL is required.');
   }
 
+  logger?.info(
+    {
+      stage: PIPELINE_STAGE.apify,
+      requestedProfiles: uniqueProfiles.length,
+      batchSize: config.profilesPerActorRun,
+      concurrency: config.actorRunConcurrency,
+      maxAttempts: config.maxAttempts,
+    },
+    PIPELINE_PROGRESS_MESSAGE.apifyStarted,
+  );
+
   const collected = new Map<number, CollectedProfile>();
   const failures = new Map<number, ApifyProfileFailure>();
   const retriedProfiles = new Set<number>();
@@ -318,6 +340,7 @@ export async function collectApifyProfilesWithExecutor(
       config.actorRunConcurrency,
       executeBatch,
       logger,
+      uniqueProfiles.length,
     );
     roundsCompleted = round;
     actorRuns += outcomes.length;
@@ -357,7 +380,10 @@ export async function collectApifyProfilesWithExecutor(
       failures.set(profile.inputIndex, failure);
       logger?.warn(
         {
+          stage: PIPELINE_STAGE.apify,
           linkedinUrl: failure.linkedinUrl,
+          profileIndex: displayIndex(failure.inputIndex),
+          requestedProfiles: uniqueProfiles.length,
           category: failure.category,
           status: failure.status,
           attempts: failure.attempts,
@@ -365,7 +391,7 @@ export async function collectApifyProfilesWithExecutor(
           retryExhausted: failure.retryExhausted,
           error: failure.error,
         },
-        'Apify profile collection failed.',
+        PIPELINE_PROGRESS_MESSAGE.apifyProfileFailed,
       );
     }
 
@@ -415,6 +441,20 @@ export async function collectApifyProfilesWithExecutor(
 
     retryCandidates.sort((left, right) => left.inputIndex - right.inputIndex);
     pending = retryCandidates;
+
+    logger?.info(
+      {
+        stage: PIPELINE_STAGE.apify,
+        round,
+        completed: collected.size,
+        total: uniqueProfiles.length,
+        collectedProfiles: collected.size,
+        requestedProfiles: uniqueProfiles.length,
+        failedProfiles: failures.size,
+        retryProfiles: pending.length,
+      },
+      PIPELINE_PROGRESS_MESSAGE.apifyRoundProgress,
+    );
 
     if (pending.length > 0) {
       const waitMs = retryDelayMs(
@@ -466,6 +506,44 @@ export async function collectApifyProfilesWithExecutor(
       batchConcurrency: config.actorRunConcurrency,
       unexpectedProviderRecords,
     },
+  };
+}
+
+/**
+ * Shared N-of-total fields for one Actor batch so start, success, and failure
+ * lines can be grepped as a single progress sequence.
+ */
+function apifyBatchProgress(
+  batch: readonly PendingProfile[],
+  context: ApifyBatchContext,
+  concurrency: number,
+  runRequestedProfiles: number,
+): {
+  stage: typeof PIPELINE_STAGE.apify;
+  round: number;
+  batchNumber: number;
+  totalBatches: number;
+  total: number;
+  batchSize: number;
+  concurrency: number;
+  runRequestedProfiles: number;
+  profileStart: number;
+  profileEnd: number;
+} {
+  const first = batch[0];
+  const last = batch[batch.length - 1];
+
+  return {
+    stage: PIPELINE_STAGE.apify,
+    round: context.round,
+    batchNumber: context.batchNumber,
+    totalBatches: context.totalBatches,
+    total: context.totalBatches,
+    batchSize: batch.length,
+    concurrency,
+    runRequestedProfiles,
+    profileStart: first ? displayIndex(first.inputIndex) : 0,
+    profileEnd: last ? displayIndex(last.inputIndex) : 0,
   };
 }
 

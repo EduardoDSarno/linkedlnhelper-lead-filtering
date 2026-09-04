@@ -1,4 +1,12 @@
 import { asHttpStatus, asRecord, asString } from '../../helpers/index.js';
+import {
+  EVALUATION_PASS,
+  PIPELINE_PROGRESS_MESSAGE,
+  PIPELINE_STAGE,
+  displayIndex,
+  displayRange,
+} from '../../logging/index.js';
+import type { EvaluationPass, Logger } from '../../logging/index.js';
 import { resolveModelClient } from '../../models/index.js';
 import type { ModelResponse, ModelTokenUsage } from '../../models/index.js';
 import type { FullEvaluationCriteria } from '../criterias/index.js';
@@ -39,6 +47,13 @@ type ModelEvaluationGroupResult =
       readonly failure: ModelEvaluationFailure;
       readonly tokenUsage: ModelEvaluationTokenUsage;
     };
+
+/** Live-progress identity for one evaluation pass through the worker pool. */
+interface ModelEvaluationProgress {
+  readonly logger?: Logger;
+  readonly pass: EvaluationPass;
+  readonly passProfileTotal: number;
+}
 
 /** Creates a present, serializable token total for aggregation. */
 export function emptyModelEvaluationTokenUsage(): ModelEvaluationTokenUsage {
@@ -337,9 +352,11 @@ async function runProfileGroups(
   options: ReturnType<typeof resolveModelEvaluationOptions>,
   generateContent: NonNullable<ModelEvaluationOptions['generateContent']>,
   wait: NonNullable<ModelEvaluationOptions['wait']>,
+  progress: ModelEvaluationProgress,
 ): Promise<readonly ModelEvaluationGroupResult[]> {
   const groupResults = new Array<ModelEvaluationGroupResult>(groups.length);
   let nextGroupIndex = 0;
+  let completedGroups = 0;
 
   /** Claims and evaluates profile groups until the shared queue is empty. */
   async function worker(): Promise<void> {
@@ -349,12 +366,30 @@ async function runProfileGroups(
       const group = groups[groupIndex];
       if (!group) continue;
 
-      groupResults[groupIndex] = await evaluateProfileGroup(
+      logEvaluationGroupStart(
+        progress,
+        groupIndex,
+        groups.length,
+        group,
+        options.profilesPerRequest,
+      );
+      const result = await evaluateProfileGroup(
         group,
         criteria,
         options,
         generateContent,
         wait,
+      );
+      completedGroups += 1;
+      groupResults[groupIndex] = result;
+      logEvaluationGroupOutcome(
+        progress,
+        groupIndex,
+        groups.length,
+        completedGroups,
+        group,
+        options.profilesPerRequest,
+        result,
       );
     }
   }
@@ -418,13 +453,36 @@ export async function evaluateProfilesWithModel(
   const options = resolveModelEvaluationOptions(callerOptions);
   const generateContent = callerOptions.generateContent ?? resolveModelClient();
   const wait = callerOptions.wait ?? waitForRetry;
+  const logger = callerOptions.logger;
 
   const groups = groupProfilesForModelEvaluation(
     profiles,
     options.profilesPerRequest,
   );
+  logger?.info(
+    {
+      stage: PIPELINE_STAGE.eval,
+      pass: EVALUATION_PASS.primary,
+      requestedProfiles: profiles.length,
+      totalGroups: groups.length,
+      profilesPerRequest: options.profilesPerRequest,
+      concurrency: options.concurrency,
+    },
+    PIPELINE_PROGRESS_MESSAGE.evalStarted,
+  );
   const primary = reduceGroupResults(
-    await runProfileGroups(groups, criteria, options, generateContent, wait),
+    await runProfileGroups(
+      groups,
+      criteria,
+      options,
+      generateContent,
+      wait,
+      {
+        pass: EVALUATION_PASS.primary,
+        passProfileTotal: profiles.length,
+        ...(logger ? { logger } : {}),
+      },
+    ),
   );
 
   const tokenUsage = emptyModelEvaluationTokenUsage();
@@ -448,6 +506,17 @@ export async function evaluateProfilesWithModel(
         retryProfiles,
         options.profilesPerRequest,
       );
+      logger?.info(
+        {
+          stage: PIPELINE_STAGE.eval,
+          pass: EVALUATION_PASS.retry,
+          requestedProfiles: retryProfiles.length,
+          totalGroups: retryGroups.length,
+          profilesPerRequest: options.profilesPerRequest,
+          concurrency: options.concurrency,
+        },
+        PIPELINE_PROGRESS_MESSAGE.evalRetryStarted,
+      );
       const retry = reduceGroupResults(
         await runProfileGroups(
           retryGroups,
@@ -455,6 +524,11 @@ export async function evaluateProfilesWithModel(
           options,
           generateContent,
           wait,
+          {
+            pass: EVALUATION_PASS.retry,
+            passProfileTotal: retryProfiles.length,
+            ...(logger ? { logger } : {}),
+          },
         ),
       );
 
@@ -478,5 +552,140 @@ export async function evaluateProfilesWithModel(
     evaluations,
     failures,
     tokenUsage,
+  };
+}
+
+/**
+ * Logs that a request-sized group is about to be sent to the model.
+ */
+function logEvaluationGroupStart(
+  progress: ModelEvaluationProgress,
+  groupIndex: number,
+  totalGroups: number,
+  group: readonly EvaluationProfileData[],
+  profilesPerRequest: number,
+): void {
+  progress.logger?.info(
+    evaluationGroupProgressFields(
+      progress,
+      groupIndex,
+      totalGroups,
+      group,
+      profilesPerRequest,
+    ),
+    PIPELINE_PROGRESS_MESSAGE.evalGroupStarted,
+  );
+}
+
+/**
+ * Logs the settled outcome of one group, with fail-now detail when anyone
+ * was not scored.
+ *
+ * An envelope failure includes the capped reply once on the group line.
+ * A scored group that omitted people logs that same reply once on the
+ * complete line, then one compact per-profile warning without repeating it.
+ */
+function logEvaluationGroupOutcome(
+  progress: ModelEvaluationProgress,
+  groupIndex: number,
+  totalGroups: number,
+  completedGroups: number,
+  group: readonly EvaluationProfileData[],
+  profilesPerRequest: number,
+  result: ModelEvaluationGroupResult,
+): void {
+  const logger = progress.logger;
+  if (!logger) return;
+
+  const payload = {
+    ...evaluationGroupProgressFields(
+      progress,
+      groupIndex,
+      totalGroups,
+      group,
+      profilesPerRequest,
+    ),
+    completed: completedGroups,
+  };
+
+  if (result.status === 'rejected') {
+    logger.warn(
+      {
+        ...payload,
+        error: result.failure.error,
+        attempts: result.failure.attempts,
+        retryable: result.failure.retryable,
+        retryExhausted: result.failure.retryExhausted,
+        ...(result.failure.responseText
+          ? { responseText: result.failure.responseText }
+          : {}),
+      },
+      PIPELINE_PROGRESS_MESSAGE.evalGroupFailed,
+    );
+    return;
+  }
+
+  const scoredProfileIds = result.evaluations.map((item) => item.profileId);
+  const failedProfileIds = result.failures.flatMap((item) => [...item.profileIds]);
+  const responseText = result.failures.find((item) => item.responseText)
+    ?.responseText;
+
+  logger.info(
+    {
+      ...payload,
+      scoredProfiles: result.evaluations.length,
+      failedProfiles: result.failures.length,
+      scoredProfileIds,
+      failedProfileIds,
+      ...(responseText ? { responseText } : {}),
+    },
+    PIPELINE_PROGRESS_MESSAGE.evalGroupCompleted,
+  );
+
+  for (const failure of result.failures) {
+    const profileId = failure.profileIds[0];
+    if (!profileId) continue;
+
+    logger.warn(
+      {
+        ...payload,
+        profileId,
+        error: failure.error,
+        attempts: failure.attempts,
+      },
+      PIPELINE_PROGRESS_MESSAGE.evalProfileFailed,
+    );
+  }
+}
+
+/** Shared N-of-total fields for one evaluation group's start and settle lines. */
+function evaluationGroupProgressFields(
+  progress: ModelEvaluationProgress,
+  groupIndex: number,
+  totalGroups: number,
+  group: readonly EvaluationProfileData[],
+  profilesPerRequest: number,
+): {
+  stage: typeof PIPELINE_STAGE.eval;
+  pass: EvaluationPass;
+  groupNumber: number;
+  totalGroups: number;
+  total: number;
+  profileStart: number;
+  profileEnd: number;
+  profileTotal: number;
+  profileIds: readonly string[];
+} {
+  const range = displayRange(groupIndex * profilesPerRequest, group.length);
+
+  return {
+    stage: PIPELINE_STAGE.eval,
+    pass: progress.pass,
+    groupNumber: displayIndex(groupIndex),
+    totalGroups,
+    total: totalGroups,
+    ...range,
+    profileTotal: progress.passProfileTotal,
+    profileIds: group.map((profile) => profile.profileId),
   };
 }

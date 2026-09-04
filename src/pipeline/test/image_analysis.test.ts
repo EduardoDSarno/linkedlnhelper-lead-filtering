@@ -15,6 +15,7 @@ import {
   imageExtractionResult,
   recordingLogger,
 } from '../../test_support/pipeline_fakes.js';
+import type { RecordingLogger } from '../../test_support/pipeline_fakes.js';
 
 /** Builds a normalized profile, with a photo unless one is explicitly absent. */
 function profile(id: string, photo?: string | undefined): Profile {
@@ -35,6 +36,18 @@ const fulfilEveryJob: ProfileImageAnalyzer = async (jobs) =>
     status: 'fulfilled' as const,
     result: imageExtractionResult({ model: `model-for-${job.id}` }),
   }));
+
+/** Asserts the analyzer received concurrency, resolution, and the stage logger. */
+function assertAnalyzerCallOptions(
+  seen: unknown[],
+  expected: { concurrency: number; logger: RecordingLogger },
+): void {
+  assert.equal(seen.length, 1);
+  const options = seen[0] as Record<string, unknown>;
+  assert.equal(options['concurrency'], expected.concurrency);
+  assert.equal(options['resolution'], 'medium');
+  assert.equal(options['logger'], expected.logger);
+}
 
 /** Runs one case with a temporarily replaced environment variable. */
 async function withEnvironment(
@@ -248,19 +261,22 @@ test('passes the requested concurrency and resolution to the analyzer', async ()
     return fulfilEveryJob(jobs, options);
   };
 
+  const logger = recordingLogger();
+
   await analyzeProfileImages(
     [profile('a', 'https://example.invalid/a.jpg')],
     analyzer,
-    recordingLogger(),
+    logger,
     6,
   );
 
-  assert.deepEqual(seen, [{ concurrency: 6, resolution: 'medium' }]);
+  assertAnalyzerCallOptions(seen, { concurrency: 6, logger });
 });
 
 test('reads the environment when no concurrency is supplied', async () => {
   await withEnvironment('4', async () => {
     const seen: unknown[] = [];
+    const logger = recordingLogger();
 
     await analyzeProfileImages(
       [profile('a', 'https://example.invalid/a.jpg')],
@@ -268,16 +284,17 @@ test('reads the environment when no concurrency is supplied', async () => {
         seen.push(options);
         return fulfilEveryJob(jobs, options);
       },
-      recordingLogger(),
+      logger,
     );
 
-    assert.deepEqual(seen, [{ concurrency: 4, resolution: 'medium' }]);
+    assertAnalyzerCallOptions(seen, { concurrency: 4, logger });
   });
 });
 
 test('prefers an explicit concurrency over the environment', async () => {
   await withEnvironment('4', async () => {
     const seen: unknown[] = [];
+    const logger = recordingLogger();
 
     await analyzeProfileImages(
       [profile('a', 'https://example.invalid/a.jpg')],
@@ -285,11 +302,11 @@ test('prefers an explicit concurrency over the environment', async () => {
         seen.push(options);
         return fulfilEveryJob(jobs, options);
       },
-      recordingLogger(),
+      logger,
       9,
     );
 
-    assert.deepEqual(seen, [{ concurrency: 9, resolution: 'medium' }]);
+    assertAnalyzerCallOptions(seen, { concurrency: 9, logger });
   });
 });
 

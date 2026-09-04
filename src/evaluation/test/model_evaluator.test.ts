@@ -3,7 +3,12 @@ import { setImmediate } from 'node:timers/promises';
 import test from 'node:test';
 
 import { asRecord, asString } from '../../helpers/index.js';
+import {
+  EVALUATION_PASS,
+  PIPELINE_PROGRESS_MESSAGE,
+} from '../../logging/index.js';
 import type { ModelRequest, ModelResponse } from '../../models/index.js';
+import { recordingLogger } from '../../test_support/pipeline_fakes.js';
 import type { FullEvaluationCriteria } from '../criterias/index.js';
 import type { EvaluationProfileData } from '../context.js';
 import {
@@ -507,4 +512,100 @@ test('rescues a profile on retry after its first attempt was dropped', async () 
   assert.equal(result.successfulProfiles, profilesPerRequest);
   assert.equal(result.failedProfiles, 0);
   assert.ok(result.evaluations.some((item) => item.profileId === droppedId));
+});
+
+test('logs evaluation group ranges and fail-now reply text', async () => {
+  const logger = recordingLogger();
+  const profilesPerRequest = 2;
+  const candidates = profiles(3);
+
+  await evaluateProfilesWithModel(candidates, criteria(), {
+    profilesPerRequest,
+    concurrency: 1,
+    retryBaseDelayMs: 0,
+    wait: async () => undefined,
+    logger,
+    generateContent: async (parameters) => {
+      const ids = requestedProfileIds(parameters);
+      if (ids.length === 2 && ids[0] === 'profile-0') {
+        return { text: '{invalid-json' };
+      }
+
+      return modelResponse(ids);
+    },
+  });
+
+  const started = logger.entries.filter(
+    (entry) => entry.message === PIPELINE_PROGRESS_MESSAGE.evalStarted,
+  );
+  assert.equal(started.length, 1);
+  const startedPayload = started[0]?.payload as Record<string, unknown>;
+  assert.equal(startedPayload['requestedProfiles'], 3);
+  assert.equal(startedPayload['totalGroups'], 2);
+
+  const groupStarted = logger.entries.filter(
+    (entry) => entry.message === PIPELINE_PROGRESS_MESSAGE.evalGroupStarted,
+  );
+  const firstGroup = groupStarted[0]?.payload as Record<string, unknown>;
+  assert.equal(firstGroup['pass'], EVALUATION_PASS.primary);
+  assert.equal(firstGroup['groupNumber'], 1);
+  assert.equal(firstGroup['profileStart'], 1);
+  assert.equal(firstGroup['profileEnd'], 2);
+  assert.equal(firstGroup['profileTotal'], 3);
+
+  const groupFailed = logger.entries.filter(
+    (entry) => entry.message === PIPELINE_PROGRESS_MESSAGE.evalGroupFailed,
+  );
+  assert.ok(groupFailed.length >= 1);
+  const failedPayload = groupFailed[0]?.payload as Record<string, unknown>;
+  assert.equal(failedPayload['responseText'], '{invalid-json');
+  assert.deepEqual(failedPayload['profileIds'], ['profile-0', 'profile-1']);
+
+  const retryStarted = logger.entries.filter(
+    (entry) => entry.message === PIPELINE_PROGRESS_MESSAGE.evalRetryStarted,
+  );
+  assert.equal(retryStarted.length, 1);
+  assert.equal(
+    (retryStarted[0]?.payload as Record<string, unknown>)['requestedProfiles'],
+    2,
+  );
+});
+
+test('logs an omitted profile without repeating the batch reply on that line', async () => {
+  const logger = recordingLogger();
+  const candidates = profiles(2);
+
+  await evaluateProfilesWithModel(candidates, criteria(), {
+    profilesPerRequest: 2,
+    concurrency: 1,
+    logger,
+    generateContent: async (parameters) => {
+      const ids = requestedProfileIds(parameters);
+      return modelResponse(ids.filter((id) => id !== 'profile-1'));
+    },
+  });
+
+  const completed = logger.entries.filter(
+    (entry) => entry.message === PIPELINE_PROGRESS_MESSAGE.evalGroupCompleted,
+  );
+  const primaryComplete = completed.find((entry) => {
+    const payload = entry.payload as Record<string, unknown>;
+    return payload['pass'] === EVALUATION_PASS.primary;
+  });
+  assert.ok(primaryComplete);
+  const completePayload = primaryComplete.payload as Record<string, unknown>;
+  assert.deepEqual(completePayload['failedProfileIds'], ['profile-1']);
+  assert.ok(typeof completePayload['responseText'] === 'string');
+
+  const profileFailed = logger.entries.filter(
+    (entry) =>
+      entry.message === PIPELINE_PROGRESS_MESSAGE.evalProfileFailed &&
+      (entry.payload as Record<string, unknown>)['pass'] ===
+        EVALUATION_PASS.primary,
+  );
+  assert.equal(profileFailed.length, 1);
+  const profilePayload = profileFailed[0]?.payload as Record<string, unknown>;
+  assert.equal(profilePayload['profileId'], 'profile-1');
+  assert.match(String(profilePayload['error']), /omitted profile ID/);
+  assert.equal(profilePayload['responseText'], undefined);
 });

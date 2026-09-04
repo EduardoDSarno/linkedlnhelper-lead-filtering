@@ -1,3 +1,4 @@
+import type { Logger } from '../logging/index.js';
 import type { ModelClient, ModelTokenUsage } from '../models/index.js';
 import { PROFILE_IMAGE_LIMITS } from './config.js';
 
@@ -173,6 +174,8 @@ export type ProfileImageJobResult =
 export interface ProfileImageBatchOptions
   extends ProfileImageExtractionOptions {
   concurrency?: number;
+  /** Optional logger for per-image N-of-total progress while the pool runs. */
+  logger?: Logger;
 }
 
 /** JSON Schema sent to Gemini so the response is machine-readable. */

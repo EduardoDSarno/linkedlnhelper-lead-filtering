@@ -1,3 +1,4 @@
+import type { Logger } from '../../logging/index.js';
 import type { ModelClient, ModelTokenUsage, ThinkingEffort } from '../../models/index.js';
 
 /** Final decisions the model stage may return for professional fit. */
@@ -117,4 +118,6 @@ export interface ModelEvaluationOptions {
   retryBaseDelayMs?: number;
   generateContent?: ModelClient;
   wait?: ModelEvaluationWait;
+  /** Optional logger for live group progress and fail-now diagnostics. */
+  logger?: Logger;
 }

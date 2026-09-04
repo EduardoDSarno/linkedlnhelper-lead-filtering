@@ -7,6 +7,8 @@ import type {
   ApifyBatchExecutor,
   RawApifyProfile,
 } from '../index.js';
+import { PIPELINE_PROGRESS_MESSAGE } from '../../../logging/index.js';
+import { recordingLogger } from '../../../test_support/pipeline_fakes.js';
 
 /** Builds a minimal valid provider record for collector tests. */
 function successfulRecord(linkedinUrl: string): RawApifyProfile {
@@ -292,4 +294,71 @@ test('reports a transient failure after its retry budget is exhausted', async ()
       status: 503,
     },
   ]);
+});
+
+test('logs batch progress and includes URLs when an Actor batch fails', async () => {
+  const logger = recordingLogger();
+  const links = [
+    'https://linkedin.com/in/alpha',
+    'https://linkedin.com/in/bravo',
+    'https://linkedin.com/in/missing',
+  ];
+
+  const result = await collectApifyProfilesWithExecutor(
+    links,
+    async (batch) => {
+      if (batch.includes(links[2]!)) {
+        throw Object.assign(new Error('Actor run failed'), { statusCode: 500 });
+      }
+
+      return { records: batch.map((url) => successfulRecord(url)) };
+    },
+    logger,
+    {
+      batchSize: 2,
+      concurrency: 1,
+      maxAttempts: 1,
+      retryBaseDelayMs: 0,
+    },
+  );
+
+  assert.equal(result.profiles.length, 2);
+  assert.equal(result.failures.length, 1);
+
+  const batchStarted = logger.entries.filter(
+    (entry) => entry.message === PIPELINE_PROGRESS_MESSAGE.apifyBatchStarted,
+  );
+  assert.equal(batchStarted.length, 2);
+  const firstBatch = batchStarted[0]?.payload as Record<string, unknown>;
+  assert.equal(firstBatch['profileStart'], 1);
+  assert.equal(firstBatch['profileEnd'], 2);
+  assert.equal(firstBatch['runRequestedProfiles'], 3);
+  assert.equal(firstBatch['totalBatches'], 2);
+
+  const roundProgress = logger.entries.filter(
+    (entry) => entry.message === PIPELINE_PROGRESS_MESSAGE.apifyRoundProgress,
+  );
+  assert.equal(roundProgress.length, 1);
+  const progress = roundProgress[0]?.payload as Record<string, unknown>;
+  assert.equal(progress['completed'], 2);
+  assert.equal(progress['total'], 3);
+  assert.equal(progress['failedProfiles'], 1);
+
+  const failedBatch = logger.entries.find(
+    (entry) => entry.message === PIPELINE_PROGRESS_MESSAGE.apifyBatchFailed,
+  );
+  assert.ok(failedBatch);
+  assert.deepEqual(
+    (failedBatch.payload as Record<string, unknown>)['linkedinUrls'],
+    [links[2]],
+  );
+
+  const profileFailed = logger.entries.find(
+    (entry) => entry.message === PIPELINE_PROGRESS_MESSAGE.apifyProfileFailed,
+  );
+  assert.ok(profileFailed);
+  const failurePayload = profileFailed.payload as Record<string, unknown>;
+  assert.equal(failurePayload['linkedinUrl'], links[2]);
+  assert.equal(failurePayload['error'], 'Actor run failed');
+  assert.equal(failurePayload['profileIndex'], 3);
 });
