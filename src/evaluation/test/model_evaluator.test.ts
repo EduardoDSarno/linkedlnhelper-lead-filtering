@@ -295,6 +295,35 @@ test('does not retry an invalid response and retains successful groups', async (
   assert.equal(result.failedProfiles, profilesPerRequest);
   assert.equal(result.failures[0]?.retryable, false);
   assert.match(result.failures[0]?.error ?? '', /invalid JSON/);
+  assert.equal(result.failures[0]?.responseText, '{invalid-json');
+});
+
+test('retries a timed-out group and keeps the later success', async () => {
+  const profilesPerRequest = MODEL_EVALUATION_DEFAULTS.profilesPerRequest;
+  const candidates = profiles(profilesPerRequest);
+  let calls = 0;
+
+  const result = await evaluateProfilesWithModel(candidates, criteria(), {
+    profilesPerRequest,
+    concurrency: 1,
+    maximumAttempts: 2,
+    retryBaseDelayMs: 0,
+    wait: async () => undefined,
+    generateContent: async (parameters) => {
+      calls += 1;
+      if (calls === 1) {
+        const timeout = new Error('The operation was aborted due to timeout');
+        timeout.name = 'AbortError';
+        throw timeout;
+      }
+
+      return modelResponse(requestedProfileIds(parameters));
+    },
+  });
+
+  assert.equal(calls, 2);
+  assert.equal(result.successfulProfiles, candidates.length);
+  assert.equal(result.failedProfiles, 0);
 });
 
 test('rejects missing, duplicated, and unexpected response profile IDs', () => {

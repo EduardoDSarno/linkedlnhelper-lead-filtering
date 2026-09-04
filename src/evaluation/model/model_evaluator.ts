@@ -5,6 +5,7 @@ import type { FullEvaluationCriteria } from '../criterias/index.js';
 import type { EvaluationProfileData } from '../context.js';
 import {
   MODEL_EVALUATION_DEFAULTS,
+  MODEL_EVALUATION_LIMITS,
   MODEL_EVALUATION_RETRY_POLICY,
   resolveModelEvaluationOptions,
 } from './config.js';
@@ -116,7 +117,26 @@ function isRetryableModelError(error: unknown): boolean {
     return true;
   }
 
+  if (isTimeoutModelError(error)) return true;
+
   return error instanceof TypeError;
+}
+
+/** Detects a cancelled or timed-out model call that is worth trying again. */
+function isTimeoutModelError(error: unknown): boolean {
+  const record = asRecord(error);
+  const name = asString(record?.['name']);
+  if (
+    name &&
+    MODEL_EVALUATION_RETRY_POLICY.timeoutErrorNames.includes(
+      name as (typeof MODEL_EVALUATION_RETRY_POLICY.timeoutErrorNames)[number],
+    )
+  ) {
+    return true;
+  }
+
+  const message = error instanceof Error ? error.message : String(error);
+  return /timeout|aborted/i.test(message);
 }
 
 /** Converts an unknown thrown value into a stable failure message. */
@@ -164,6 +184,7 @@ async function evaluateProfileGroup(
   const prompt = buildModelEvaluationPrompt(criteria, profiles);
   const tokenUsage = emptyModelEvaluationTokenUsage();
   let attempts = 0;
+  let lastResponseText: string | undefined;
 
   while (attempts < options.maximumAttempts) {
     attempts += 1;
@@ -177,6 +198,7 @@ async function evaluateProfileGroup(
         thinking: MODEL_EVALUATION_DEFAULTS.thinkingEffort,
         timeoutMs: options.requestTimeoutMs,
       });
+      lastResponseText = response.text;
       addTokenUsage(tokenUsage, response.usage);
 
       const assessments = parseModelEvaluationResponse(
@@ -226,33 +248,62 @@ async function evaluateProfileGroup(
         continue;
       }
 
-      return {
-        status: 'rejected',
-        failure: {
-          profileIds,
-          attempts,
-          retryable,
-          retryExhausted,
-          error: errorMessage(error),
-          ...(hasTokenUsage(tokenUsage) ? { tokenUsage: { ...tokenUsage } } : {}),
-        },
+      return rejectedGroupResult({
+        profileIds,
+        attempts,
+        retryable,
+        retryExhausted,
+        error: errorMessage(error),
+        responseText: lastResponseText,
         tokenUsage,
-      };
+      });
     }
   }
 
+  return rejectedGroupResult({
+    profileIds,
+    attempts,
+    retryable: true,
+    retryExhausted: true,
+    error: 'Model evaluation exhausted its configured attempt budget.',
+    responseText: lastResponseText,
+    tokenUsage,
+  });
+}
+
+/** Builds the rejected-group shape shared by parse failures and exhausted retries. */
+function rejectedGroupResult(input: {
+  profileIds: readonly string[];
+  attempts: number;
+  retryable: boolean;
+  retryExhausted: boolean;
+  error: string;
+  responseText: string | undefined;
+  tokenUsage: ModelEvaluationTokenUsage;
+}): Extract<ModelEvaluationGroupResult, { status: 'rejected' }> {
   return {
     status: 'rejected',
     failure: {
-      profileIds,
-      attempts,
-      retryable: true,
-      retryExhausted: true,
-      error: 'Model evaluation exhausted its configured attempt budget.',
-      ...(hasTokenUsage(tokenUsage) ? { tokenUsage: { ...tokenUsage } } : {}),
+      profileIds: input.profileIds,
+      attempts: input.attempts,
+      retryable: input.retryable,
+      retryExhausted: input.retryExhausted,
+      error: input.error,
+      ...(input.responseText
+        ? { responseText: loggedModelResponseText(input.responseText) }
+        : {}),
+      ...(hasTokenUsage(input.tokenUsage)
+        ? { tokenUsage: { ...input.tokenUsage } }
+        : {}),
     },
-    tokenUsage,
+    tokenUsage: input.tokenUsage,
   };
+}
+
+/** Caps a failed reply so logs and stored failures stay a bounded diagnostic. */
+function loggedModelResponseText(text: string): string {
+  const limit = MODEL_EVALUATION_LIMITS.failedResponseLogMaxLength;
+  return text.length <= limit ? text : text.slice(0, limit);
 }
 
 /**

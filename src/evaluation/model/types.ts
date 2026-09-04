@@ -88,6 +88,8 @@ export interface ModelEvaluationFailure {
   readonly retryable: boolean;
   readonly retryExhausted: boolean;
   readonly error: string;
+  /** Model reply text when a response arrived but could not be used. */
+  readonly responseText?: string;
   readonly tokenUsage?: ModelEvaluationTokenUsage;
 }
 

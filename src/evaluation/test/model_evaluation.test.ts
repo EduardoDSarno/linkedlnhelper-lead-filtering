@@ -57,6 +57,28 @@ function profile(): EvaluationProfileData {
   };
 }
 
+/** Builds one parseable evaluation, optionally overriding the currency field. */
+function compensationEvaluation(
+  compensation: Record<string, unknown> = {},
+): Record<string, unknown> {
+  return {
+    profileId: 'profile-1',
+    matchPercent: 82,
+    estimatedTotalMonthlyCompensation: {
+      status: 'estimated',
+      currency: 'BRL',
+      minimumMonthlyCompensation: 9_000,
+      maximumMonthlyCompensation: 14_000,
+      confidence: 'medium',
+      basis: ['Senior customer-success role in the supplied profile.'],
+      ...compensation,
+    },
+    reasons: ['Senior customer-success trajectory in the campaign market.'],
+    evidence: ['Headline is Customer Success Manager in Goiânia.'],
+    uncertainties: [],
+  };
+}
+
 test('requests a score without asking Gemini for a final decision', () => {
   const properties =
     MODEL_EVALUATION_JSON_SCHEMA.properties.evaluations.items.properties;
@@ -110,6 +132,44 @@ test('sends profile evidence while keeping desired compensation out of the promp
   assert.match(prompt.systemInstruction, /Do not make approve, reject/);
   assert.doesNotMatch(prompt.userContent, /minimumNetWorth/);
   assert.doesNotMatch(prompt.userContent, /minimumApprovalPercent/);
+});
+
+test('accepts BRL-equivalent currency spellings on an estimated range', () => {
+  const expected = {
+    status: 'estimated' as const,
+    currency: 'BRL' as const,
+    minimumMonthlyCompensation: 9_000,
+    maximumMonthlyCompensation: 14_000,
+    confidence: 'medium' as const,
+    basis: ['Senior customer-success role in the supplied profile.'],
+  };
+
+  for (const currency of ['BRL', 'brl', 'R$', undefined]) {
+    const evaluations = parseModelEvaluationResponse(
+      JSON.stringify({
+        evaluations: [compensationEvaluation({ currency })],
+      }),
+      ['profile-1'],
+    );
+
+    assert.deepEqual(
+      evaluations[0]?.estimatedTotalMonthlyCompensation,
+      expected,
+    );
+  }
+});
+
+test('rejects a compensation currency that is not reais', () => {
+  assert.throws(
+    () =>
+      parseModelEvaluationResponse(
+        JSON.stringify({
+          evaluations: [compensationEvaluation({ currency: 'USD' })],
+        }),
+        ['profile-1'],
+      ),
+    /must use BRL, got "USD"/,
+  );
 });
 
 test('parses a supported total monthly compensation range', () => {

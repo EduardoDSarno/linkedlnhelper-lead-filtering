@@ -11,6 +11,15 @@ import {
 /** The categories a profile highlight may use. */
 const HIGHLIGHT_KINDS: readonly ProfileHighlightKind[] = ['strength', 'warning', 'info'];
 
+/** Campaign currency stored on every accepted compensation estimate. */
+const COMPENSATION_CURRENCY = 'BRL' as const;
+
+/**
+ * Provider spellings that still mean reais. Compared after trim and case fold,
+ * with spaces removed so "R $" and "brl" both match.
+ */
+const BRL_CURRENCY_ALIASES = new Set(['brl', 'r$', 'brl$', 'r$brl']);
+
 /**
  * JSON Schema supplied to Gemini for a machine-readable batch response.
  *
@@ -238,11 +247,7 @@ function estimatedTotalMonthlyCompensation(
     );
   }
 
-  if (record['currency'] !== 'BRL') {
-    throw new ModelEvaluationResponseError(
-      'Gemini compensation estimates must use BRL.',
-    );
-  }
+  const currency = compensationCurrency(record['currency']);
 
   const minimumMonthlyCompensation = monthlyCompensation(
     record['minimumMonthlyCompensation'],
@@ -261,7 +266,7 @@ function estimatedTotalMonthlyCompensation(
 
   return {
     status,
-    currency: 'BRL',
+    currency,
     minimumMonthlyCompensation,
     maximumMonthlyCompensation,
     confidence: compensationConfidence(record['confidence']),
@@ -272,6 +277,25 @@ function estimatedTotalMonthlyCompensation(
       1,
     ),
   };
+}
+
+/**
+ * Accepts BRL and the common ways models spell reais.
+ *
+ * The prompt only allows Brazilian-real estimates. A missing or blank currency
+ * is treated as that campaign currency. Any other code is rejected, and the
+ * error includes the received value so the failed reply can be diagnosed.
+ */
+function compensationCurrency(value: unknown): typeof COMPENSATION_CURRENCY {
+  const raw = asString(value);
+  if (!raw) return COMPENSATION_CURRENCY;
+
+  const normalized = raw.toLowerCase().replaceAll(/\s+/g, '');
+  if (BRL_CURRENCY_ALIASES.has(normalized)) return COMPENSATION_CURRENCY;
+
+  throw new ModelEvaluationResponseError(
+    `Compensation estimates must use BRL, got ${JSON.stringify(raw)}.`,
+  );
 }
 
 /**

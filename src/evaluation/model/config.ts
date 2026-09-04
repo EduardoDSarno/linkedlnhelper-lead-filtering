@@ -23,7 +23,7 @@ export const MODEL_EVALUATION_DEFAULTS = {
   model: 'gemini-3.8-flash',
   profilesPerRequest: 5,
   concurrency: 10,
-  requestTimeoutMs: 30_000,
+  requestTimeoutMs: 90_000,
   maximumAttempts: 3,
   retryBaseDelayMs: 250,
   retryMaximumDelayMs: 4_000,
@@ -44,6 +44,7 @@ export const MODEL_EVALUATION_LIMITS = {
   uncertaintiesPerProfile: 5,
   highlightsPerProfile: 3,
   highlightTextMaxLength: 80,
+  failedResponseLogMaxLength: 8_000,
 } as const;
 
 /** Errors that may succeed when the same model request is attempted again. */
@@ -56,7 +57,9 @@ export const MODEL_EVALUATION_RETRY_POLICY = {
     'EHOSTUNREACH',
     'ENETUNREACH',
     'ETIMEDOUT',
+    'ABORT_ERR',
   ],
+  timeoutErrorNames: ['AbortError', 'TimeoutError'],
 } as const;
 
 /** Placeholder tokens interpolated into the model-evaluation prompt templates. */

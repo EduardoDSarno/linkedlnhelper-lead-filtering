@@ -159,6 +159,9 @@ function logFailedModelDecisions(
           linkedinUrl: profileLookup.get(profileId)?.linkedinUrl,
           reason: failure.error,
           attempts: failure.attempts,
+          ...(failure.responseText
+            ? { responseText: failure.responseText }
+            : {}),
         },
         'Gemini profile evaluation failed.',
       );
