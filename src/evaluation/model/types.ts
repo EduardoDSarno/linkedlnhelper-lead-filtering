@@ -1,4 +1,4 @@
-import type { ModelClient, ModelTokenUsage } from '../../models/index.js';
+import type { ModelClient, ModelTokenUsage, ThinkingEffort } from '../../models/index.js';
 
 /** Final decisions the model stage may return for professional fit. */
 export const MODEL_EVALUATION_DECISION = {
@@ -109,6 +109,7 @@ export type ModelEvaluationWait = (milliseconds: number) => Promise<void>;
 /** Caller overrides and test boundaries for the model-evaluation stage. */
 export interface ModelEvaluationOptions {
   model?: string;
+  thinkingEffort?: ThinkingEffort;
   profilesPerRequest?: number;
   concurrency?: number;
   requestTimeoutMs?: number;

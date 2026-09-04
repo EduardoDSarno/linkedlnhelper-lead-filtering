@@ -30,6 +30,8 @@ import {
     MODEL_EVALUATION_DECISION,
     parseFullEvaluationCriteria,
 } from '../evaluation/index.js';
+import type { ThinkingEffort } from '../models/index.js';
+import { resolveThinkingEffortChoice } from '../models/index.js';
 import { runPipeline } from '../app.js';
 import type { Logger } from '../logging/index.js';
 import { createReadStream } from 'node:fs';
@@ -401,6 +403,13 @@ function registerFilterRoute(server: FastifyInstance)
             return reply.status(HTTP_STATUS.badRequest).send({ error: 'Invalid skipCollection' });
         }
 
+        let thinkingEffort: ThinkingEffort;
+        try {
+            thinkingEffort = parseThinkingEffortFromBody(body[API_FIELD.thinkingEffort]);
+        } catch {
+            return reply.status(HTTP_STATUS.badRequest).send({ error: 'Invalid thinkingEffort' });
+        }
+
         // Check if the criteria is a valid JSON object
         const criteria = body[API_FIELD.criteria];
         let validCriteria;
@@ -430,7 +439,10 @@ function registerFilterRoute(server: FastifyInstance)
             validCriteria,
             request.log as Logger,
             name,
-            { skipCollection: skipCollection === true },
+            {
+                skipCollection: skipCollection === true,
+                modelEvaluation: { thinkingEffort },
+            },
         )
         .catch((error) =>
         {
@@ -673,4 +685,21 @@ function registerDeleteRunRoute(server: FastifyInstance)
             db.close();
         }
     });
+}
+
+/**
+ * Reads the optional thinking-effort choice from a /run_filter body.
+ *
+ * Omitted or "default" follows the provider environment. "max" forces the
+ * deepest supported effort. Non-strings and unknown names fail so a typo
+ * cannot silently keep the fallback.
+ */
+function parseThinkingEffortFromBody(value: unknown): ThinkingEffort {
+    if (value === undefined) {
+        return resolveThinkingEffortChoice();
+    }
+    if (typeof value !== 'string') {
+        throw new Error('Invalid thinkingEffort');
+    }
+    return resolveThinkingEffortChoice(value);
 }

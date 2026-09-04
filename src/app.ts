@@ -9,7 +9,10 @@ import {
 import { saveOriginalCsv } from './dataCollector/processing/processing.js';
 import type { ProcessingPaths } from './dataCollector/processing/processing.js';
 import { writeReviewArtifacts } from './dataCollector/processing/review_artifacts.js';
-import type { FullEvaluationCriteria } from './evaluation/index.js';
+import type {
+  FullEvaluationCriteria,
+  ModelEvaluationOptions,
+} from './evaluation/index.js';
 import { errorMessage } from './helpers/index.js';
 import type { Logger } from './logging/index.js';
 import { runReviewPipeline } from './pipeline/index.js';
@@ -45,6 +48,7 @@ export async function prepRun(
 /** Optional review-pipeline flags that the API can pass without changing the UI. */
 export interface RunPipelineOptions {
   skipCollection?: boolean;
+  modelEvaluation?: ModelEvaluationOptions;
 }
 
 /**
@@ -91,7 +95,12 @@ export async function runPipeline(
       importedData,
       criteria,
       logger,
-      options.skipCollection === true ? { skipCollection: true } : {},
+      {
+        ...(options.skipCollection === true ? { skipCollection: true } : {}),
+        ...(options.modelEvaluation
+          ? { modelEvaluation: options.modelEvaluation }
+          : {}),
+      },
     );
     const artifacts = await writeReviewArtifacts(paths.original, paths, result);
 

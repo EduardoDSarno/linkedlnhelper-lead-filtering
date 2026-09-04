@@ -3,9 +3,10 @@ import {
   resolveConfigNumber,
 } from '../../helpers/index.js';
 import {
-  DEFAULT_THINKING_EFFORT,
   resolveProviderModelId,
+  resolveThinkingEffort,
 } from '../../models/index.js';
+import type { ThinkingEffort } from '../../models/index.js';
 import type { ModelEvaluationOptions } from './types.js';
 
 /** Environment variables understood by the model-evaluation stage. */
@@ -27,7 +28,6 @@ export const MODEL_EVALUATION_DEFAULTS = {
   maximumAttempts: 3,
   retryBaseDelayMs: 250,
   retryMaximumDelayMs: 4_000,
-  thinkingEffort: DEFAULT_THINKING_EFFORT,
 } as const;
 
 /** Safety ceilings for request scheduling and structured responses. */
@@ -140,6 +140,7 @@ Return only the required structured JSON response.
 /** Validated settings used by the model-evaluation worker pool. */
 export interface ResolvedModelEvaluationOptions {
   model: string;
+  thinkingEffort: ThinkingEffort;
   profilesPerRequest: number;
   concurrency: number;
   requestTimeoutMs: number;
@@ -168,6 +169,7 @@ export function resolveModelEvaluationOptions(
       },
       environment,
     ),
+    thinkingEffort: options.thinkingEffort ?? resolveThinkingEffort(environment),
     profilesPerRequest: resolveConfigNumber(
       options.profilesPerRequest ??
         environment[MODEL_EVALUATION_ENVIRONMENT_KEYS.profilesPerRequest],

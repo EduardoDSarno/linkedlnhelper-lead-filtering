@@ -195,7 +195,7 @@ async function evaluateProfileGroup(
         system: prompt.systemInstruction,
         parts: [{ text: prompt.userContent }],
         jsonSchema: MODEL_EVALUATION_JSON_SCHEMA,
-        thinking: MODEL_EVALUATION_DEFAULTS.thinkingEffort,
+        thinking: options.thinkingEffort,
         timeoutMs: options.requestTimeoutMs,
       });
       lastResponseText = response.text;

@@ -206,6 +206,45 @@ test('POST /run_filter rejects a non-boolean skipCollection flag', async () => {
   }
 });
 
+test('POST /run_filter rejects an unknown thinkingEffort choice', async () => {
+  const databasePath = join(tmpdir(), `api-test-${randomUUID()}.sqlite`);
+  process.env['DATABASE_PATH'] = databasePath;
+
+  const app = await buildServer();
+  const csv = Buffer.from(
+    '﻿public_id;full_name\r\nabc;Ada Lovelace\r\n',
+    'utf-8',
+  );
+  const importResponse = await app.inject({
+    method: 'POST',
+    url: API_ROUTES.import,
+    headers: { 'content-type': CSV_CONTENT_TYPE },
+    payload: csv,
+  });
+  const { processingId } = importResponse.json() as { processingId: string };
+
+  try {
+    const response = await app.inject({
+      method: 'POST',
+      url: API_ROUTES.review,
+      payload: {
+        processingId,
+        criteria: { systemPrompt: 'test' },
+        thinkingEffort: 'turbo',
+      },
+    });
+
+    assert.equal(response.statusCode, HTTP_STATUS.badRequest);
+  } finally {
+    await rm(processingPaths(processingId).dir, {
+      recursive: true,
+      force: true,
+    });
+    await rm(databasePath, { force: true });
+    delete process.env['DATABASE_PATH'];
+  }
+});
+
 test('POST /run_filter rejects a completed run with a conflict', async () => {
   const databasePath = join(tmpdir(), `api-test-${randomUUID()}.sqlite`);
   process.env['DATABASE_PATH'] = databasePath;
