@@ -2,12 +2,8 @@ import assert from 'node:assert/strict';
 import { setImmediate } from 'node:timers/promises';
 import test from 'node:test';
 
-import type {
-  GenerateContentParameters,
-  GenerateContentResponse,
-} from '@google/genai';
-
 import { asRecord, asString } from '../../helpers/index.js';
+import type { ModelRequest, ModelResponse } from '../../models/index.js';
 import type { FullEvaluationCriteria } from '../criterias/index.js';
 import type { EvaluationProfileData } from '../context.js';
 import {
@@ -27,10 +23,10 @@ const TEST_MONTHLY_COMPENSATION_MAXIMUM = 12_000;
 const TEST_DESIRED_COMPENSATION_MINIMUM = 7_000;
 const TEST_DESIRED_COMPENSATION_MAXIMUM = 15_000;
 const TEST_TOKEN_USAGE = {
-  promptTokenCount: 100,
-  candidatesTokenCount: 40,
-  thoughtsTokenCount: 20,
-  totalTokenCount: 160,
+  promptTokens: 100,
+  outputTokens: 40,
+  thinkingTokens: 20,
+  totalTokens: 160,
 } as const;
 const PROFILE_JSON_MARKER = '=== PROFILES TO EVALUATE ===\n';
 const PROFILE_JSON_END_MARKER = '\n\nReturn only';
@@ -88,27 +84,24 @@ function evaluation(profileId: string, matchPercent = TEST_MATCH_PERCENT) {
   };
 }
 
-/** Wraps response JSON in the narrow SDK shape consumed by the evaluator. */
-function geminiResponse(
+/** Wraps response JSON in the provider-neutral shape consumed by the evaluator. */
+function modelResponse(
   profileIds: readonly string[],
   usage = TEST_TOKEN_USAGE,
-): GenerateContentResponse {
+): ModelResponse {
   return {
     text: JSON.stringify({
       evaluations: profileIds.map((profileId) => evaluation(profileId)),
     }),
-    usageMetadata: { ...usage },
-  } as GenerateContentResponse;
+    usage: { ...usage },
+  };
 }
 
-/** Extracts the requested profile IDs from the generated Gemini user content. */
-function requestedProfileIds(
-  parameters: GenerateContentParameters,
-): string[] {
-  const contents = parameters.contents;
-  assert.ok(Array.isArray(contents));
-
-  const text = asString(asRecord(contents[0])?.['text']);
+/** Extracts the requested profile IDs from the generated evaluation user content. */
+function requestedProfileIds(request: ModelRequest): string[] {
+  const text = request.parts[0] && 'text' in request.parts[0]
+    ? request.parts[0].text
+    : undefined;
   assert.ok(text, 'The model request must include text content.');
 
   const jsonStart = text.indexOf(PROFILE_JSON_MARKER);
@@ -152,7 +145,7 @@ test('groups profiles by the configured request size and keeps the final partial
     generateContent: async (parameters) => {
       const profileIds = requestedProfileIds(parameters);
       requestedGroups.push(profileIds);
-      return geminiResponse(profileIds);
+      return modelResponse(profileIds);
     },
   });
 
@@ -193,7 +186,7 @@ test('retains model scores while routing every result to manual review', async (
       text: JSON.stringify({
         evaluations: [evaluation(candidate.profileId, manualMatchPercent)],
       }),
-    }) as GenerateContentResponse,
+    }),
   });
 
   assert.equal(result.evaluations[0]?.matchPercent, manualMatchPercent);
@@ -218,7 +211,7 @@ test('never exceeds the configured concurrent model-request limit', async () => 
       peakRequests = Math.max(peakRequests, activeRequests);
       await yieldEventLoop();
       activeRequests -= 1;
-      return geminiResponse(requestedProfileIds(parameters));
+      return modelResponse(requestedProfileIds(parameters));
     },
   });
 
@@ -250,7 +243,7 @@ test('retries only the transiently failed group and preserves other successes', 
         throw httpError(429);
       }
 
-      return geminiResponse(profileIds);
+      return modelResponse(profileIds);
     },
   });
 
@@ -289,11 +282,11 @@ test('does not retry an invalid response and retains successful groups', async (
       if (firstProfileId === invalidGroupId) {
         return {
           text: '{invalid-json',
-          usageMetadata: { ...TEST_TOKEN_USAGE },
-        } as GenerateContentResponse;
+          usage: { ...TEST_TOKEN_USAGE },
+        };
       }
 
-      return geminiResponse(profileIds);
+      return modelResponse(profileIds);
     },
   });
 
@@ -358,8 +351,8 @@ test('restores requested profile order and aggregates usage from every response'
             .reverse()
             .map((profileId) => evaluation(profileId)),
         }),
-        usageMetadata: { ...TEST_TOKEN_USAGE },
-      } as GenerateContentResponse;
+        usage: { ...TEST_TOKEN_USAGE },
+      };
     },
   });
 
@@ -368,9 +361,9 @@ test('restores requested profile order and aggregates usage from every response'
     candidates.map((item) => item.profileId),
   );
   assert.deepEqual(result.tokenUsage, {
-    promptTokens: TEST_TOKEN_USAGE.promptTokenCount * 2,
-    outputTokens: TEST_TOKEN_USAGE.candidatesTokenCount * 2,
-    thinkingTokens: TEST_TOKEN_USAGE.thoughtsTokenCount * 2,
-    totalTokens: TEST_TOKEN_USAGE.totalTokenCount * 2,
+    promptTokens: TEST_TOKEN_USAGE.promptTokens * 2,
+    outputTokens: TEST_TOKEN_USAGE.outputTokens * 2,
+    thinkingTokens: TEST_TOKEN_USAGE.thinkingTokens * 2,
+    totalTokens: TEST_TOKEN_USAGE.totalTokens * 2,
   });
 });

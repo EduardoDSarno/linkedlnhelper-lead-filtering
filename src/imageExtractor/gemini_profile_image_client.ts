@@ -1,22 +1,15 @@
-import {
-  createPartFromBase64,
-  PartMediaResolutionLevel,
-  ThinkingLevel,
-} from '@google/genai';
-import type { GenerateContentResponse } from '@google/genai';
-
-import {
-  generateContentWithGemini,
-  mapGeminiTokenUsage,
-} from '../models/index.js';
+import { geminiModelClient } from '../models/index.js';
 import type {
-  GeminiContentGenerator,
-  GeminiTokenUsage,
+  ModelClient,
+  ModelResponse,
+  ModelTokenUsage,
 } from '../models/index.js';
-import { GEMINI_IMAGE_RETRY_POLICY } from './config.js';
 import type { LoadedProfileImage } from './profile_image_loader.js';
 import { PROFILE_IMAGE_ASSESSMENT_JSON_SCHEMA } from './profile_image_types.js';
 import type { ProfileImageResolution } from './profile_image_types.js';
+
+/** Matches the thinking effort both current Gemini call sites already use. */
+const IMAGE_THINKING_EFFORT = 'medium' as const;
 
 const IMAGE_ASSESSMENT_PROMPT = `
 Analyze this profile image using only directly visible, neutral properties.
@@ -36,46 +29,41 @@ brief, factual, and limited to composition and image quality. Do not mention
 age, or any other personal characteristic, in "observations".
 `.trim();
 
-const MEDIA_RESOLUTION: Readonly<
-  Record<ProfileImageResolution, PartMediaResolutionLevel>
-> = {
-  low: PartMediaResolutionLevel.MEDIA_RESOLUTION_LOW,
-  medium: PartMediaResolutionLevel.MEDIA_RESOLUTION_MEDIUM,
-  high: PartMediaResolutionLevel.MEDIA_RESOLUTION_HIGH,
-};
-
 /**
- * The single SDK call this module needs.
+ * The single model call this module needs.
  *
- * Injecting the call rather than the whole `GoogleGenAI` client keeps the test
- * boundary as narrow as possible: a test supplies one function and never
- * constructs a client, so no API key is required and the memoized production
- * client is never created.
+ * Injecting the call rather than a provider client keeps the test boundary
+ * narrow: a test supplies one function and never constructs a client, so no
+ * API key is required and the memoized production client is never created.
  */
 export interface GeminiProfileImageRequest {
   image: LoadedProfileImage;
   model: string;
   resolution: ProfileImageResolution;
   timeoutMs: number;
+  /**
+   * Caller-facing retry budget. Not forwarded on `ModelRequest` yet; the
+   * Gemini adapter still uses its own single-attempt SDK policy.
+   */
   maxRetries: number;
 
   /**
-   * Performs the model call. Production omits this and gets the shared Gemini
-   * client; tests supply a stand-in so no Gemini request is ever made.
+   * Performs the model call. Production omits this and gets the Gemini
+   * adapter; tests supply a stand-in so no provider request is ever made.
    */
-  generateContent?: GeminiContentGenerator;
+  generateContent?: ModelClient;
 }
 
 export interface GeminiProfileImageResponse {
   text: string;
-  usage?: GeminiTokenUsage;
+  usage?: ModelTokenUsage;
 }
 
 /**
- * A Gemini response that arrived but could not be used.
+ * A model response that arrived but could not be used.
  *
- * Gemini bills for the tokens it read even when it declines to answer, so a
- * blocked or truncated response is a real cost with nothing to show for it.
+ * Providers bill for the tokens they read even when they decline to answer, so
+ * a blocked or empty response is a real cost with nothing to show for it.
  * Carrying `usage` on the error is what lets the batch and pipeline layers
  * report that spend instead of losing it.
  *
@@ -83,50 +71,23 @@ export interface GeminiProfileImageResponse {
  * reached us and no token count exists to report.
  */
 export class GeminiImageError extends Error {
-  readonly usage: GeminiTokenUsage | undefined;
+  readonly usage: ModelTokenUsage | undefined;
 
   /** Creates a failed assessment while retaining any usage the model reported. */
-  constructor(message: string, usage?: GeminiTokenUsage) {
+  constructor(message: string, usage?: ModelTokenUsage) {
     super(message);
     this.name = 'GeminiImageError';
     this.usage = usage;
   }
 }
 
-/** Extracts usable response text or reports why Gemini produced none. */
-function getResponseText(
-  response: GenerateContentResponse,
-  usage: GeminiTokenUsage | undefined,
-): string {
-  const blockReason = response.promptFeedback?.blockReason;
-  if (blockReason) {
-    throw new GeminiImageError(
-      `Gemini blocked the image request: ${blockReason}.`,
-      usage,
-    );
-  }
-
-  const text = response.text?.trim();
-  if (text) return text;
-
-  const finishReason = response.candidates?.[0]?.finishReason;
-  throw new GeminiImageError(
-    finishReason
-      ? `Gemini returned no assessment (${finishReason}).`
-      : 'Gemini returned no image assessment.',
-    usage,
-  );
-}
-
 /**
- * Sends one loaded image to Gemini and returns its raw assessment text.
+ * Sends one loaded image through the model client and returns its raw
+ * assessment text.
  *
- * Retries are configured here but performed by the SDK; `maxRetries` is a retry
- * budget, so the SDK receives `maxRetries + 1` total attempts.
- *
- * @param request - Image, model, resolution, timeout, retry budget, and an
- * optional model call to use instead of the shared client.
- * @returns The response text and any token usage Gemini reported.
+ * @param request - Image, model, resolution, timeout, and an optional model
+ * call to use instead of the Gemini adapter.
+ * @returns The response text and any token usage the model reported.
  * @throws {GeminiImageError} When a response arrived but was blocked or empty;
  * it carries the tokens that response was billed for. Failures of the model
  * call itself propagate unchanged, because no response and no usage exists.
@@ -134,37 +95,48 @@ function getResponseText(
 export async function recognizeProfileImageWithGemini(
   request: GeminiProfileImageRequest,
 ): Promise<GeminiProfileImageResponse> {
-  const generateContent =
-    request.generateContent ?? generateContentWithGemini;
+  const generateContent = request.generateContent ?? geminiModelClient;
   const response = await generateContent({
     model: request.model,
-    contents: [
+    parts: [
       { text: IMAGE_ASSESSMENT_PROMPT },
-      createPartFromBase64(
-        Buffer.from(request.image.data).toString('base64'),
-        request.image.mimeType,
-        MEDIA_RESOLUTION[request.resolution],
-      ),
-    ],
-    config: {
-      thinkingConfig: { thinkingLevel: ThinkingLevel.MEDIUM },
-      responseMimeType: 'application/json',
-      responseJsonSchema: PROFILE_IMAGE_ASSESSMENT_JSON_SCHEMA,
-      httpOptions: {
-        timeout: request.timeoutMs,
-        retryOptions: {
-          attempts: request.maxRetries + 1,
-          initialDelay: GEMINI_IMAGE_RETRY_POLICY.initialDelaySeconds,
-          maxDelay: GEMINI_IMAGE_RETRY_POLICY.maximumDelaySeconds,
-          httpStatusCodes: [...GEMINI_IMAGE_RETRY_POLICY.httpStatusCodes],
+      {
+        image: {
+          data: request.image.data,
+          mimeType: request.image.mimeType,
+          resolution: request.resolution,
         },
       },
-    },
+    ],
+    jsonSchema: PROFILE_IMAGE_ASSESSMENT_JSON_SCHEMA,
+    thinking: IMAGE_THINKING_EFFORT,
+    timeoutMs: request.timeoutMs,
   });
-  const usage = mapGeminiTokenUsage(response);
+  const usage = response.usage;
 
   return {
     text: getResponseText(response, usage),
     ...(usage ? { usage } : {}),
   };
+}
+
+/** Extracts usable response text or reports why the model produced none. */
+function getResponseText(
+  response: ModelResponse,
+  usage: ModelTokenUsage | undefined,
+): string {
+  if (response.blockReason) {
+    throw new GeminiImageError(
+      `The model blocked the image request: ${response.blockReason}.`,
+      usage,
+    );
+  }
+
+  const text = response.text.trim();
+  if (text) return text;
+
+  throw new GeminiImageError(
+    'The model returned no image assessment.',
+    usage,
+  );
 }

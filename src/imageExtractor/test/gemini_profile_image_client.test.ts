@@ -1,12 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { BlockedReason } from '@google/genai';
-import type {
-  GenerateContentParameters,
-  GenerateContentResponse,
-} from '@google/genai';
-
+import type { ModelRequest, ModelResponse } from '../../models/index.js';
 import {
   GeminiImageError,
   recognizeProfileImageWithGemini,
@@ -16,20 +11,9 @@ import { validImageAssessmentJson } from '../../test_support/image_assessment_fi
 
 const IMAGE_BYTES = new Uint8Array([0x89, 0x50, 0x4e, 0x47]);
 
-/**
- * Builds a response shaped like the SDK's, with only the fields this module
- * reads. The SDK type is wider than anything we touch, so the cast keeps the
- * fixture readable instead of stubbing dozens of unused members.
- */
-function geminiResponse(
-  fields: Partial<GenerateContentResponse>,
-): GenerateContentResponse {
-  return fields as GenerateContentResponse;
-}
-
 /** Builds a request whose model call returns one prepared response. */
 function requestReturning(
-  response: GenerateContentResponse,
+  response: ModelResponse,
   overrides: Partial<GeminiProfileImageRequest> = {},
 ): GeminiProfileImageRequest {
   return {
@@ -43,20 +27,36 @@ function requestReturning(
   };
 }
 
+/** Returns the text part sent as the image-assessment prompt. */
+function promptText(request: ModelRequest): string {
+  const part = request.parts[0];
+  assert.ok(part && 'text' in part);
+  return part.text;
+}
+
+/** Returns the image part sent with the assessment prompt. */
+function imagePart(request: ModelRequest): {
+  data: Uint8Array;
+  mimeType: string;
+  resolution?: 'low' | 'medium' | 'high';
+} {
+  const part = request.parts[1];
+  assert.ok(part && 'image' in part);
+  return part.image;
+}
+
 test('returns the response text and mapped token usage', async () => {
   const assessmentJson = validImageAssessmentJson();
   const result = await recognizeProfileImageWithGemini(
-    requestReturning(
-      geminiResponse({
-        text: assessmentJson,
-        usageMetadata: {
-          promptTokenCount: 11,
-          candidatesTokenCount: 22,
-          thoughtsTokenCount: 33,
-          totalTokenCount: 66,
-        },
-      }),
-    ),
+    requestReturning({
+      text: assessmentJson,
+      usage: {
+        promptTokens: 11,
+        outputTokens: 22,
+        thinkingTokens: 33,
+        totalTokens: 66,
+      },
+    }),
   );
 
   assert.equal(result.text, assessmentJson);
@@ -70,7 +70,7 @@ test('returns the response text and mapped token usage', async () => {
 
 test('trims surrounding whitespace from the response text', async () => {
   const result = await recognizeProfileImageWithGemini(
-    requestReturning(geminiResponse({ text: '  {"ok":true}  ' })),
+    requestReturning({ text: '  {"ok":true}  ' }),
   );
 
   assert.equal(result.text, '{"ok":true}');
@@ -78,7 +78,7 @@ test('trims surrounding whitespace from the response text', async () => {
 
 test('omits usage entirely when the response reports none', async () => {
   const result = await recognizeProfileImageWithGemini(
-    requestReturning(geminiResponse({ text: '{"ok":true}' })),
+    requestReturning({ text: '{"ok":true}' }),
   );
 
   assert.equal('usage' in result, false);
@@ -86,12 +86,10 @@ test('omits usage entirely when the response reports none', async () => {
 
 test('maps only the token counts the response actually reports', async () => {
   const result = await recognizeProfileImageWithGemini(
-    requestReturning(
-      geminiResponse({
-        text: '{"ok":true}',
-        usageMetadata: { promptTokenCount: 5, totalTokenCount: 5 },
-      }),
-    ),
+    requestReturning({
+      text: '{"ok":true}',
+      usage: { promptTokens: 5, totalTokens: 5 },
+    }),
   );
 
   assert.deepEqual(result.usage, { promptTokens: 5, totalTokens: 5 });
@@ -101,131 +99,97 @@ test('reports a blocked prompt with its block reason', async () => {
   await assert.rejects(
     () =>
       recognizeProfileImageWithGemini(
-        requestReturning(
-          geminiResponse({
-            promptFeedback: { blockReason: BlockedReason.SAFETY },
-            text: '{"ok":true}',
-          }) as GenerateContentResponse,
-        ),
+        requestReturning({
+          text: '{"ok":true}',
+          blockReason: 'SAFETY',
+        }),
       ),
-    /Gemini blocked the image request: SAFETY/,
+    /The model blocked the image request: SAFETY/,
   );
 });
 
-test('reports an empty response with its finish reason', async () => {
+test('reports an empty response', async () => {
   await assert.rejects(
     () =>
-      recognizeProfileImageWithGemini(
-        requestReturning(
-          geminiResponse({
-            text: '',
-            candidates: [{ finishReason: 'MAX_TOKENS' }],
-          } as Partial<GenerateContentResponse>),
-        ),
-      ),
-    /Gemini returned no assessment \(MAX_TOKENS\)/,
-  );
-});
-
-test('reports an empty response without a finish reason', async () => {
-  await assert.rejects(
-    () =>
-      recognizeProfileImageWithGemini(
-        requestReturning(geminiResponse({ text: undefined })),
-      ),
-    /Gemini returned no image assessment\./,
+      recognizeProfileImageWithGemini(requestReturning({ text: '' })),
+    /The model returned no image assessment\./,
   );
 });
 
 test('treats a whitespace-only response as empty', async () => {
   await assert.rejects(
     () =>
-      recognizeProfileImageWithGemini(
-        requestReturning(geminiResponse({ text: '   \n  ' })),
-      ),
-    /Gemini returned no image assessment\./,
+      recognizeProfileImageWithGemini(requestReturning({ text: '   \n  ' })),
+    /The model returned no image assessment\./,
   );
 });
 
-test('propagates an SDK rejection unchanged', async () => {
+test('propagates a model-call rejection unchanged', async () => {
   const sdkError = new Error('The model is overloaded.');
 
   await assert.rejects(
     () =>
       recognizeProfileImageWithGemini(
-        requestReturning(geminiResponse({}), {
+        requestReturning({ text: '' }, {
           generateContent: async () => {
             throw sdkError;
           },
         }),
       ),
     // Identity: the batch layer classifies terminal failures, so this module
-    // must not wrap or reword what the SDK reported.
+    // must not wrap or reword what the client reported.
     (error: unknown) => error === sdkError,
   );
 });
 
-test('passes the configured model, schema, timeout, and retries to the SDK', async () => {
-  const calls: GenerateContentParameters[] = [];
+test('passes the configured model, schema, timeout, and thinking', async () => {
+  const calls: ModelRequest[] = [];
 
   await recognizeProfileImageWithGemini(
-    requestReturning(geminiResponse({ text: '{"ok":true}' }), {
+    requestReturning({ text: '{"ok":true}' }, {
       model: 'configured-model',
       timeoutMs: 12_345,
       maxRetries: 4,
-      generateContent: async (parameters) => {
-        calls.push(parameters);
-        return geminiResponse({ text: '{"ok":true}' });
+      generateContent: async (request) => {
+        calls.push(request);
+        return { text: '{"ok":true}' };
       },
     }),
   );
 
   assert.equal(calls.length, 1);
 
-  const parameters = calls[0];
-  assert.equal(parameters?.model, 'configured-model');
-  assert.equal(parameters?.config?.responseMimeType, 'application/json');
-  assert.ok(parameters?.config?.responseJsonSchema);
-  assert.equal(parameters?.config?.httpOptions?.timeout, 12_345);
-
-  // The SDK counts total attempts, so a budget of maxRetries retries means
-  // maxRetries + 1 attempts. Off-by-one here would silently change cost.
-  assert.equal(parameters?.config?.httpOptions?.retryOptions?.attempts, 5);
-  assert.deepEqual(
-    parameters?.config?.httpOptions?.retryOptions?.httpStatusCodes,
-    [408, 429, 500, 502, 503, 504],
-  );
+  const request = calls[0];
+  assert.equal(request?.model, 'configured-model');
+  assert.equal(request?.timeoutMs, 12_345);
+  assert.equal(request?.thinking, 'medium');
+  assert.ok(request?.jsonSchema);
+  assert.equal('retries' in (request ?? {}), false);
 });
 
-test('sends the prompt and the image as base64 with the requested resolution', async () => {
-  const calls: GenerateContentParameters[] = [];
+test('sends the prompt and the image bytes with the requested resolution', async () => {
+  const calls: ModelRequest[] = [];
 
   await recognizeProfileImageWithGemini(
-    requestReturning(geminiResponse({ text: '{"ok":true}' }), {
+    requestReturning({ text: '{"ok":true}' }, {
       resolution: 'high',
-      generateContent: async (parameters) => {
-        calls.push(parameters);
-        return geminiResponse({ text: '{"ok":true}' });
+      generateContent: async (request) => {
+        calls.push(request);
+        return { text: '{"ok":true}' };
       },
     }),
   );
 
-  const contents = calls[0]?.contents as Array<Record<string, unknown>>;
-  assert.equal(contents.length, 2);
-
-  const prompt = contents[0]?.['text'];
-  assert.equal(typeof prompt, 'string');
+  assert.ok(calls[0]);
   assert.ok(
-    (prompt as string).includes('apparentAge'),
+    promptText(calls[0]).includes('apparentAge'),
     'the prompt must still instruct the model about the apparent age bracket',
   );
-
-  const inlineData = contents[1]?.['inlineData'] as Record<string, unknown>;
-  assert.equal(inlineData['mimeType'], 'image/png');
-  assert.equal(
-    inlineData['data'],
-    Buffer.from(IMAGE_BYTES).toString('base64'),
-  );
+  assert.deepEqual(imagePart(calls[0]), {
+    data: IMAGE_BYTES,
+    mimeType: 'image/png',
+    resolution: 'high',
+  });
 });
 
 test('does not require GEMINI_API_KEY when the model call is supplied', async () => {
@@ -234,7 +198,7 @@ test('does not require GEMINI_API_KEY when the model call is supplied', async ()
 
   try {
     const result = await recognizeProfileImageWithGemini(
-      requestReturning(geminiResponse({ text: '{"ok":true}' })),
+      requestReturning({ text: '{"ok":true}' }),
     );
 
     assert.equal(result.text, '{"ok":true}');
@@ -246,17 +210,14 @@ test('does not require GEMINI_API_KEY when the model call is supplied', async ()
 });
 
 test('reports token usage on a blocked response', async () => {
-  // A blocked response is still billed, so the cost must travel with the
-  // failure. Without this the spend is invisible to every summary.
   await assert.rejects(
     () =>
       recognizeProfileImageWithGemini(
-        requestReturning(
-          geminiResponse({
-            promptFeedback: { blockReason: BlockedReason.SAFETY },
-            usageMetadata: { promptTokenCount: 900, totalTokenCount: 900 },
-          }),
-        ),
+        requestReturning({
+          text: '',
+          blockReason: 'SAFETY',
+          usage: { promptTokens: 900, totalTokens: 900 },
+        }),
       ),
     (error: unknown) => {
       assert.ok(error instanceof GeminiImageError);
@@ -267,17 +228,14 @@ test('reports token usage on a blocked response', async () => {
   );
 });
 
-test('reports token usage on a truncated response', async () => {
+test('reports token usage on an empty response', async () => {
   await assert.rejects(
     () =>
       recognizeProfileImageWithGemini(
-        requestReturning(
-          geminiResponse({
-            text: '',
-            candidates: [{ finishReason: 'MAX_TOKENS' }],
-            usageMetadata: { promptTokenCount: 40, totalTokenCount: 90 },
-          } as Partial<GenerateContentResponse>),
-        ),
+        requestReturning({
+          text: '',
+          usage: { promptTokens: 40, totalTokens: 90 },
+        }),
       ),
     (error: unknown) => {
       assert.ok(error instanceof GeminiImageError);
@@ -291,11 +249,7 @@ test('omits usage when the response reported none', async () => {
   await assert.rejects(
     () =>
       recognizeProfileImageWithGemini(
-        requestReturning(
-          geminiResponse({
-            promptFeedback: { blockReason: BlockedReason.SAFETY },
-          }),
-        ),
+        requestReturning({ text: '', blockReason: 'SAFETY' }),
       ),
     (error: unknown) => {
       assert.ok(error instanceof GeminiImageError);
@@ -306,12 +260,10 @@ test('omits usage when the response reported none', async () => {
 });
 
 test('carries no usage when the model call itself failed', async () => {
-  // No response arrived, so there is no token count to report. Inventing one
-  // would be worse than reporting nothing.
   await assert.rejects(
     () =>
       recognizeProfileImageWithGemini(
-        requestReturning(geminiResponse({}), {
+        requestReturning({ text: '' }, {
           generateContent: async () => {
             throw new Error('Network unreachable.');
           },
@@ -326,16 +278,10 @@ test('carries no usage when the model call itself failed', async () => {
 });
 
 test('a Gemini image error is still an ordinary Error for existing callers', async () => {
-  // The batch layer reads `error.message` from a plain Error. Subclassing
-  // keeps that path working untouched while adding the usage for new callers.
   await assert.rejects(
     () =>
       recognizeProfileImageWithGemini(
-        requestReturning(
-          geminiResponse({
-            promptFeedback: { blockReason: BlockedReason.SAFETY },
-          }),
-        ),
+        requestReturning({ text: '', blockReason: 'SAFETY' }),
       ),
     (error: unknown) => {
       assert.ok(error instanceof Error);
@@ -350,8 +296,6 @@ test('requires GEMINI_API_KEY when no model call is supplied', async () => {
   delete process.env['GEMINI_API_KEY'];
 
   try {
-    // Reaching the shared client is the only path that needs a credential.
-    // The error must name the variable so a misconfigured run is obvious.
     await assert.rejects(
       () =>
         recognizeProfileImageWithGemini({

@@ -1,11 +1,9 @@
-import type {
-  GeminiContentGenerator,
-  GeminiTokenUsage,
-} from '../models/index.js';
+import type { ModelClient, ModelTokenUsage } from '../models/index.js';
 import { PROFILE_IMAGE_LIMITS } from './config.js';
 
 export type {
-  GeminiContentGenerator,
+  ModelClient,
+  ModelTokenUsage,
   GeminiTokenUsage,
 } from '../models/index.js';
 
@@ -129,7 +127,7 @@ export interface ProfileImageExtractionResult {
   assessment: ProfileImageAssessment;
   model: string;
   resolution: ProfileImageResolution;
-  usage?: GeminiTokenUsage;
+  usage?: ModelTokenUsage;
 }
 
 export interface ProfileImageExtractionOptions {
@@ -140,8 +138,8 @@ export interface ProfileImageExtractionOptions {
   maxImageBytes?: number;
   maxRetries?: number;
 
-  /** Optional model call used by deterministic tests instead of the SDK client. */
-  generateContent?: GeminiContentGenerator;
+  /** Optional model call used by deterministic tests instead of a provider client. */
+  generateContent?: ModelClient;
 }
 
 export interface ProfileImageJob {
@@ -162,14 +160,14 @@ export type ProfileImageJobResult =
       error: string;
 
       /**
-       * Tokens Gemini billed before rejecting the image, when it reported any.
+       * Tokens the model billed before rejecting the image, when it reported any.
        *
        * A blocked or truncated response still costs money, so this is what
        * keeps failed images visible in a cost total. Absent when the failure
        * happened before a response arrived, such as a download or network
        * error, because no token count exists in that case.
        */
-      usage?: GeminiTokenUsage;
+      usage?: ModelTokenUsage;
     };
 
 export interface ProfileImageBatchOptions

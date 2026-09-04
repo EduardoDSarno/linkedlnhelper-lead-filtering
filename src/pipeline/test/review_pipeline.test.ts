@@ -1,8 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import type { GenerateContentResponse } from '@google/genai';
-
 import {
   dbGetEvaluationRunById,
   dbInsertEvaluationRun,
@@ -102,7 +100,7 @@ function profilePipelineDependencies(
 }
 
 /** Builds a valid structured model response for the profile that reaches AI. */
-function successfulModelResponse(): GenerateContentResponse {
+function successfulModelResponse() {
   return {
     text: JSON.stringify({
       evaluations: [
@@ -123,12 +121,12 @@ function successfulModelResponse(): GenerateContentResponse {
         },
       ],
     }),
-    usageMetadata: {
-      promptTokenCount: 100,
-      candidatesTokenCount: 40,
-      totalTokenCount: 140,
+    usage: {
+      promptTokens: 100,
+      outputTokens: 40,
+      totalTokens: 140,
     },
-  } as GenerateContentResponse;
+  };
 }
 
 /** Builds review dependencies and captures the SQLite round trip before close. */
@@ -268,8 +266,7 @@ test('persists isolated model failures as a completed review run', async () => {
     }),
     {
       modelEvaluation: {
-        generateContent: async () =>
-          ({ text: '{invalid-json' }) as GenerateContentResponse,
+        generateContent: async () => ({ text: '{invalid-json' }),
       },
     },
   );

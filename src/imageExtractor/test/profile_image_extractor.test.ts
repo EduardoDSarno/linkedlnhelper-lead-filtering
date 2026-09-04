@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import type { GenerateContentResponse } from '@google/genai';
 
 import { GeminiImageError } from '../gemini_profile_image_client.js';
 import {
@@ -185,14 +184,13 @@ test('retains billed usage when Gemini returns invalid structured JSON', async (
       },
     ],
     {
-      generateContent: async () =>
-        ({
-          text: '{not valid json',
-          usageMetadata: {
-            promptTokenCount: promptTokens,
-            totalTokenCount: totalTokens,
-          },
-        }) as GenerateContentResponse,
+      generateContent: async () => ({
+        text: '{not valid json',
+        usage: {
+          promptTokens,
+          totalTokens,
+        },
+      }),
     },
   );
 
