@@ -3,6 +3,7 @@ import {
   PIPELINE_PROGRESS_MESSAGE,
   PIPELINE_STAGE,
   displayIndex,
+  elapsedMs,
 } from '../logging/index.js';
 import type { Profile } from '../profile/index.js';
 import {
@@ -146,6 +147,7 @@ export async function extractProfileImagesWithExecutor(
 
       if (!job) continue;
 
+      const startedAt = Date.now();
       try {
         results[jobIndex] = {
           id: job.id,
@@ -170,6 +172,7 @@ export async function extractProfileImagesWithExecutor(
         results[jobIndex],
         completed,
         jobs.length,
+        elapsedMs(startedAt),
       );
     }
   }
@@ -197,6 +200,7 @@ function logProfileImageJobProgress(
   result: ProfileImageJobResult | undefined,
   completed: number,
   total: number,
+  durationMs: number,
 ): void {
   if (!logger || !result) return;
 
@@ -207,6 +211,7 @@ function logProfileImageJobProgress(
     profileIndex: displayIndex(jobIndex),
     profileId: job.id,
     status: result.status,
+    durationMs,
     ...imageJobSourceFields(job.source),
   };
 

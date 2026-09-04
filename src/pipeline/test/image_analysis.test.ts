@@ -340,6 +340,17 @@ test('logs stage totals and returns failures for stable profile logging', async 
   const messages = logger.entries.map((entry) => entry.message);
   assert.ok(messages.includes('Starting profile image analysis.'));
   assert.ok(messages.includes('Completed profile image analysis.'));
+  const completed = logger.entries.find(
+    (entry) => entry.message === 'Completed profile image analysis.',
+  );
+  assert.equal(
+    typeof (completed?.payload as Record<string, unknown>)['durationMs'],
+    'number',
+  );
+  assert.ok(
+    ((completed?.payload as Record<string, unknown>)['durationMs'] as number) >=
+      0,
+  );
   assert.deepEqual(result.failures, [
     { profileId: 'b', error: 'Gemini is unavailable.' },
   ]);

@@ -70,3 +70,12 @@ export function displayRange(
     profileEnd: startIndex + count,
   };
 }
+
+/**
+ * Milliseconds since `startedAt`, for complete/fail logs of one structural unit.
+ *
+ * Callers pass `Date.now()` captured before the batch, image, or eval group.
+ */
+export function elapsedMs(startedAt: number): number {
+  return Date.now() - startedAt;
+}

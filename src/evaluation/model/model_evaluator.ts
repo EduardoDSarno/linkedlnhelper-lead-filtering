@@ -5,6 +5,7 @@ import {
   PIPELINE_STAGE,
   displayIndex,
   displayRange,
+  elapsedMs,
 } from '../../logging/index.js';
 import type { EvaluationPass, Logger } from '../../logging/index.js';
 import { resolveModelClient } from '../../models/index.js';
@@ -373,6 +374,7 @@ async function runProfileGroups(
         group,
         options.profilesPerRequest,
       );
+      const startedAt = Date.now();
       const result = await evaluateProfileGroup(
         group,
         criteria,
@@ -390,6 +392,7 @@ async function runProfileGroups(
         group,
         options.profilesPerRequest,
         result,
+        elapsedMs(startedAt),
       );
     }
   }
@@ -593,6 +596,7 @@ function logEvaluationGroupOutcome(
   group: readonly EvaluationProfileData[],
   profilesPerRequest: number,
   result: ModelEvaluationGroupResult,
+  durationMs: number,
 ): void {
   const logger = progress.logger;
   if (!logger) return;
@@ -606,6 +610,7 @@ function logEvaluationGroupOutcome(
       profilesPerRequest,
     ),
     completed: completedGroups,
+    durationMs,
   };
 
   if (result.status === 'rejected') {

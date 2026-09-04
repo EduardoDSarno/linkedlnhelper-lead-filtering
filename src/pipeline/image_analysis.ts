@@ -5,6 +5,7 @@ import {
 import type { ProfileImageJobResult } from '../imageExtractor/index.js';
 import {
   PIPELINE_PROGRESS_MESSAGE,
+  elapsedMs,
   type Logger,
 } from '../logging/index.js';
 import { attachProfileImageAnalysis } from '../profile/index.js';
@@ -138,6 +139,7 @@ export async function analyzeProfileImages(
     PIPELINE_PROGRESS_MESSAGE.imageStarted,
   );
 
+  const startedAt = Date.now();
   // The batch analyzer returns one fulfilled or rejected result per photo.
   const imageResults = await analyze(
     profilesWithPhoto.map((profile) => ({
@@ -167,6 +169,7 @@ export async function analyzeProfileImages(
       requestedImageAnalyses: imageResults.length,
       successfulImageAnalyses,
       failedImageAnalyses: failures.length,
+      durationMs: elapsedMs(startedAt),
     },
     PIPELINE_PROGRESS_MESSAGE.imageCompleted,
   );

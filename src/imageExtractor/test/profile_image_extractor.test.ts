@@ -420,10 +420,14 @@ test('logs per-image progress and includes the error on failure', async () => {
   assert.equal(failedPayload['profileId'], 'profile-0');
   assert.equal(failedPayload['error'], 'download timed out');
   assert.equal(failedPayload['status'], 'rejected');
+  assert.equal(typeof failedPayload['durationMs'], 'number');
+  assert.ok((failedPayload['durationMs'] as number) >= 0);
 
   const succeededPayload = succeeded[0]?.payload as Record<string, unknown>;
   assert.equal(succeededPayload['completed'], 2);
   assert.equal(succeededPayload['total'], 2);
   assert.equal(succeededPayload['profileIndex'], 2);
   assert.equal(succeededPayload['status'], 'fulfilled');
+  assert.equal(typeof succeededPayload['durationMs'], 'number');
+  assert.ok((succeededPayload['durationMs'] as number) >= 0);
 });

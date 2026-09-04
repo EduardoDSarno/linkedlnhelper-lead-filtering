@@ -6,5 +6,6 @@ export {
   PIPELINE_STAGE,
   displayIndex,
   displayRange,
+  elapsedMs,
 } from './progress.js';
 export type { EvaluationPass, PipelineStage } from './progress.js';

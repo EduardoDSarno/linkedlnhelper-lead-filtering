@@ -343,15 +343,17 @@ test('logs batch progress and includes URLs when an Actor batch fails', async ()
   assert.equal(progress['completed'], 2);
   assert.equal(progress['total'], 3);
   assert.equal(progress['failedProfiles'], 1);
+  assert.equal(typeof progress['durationMs'], 'number');
+  assert.ok((progress['durationMs'] as number) >= 0);
 
   const failedBatch = logger.entries.find(
     (entry) => entry.message === PIPELINE_PROGRESS_MESSAGE.apifyBatchFailed,
   );
   assert.ok(failedBatch);
-  assert.deepEqual(
-    (failedBatch.payload as Record<string, unknown>)['linkedinUrls'],
-    [links[2]],
-  );
+  const failedBatchPayload = failedBatch.payload as Record<string, unknown>;
+  assert.deepEqual(failedBatchPayload['linkedinUrls'], [links[2]]);
+  assert.equal(typeof failedBatchPayload['durationMs'], 'number');
+  assert.ok((failedBatchPayload['durationMs'] as number) >= 0);
 
   const profileFailed = logger.entries.find(
     (entry) => entry.message === PIPELINE_PROGRESS_MESSAGE.apifyProfileFailed,

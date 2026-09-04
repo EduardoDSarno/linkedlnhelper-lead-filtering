@@ -30,3 +30,7 @@
 # Others
 - Consider a cyclomatic complexity lint pass before and after each change to avoid verbose code
 - When writing a file write the most important functions close to the top, and the helpers on the bottom (decreasing order of importance)
+- Keep changes small. Prefer a field on an existing log or function over a
+  new subsystem, helper type, or parallel code path.
+- Do not add verbose commentary, overlapping abstractions, or extra files
+  when an existing function can carry the behavior.

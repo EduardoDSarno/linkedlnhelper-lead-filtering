@@ -23,6 +23,7 @@ import {
   PIPELINE_PROGRESS_MESSAGE,
   PIPELINE_STAGE,
   displayIndex,
+  elapsedMs,
 } from '../../logging/index.js';
 import type { Logger } from '../../logging/index.js';
 import type {
@@ -209,7 +210,7 @@ async function executeRound(
           batch.map((profile) => profile.linkedinUrl),
           context,
         );
-        const durationMs = Date.now() - startedAt;
+        const durationMs = elapsedMs(startedAt);
         outcomes[batchIndex] = {
           profiles: batch,
           context,
@@ -230,7 +231,7 @@ async function executeRound(
           PIPELINE_PROGRESS_MESSAGE.apifyBatchCompleted,
         );
       } catch (error: unknown) {
-        const durationMs = Date.now() - startedAt;
+        const durationMs = elapsedMs(startedAt);
         outcomes[batchIndex] = {
           profiles: batch,
           context,
@@ -333,6 +334,7 @@ export async function collectApifyProfilesWithExecutor(
     roundsCompleted < config.maxAttempts
   ) {
     const round = roundsCompleted + 1;
+    const roundStartedAt = Date.now();
     const outcomes = await executeRound(
       pending,
       round,
@@ -452,6 +454,7 @@ export async function collectApifyProfilesWithExecutor(
         requestedProfiles: uniqueProfiles.length,
         failedProfiles: failures.size,
         retryProfiles: pending.length,
+        durationMs: elapsedMs(roundStartedAt),
       },
       PIPELINE_PROGRESS_MESSAGE.apifyRoundProgress,
     );

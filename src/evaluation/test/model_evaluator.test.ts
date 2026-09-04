@@ -560,6 +560,8 @@ test('logs evaluation group ranges and fail-now reply text', async () => {
   const failedPayload = groupFailed[0]?.payload as Record<string, unknown>;
   assert.equal(failedPayload['responseText'], '{invalid-json');
   assert.deepEqual(failedPayload['profileIds'], ['profile-0', 'profile-1']);
+  assert.equal(typeof failedPayload['durationMs'], 'number');
+  assert.ok((failedPayload['durationMs'] as number) >= 0);
 
   const retryStarted = logger.entries.filter(
     (entry) => entry.message === PIPELINE_PROGRESS_MESSAGE.evalRetryStarted,
@@ -596,6 +598,8 @@ test('logs an omitted profile without repeating the batch reply on that line', a
   const completePayload = primaryComplete.payload as Record<string, unknown>;
   assert.deepEqual(completePayload['failedProfileIds'], ['profile-1']);
   assert.ok(typeof completePayload['responseText'] === 'string');
+  assert.equal(typeof completePayload['durationMs'], 'number');
+  assert.ok((completePayload['durationMs'] as number) >= 0);
 
   const profileFailed = logger.entries.filter(
     (entry) =>
