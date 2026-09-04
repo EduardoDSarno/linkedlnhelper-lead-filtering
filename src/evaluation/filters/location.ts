@@ -7,6 +7,7 @@ import {
   type BroadCriterionOutcome,
   type CriteriaMatch,
 } from './constants.js';
+import { locationTextMatches } from './brazil_location.js';
 import { normalizedText } from './helpers.js';
 import type { BroadCriterionResult } from './types.js';
 
@@ -30,7 +31,13 @@ function locationOutcome(
   return allFieldsKnown ? BROAD_OUTCOME.matched : BROAD_OUTCOME.unknown;
 }
 
-/** Checks whether one selected location field matches one configured location. */
+/**
+ * Checks whether one selected location field matches one configured location.
+ *
+ * The human-readable text field uses Brazil-aware aliases so a "Cidade, UF"
+ * chip matches LinkedIn's full state name, metro wording, and city-only text.
+ * Parsed city/state fields stay exact: they are already a single component.
+ */
 function locationMatches(
   value: string,
   configuredLocation: string,
@@ -42,7 +49,7 @@ function locationMatches(
   if (!normalizedValue || !normalizedConfiguredLocation) return false;
 
   return includesLocationText
-    ? normalizedValue.includes(normalizedConfiguredLocation)
+    ? locationTextMatches(value, configuredLocation)
     : normalizedValue === normalizedConfiguredLocation;
 }
 

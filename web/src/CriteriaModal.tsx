@@ -451,6 +451,8 @@ export function CriteriaModal({ form, update, onClose, onConfirm }: CriteriaModa
                 <>
                   Mantém apenas perfis nas localizações listadas. Adicione uma{' '}
                   <b>região</b> para incluir todos os seus estados de uma vez.
+                  Uma cidade como <b>Florianópolis, SC</b> também encontra o
+                  nome completo do estado, só a cidade, ou “e Região”.
                 </>
               ) : (
                 <>

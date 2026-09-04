@@ -1,10 +1,11 @@
 /**
  * Curated Brazilian locations for the criteria autocomplete.
  *
- * Entries are in the "Cidade, UF" shape the profile location text uses, plus the
- * state names, so a campaign can target a whole state or a specific city. The
- * user can still type a location not listed here — this only speeds up the
- * common cases; it is not an allow-list.
+ * City entries use "Cidade, UF" as a label. The backend expands that chip to
+ * LinkedIn's usual variants (full state name, UF, city-only, "e Região"), so
+ * the user does not have to add each spelling. State names target the whole
+ * state, including profiles that only wrote the UF. The user can still type a
+ * location not listed here — this only speeds up the common cases.
  */
 export const BRAZIL_LOCATIONS: string[] = [
   // States (full names)
