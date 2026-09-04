@@ -5,8 +5,7 @@ import type { ChatResult } from '@openrouter/sdk/models';
 
 import {
   DEFAULT_IMAGE_RESOLUTION,
-  DEFAULT_THINKING_EFFORT,
-  MODEL_RETRY_HTTP_STATUS_CODES,
+  DEFAULT_OPENROUTER_THINKING_EFFORT,
 } from './model_client.js';
 import type {
   ImageResolution,
@@ -32,8 +31,12 @@ const OPENROUTER_IMAGE_DETAIL: Readonly<
   high: 'high',
 };
 
-/** Status codes the OpenRouter SDK retries as strings. */
-const OPENROUTER_RETRY_CODES = MODEL_RETRY_HTTP_STATUS_CODES.map(String);
+/**
+ * Eval and image already retry at the application layer. The SDK must not
+ * retry timeouts on its own: its default backoff window is far longer than a
+ * single evaluation attempt.
+ */
+const OPENROUTER_SDK_RETRIES = { strategy: 'none' } as const;
 
 /** A cached SDK client and the credential it was created with. */
 interface CachedOpenRouterClient {
@@ -80,8 +83,7 @@ async function sendWithSharedClient(
     { chatRequest: { ...chatRequest, stream: false } },
     {
       timeoutMs: options.timeoutMs,
-      retries: { strategy: 'backoff', retryConnectionErrors: true },
-      retryCodes: OPENROUTER_RETRY_CODES,
+      retries: OPENROUTER_SDK_RETRIES,
     },
   );
 
@@ -140,7 +142,7 @@ function toChatRequest(request: ModelRequest): ChatRequest {
     model: request.model,
     messages,
     reasoning: {
-      effort: request.thinking ?? DEFAULT_THINKING_EFFORT,
+      effort: request.thinking ?? DEFAULT_OPENROUTER_THINKING_EFFORT,
     },
     responseFormat: {
       type: 'json_schema',

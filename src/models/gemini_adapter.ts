@@ -38,6 +38,8 @@ const GEMINI_THINKING_LEVEL: Readonly<Record<ThinkingEffort, ThinkingLevel>> = {
   low: ThinkingLevel.LOW,
   medium: ThinkingLevel.MEDIUM,
   high: ThinkingLevel.HIGH,
+  // Gemini has no max rung; the deepest supported level is used instead.
+  max: ThinkingLevel.HIGH,
 };
 
 /** Maps the provider-neutral image resolution onto Gemini media tokens. */

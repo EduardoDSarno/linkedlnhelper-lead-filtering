@@ -19,8 +19,10 @@ export type { OpenRouterChatSender } from './openrouter_adapter.js';
 
 export {
   DEFAULT_IMAGE_RESOLUTION,
+  DEFAULT_OPENROUTER_THINKING_EFFORT,
   DEFAULT_THINKING_EFFORT,
   MODEL_RETRY_HTTP_STATUS_CODES,
+  THINKING_EFFORTS,
 } from './model_client.js';
 export type {
   ImageResolution,
@@ -38,11 +40,16 @@ export {
   MODEL_PROVIDER_ENVIRONMENT_KEY,
   MODEL_PROVIDERS,
   OPENROUTER_MODEL_ENVIRONMENT_KEY,
+  OPENROUTER_THINKING_EFFORT_ENVIRONMENT_KEY,
+  THINKING_EFFORT_CHOICES,
   resolveModelClient,
   resolveModelProvider,
   resolveProviderModelId,
+  resolveThinkingEffort,
+  resolveThinkingEffortChoice,
 } from './model_provider.js';
 export type {
   ModelProvider,
   ProviderModelIdInput,
+  ThinkingEffortChoice,
 } from './model_provider.js';

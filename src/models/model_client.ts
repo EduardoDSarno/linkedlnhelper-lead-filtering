@@ -1,10 +1,24 @@
-export type ThinkingEffort = 'low' | 'medium' | 'high';
+export type ThinkingEffort = 'low' | 'medium' | 'high' | 'max';
 
 /** Image token/detail scale shared by every provider adapter. */
 export type ImageResolution = 'low' | 'medium' | 'high';
 
-/** Used when a caller omits thinking; matches both current call sites. */
+/** Used when a Gemini caller omits thinking. */
 export const DEFAULT_THINKING_EFFORT: ThinkingEffort = 'medium';
+
+/**
+ * Used when OpenRouter thinking is omitted or OPENROUTER_MODEL_THINKING_EFFORT
+ * is blank. GLM Flash has no medium rung, so high is the nearest mid setting.
+ */
+export const DEFAULT_OPENROUTER_THINKING_EFFORT: ThinkingEffort = 'high';
+
+/** Effort values accepted on ModelRequest and OPENROUTER_MODEL_THINKING_EFFORT. */
+export const THINKING_EFFORTS = [
+  'low',
+  'medium',
+  'high',
+  'max',
+] as const satisfies readonly ThinkingEffort[];
 
 /** Used when an image part omits resolution; matches the image-stage default. */
 export const DEFAULT_IMAGE_RESOLUTION: ImageResolution = 'medium';

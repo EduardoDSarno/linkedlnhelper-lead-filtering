@@ -4,14 +4,20 @@ import test from 'node:test';
 import {
   DEFAULT_MODEL_PROVIDER,
   DEFAULT_OPENROUTER_MODEL,
+  DEFAULT_OPENROUTER_THINKING_EFFORT,
+  DEFAULT_THINKING_EFFORT,
   MODEL_PROVIDER_ENVIRONMENT_KEY,
   MODEL_PROVIDERS,
   OPENROUTER_MODEL_ENVIRONMENT_KEY,
+  OPENROUTER_THINKING_EFFORT_ENVIRONMENT_KEY,
+  THINKING_EFFORT_CHOICES,
   geminiModelClient,
   openRouterModelClient,
   resolveModelClient,
   resolveModelProvider,
   resolveProviderModelId,
+  resolveThinkingEffort,
+  resolveThinkingEffortChoice,
 } from '../index.js';
 
 const GEMINI_DEFAULT_MODEL = 'gemini-3.8-flash';
@@ -108,5 +114,71 @@ test('falls back to the configured OpenRouter default when that env is blank', (
       [MODEL_PROVIDER_ENVIRONMENT_KEY]: 'openrouter',
     }),
     DEFAULT_OPENROUTER_MODEL,
+  );
+});
+
+test('keeps Gemini thinking at medium until OpenRouter is selected', () => {
+  assert.equal(resolveThinkingEffort({}), DEFAULT_THINKING_EFFORT);
+  assert.equal(
+    resolveThinkingEffort({ [MODEL_PROVIDER_ENVIRONMENT_KEY]: 'gemini' }),
+    DEFAULT_THINKING_EFFORT,
+  );
+});
+
+test('defaults OpenRouter thinking to high when the env is blank', () => {
+  assert.equal(
+    resolveThinkingEffort({ [MODEL_PROVIDER_ENVIRONMENT_KEY]: 'openrouter' }),
+    DEFAULT_OPENROUTER_THINKING_EFFORT,
+  );
+  assert.equal(
+    resolveThinkingEffort({
+      [MODEL_PROVIDER_ENVIRONMENT_KEY]: 'openrouter',
+      [OPENROUTER_THINKING_EFFORT_ENVIRONMENT_KEY]: '   ',
+    }),
+    DEFAULT_OPENROUTER_THINKING_EFFORT,
+  );
+});
+
+test('reads OpenRouter thinking effort from the environment', () => {
+  assert.equal(
+    resolveThinkingEffort({
+      [MODEL_PROVIDER_ENVIRONMENT_KEY]: 'openrouter',
+      [OPENROUTER_THINKING_EFFORT_ENVIRONMENT_KEY]: 'Max',
+    }),
+    'max',
+  );
+});
+
+test('rejects an unknown OpenRouter thinking effort', () => {
+  assert.throws(
+    () =>
+      resolveThinkingEffort({
+        [MODEL_PROVIDER_ENVIRONMENT_KEY]: 'openrouter',
+        [OPENROUTER_THINKING_EFFORT_ENVIRONMENT_KEY]: 'turbo',
+      }),
+    /OPENROUTER_MODEL_THINKING_EFFORT must be/,
+  );
+});
+
+test('maps a UI thinking choice onto provider effort', () => {
+  assert.equal(resolveThinkingEffortChoice(), DEFAULT_THINKING_EFFORT);
+  assert.equal(
+    resolveThinkingEffortChoice(THINKING_EFFORT_CHOICES.default, {
+      [MODEL_PROVIDER_ENVIRONMENT_KEY]: 'openrouter',
+    }),
+    DEFAULT_OPENROUTER_THINKING_EFFORT,
+  );
+  assert.equal(
+    resolveThinkingEffortChoice(THINKING_EFFORT_CHOICES.max, {
+      [MODEL_PROVIDER_ENVIRONMENT_KEY]: 'gemini',
+    }),
+    'max',
+  );
+});
+
+test('rejects an unknown UI thinking choice', () => {
+  assert.throws(
+    () => resolveThinkingEffortChoice('turbo'),
+    /thinkingEffort must be "default" or "max"/,
   );
 });

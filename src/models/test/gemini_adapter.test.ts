@@ -78,6 +78,19 @@ test('defaults omitted thinking to Gemini medium', async () => {
   });
 });
 
+test('maps max thinking onto Gemini high because Gemini has no max level', async () => {
+  let parameters: GenerateContentParameters | undefined;
+  const client = createGeminiModelClient(async (received) => {
+    parameters = received;
+    return geminiResponse({ text: '{}' });
+  });
+  await client(sampleRequest({ thinking: 'max' }));
+
+  assert.deepEqual(parameters?.config?.thinkingConfig, {
+    thinkingLevel: ThinkingLevel.HIGH,
+  });
+});
+
 test('maps an image part onto Gemini base64 media', async () => {
   let parameters: GenerateContentParameters | undefined;
   const bytes = Uint8Array.from([1, 2, 3, 4]);

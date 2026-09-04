@@ -1,4 +1,4 @@
-import { DEFAULT_THINKING_EFFORT, resolveModelClient } from '../models/index.js';
+import { resolveModelClient, resolveThinkingEffort } from '../models/index.js';
 import type {
   ModelClient,
   ModelResponse,
@@ -106,7 +106,7 @@ export async function recognizeProfileImageWithGemini(
       },
     ],
     jsonSchema: PROFILE_IMAGE_ASSESSMENT_JSON_SCHEMA,
-    thinking: DEFAULT_THINKING_EFFORT,
+    thinking: resolveThinkingEffort(),
     timeoutMs: request.timeoutMs,
   });
   const usage = response.usage;

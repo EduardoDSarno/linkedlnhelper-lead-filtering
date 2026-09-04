@@ -83,7 +83,7 @@ test('forwards text, system, schema, thinking, and timeout to OpenRouter', async
   });
 });
 
-test('defaults omitted thinking to the shared medium effort', async () => {
+test('defaults omitted thinking to OpenRouter high effort', async () => {
   let chatRequest: ChatRequest | undefined;
   const client = createOpenRouterModelClient(async (received) => {
     chatRequest = received;
@@ -97,7 +97,19 @@ test('defaults omitted thinking to the shared medium effort', async () => {
     timeoutMs: 30_000,
   });
 
-  assert.deepEqual(chatRequest?.reasoning, { effort: 'medium' });
+  assert.deepEqual(chatRequest?.reasoning, { effort: 'high' });
+});
+
+test('forwards max thinking effort to OpenRouter', async () => {
+  let chatRequest: ChatRequest | undefined;
+  const client = createOpenRouterModelClient(async (received) => {
+    chatRequest = received;
+    return chatResult();
+  });
+
+  await client(sampleRequest({ thinking: 'max' }));
+
+  assert.deepEqual(chatRequest?.reasoning, { effort: 'max' });
 });
 
 test('maps an image part onto an OpenRouter data URI', async () => {
