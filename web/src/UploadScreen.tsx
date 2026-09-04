@@ -1,5 +1,14 @@
-import { criteriaSummary } from './code/criteria';
+import { criteriaSummary, evaluationTimeEstimateMessage } from './code/criteria';
 import type { ReviewFlow } from './code/useReviewFlow';
+
+/** Circled "i" used to flag the run-time estimate chip. */
+function InfoIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 5a1.3 1.3 0 1 1 0 2.6A1.3 1.3 0 0 1 12 7zm1.2 10.5h-2.4v-6.2h2.4v6.2z" />
+    </svg>
+  );
+}
 
 /** Formats a byte count as a short Brazilian-style size label. */
 function formatSize(bytes: number): string {
@@ -230,7 +239,34 @@ export function UploadScreen({ flow }: { flow: ReviewFlow }) {
               </div>
             )}
 
-            <div style={{ marginTop: 22, display: 'flex', alignItems: 'center', gap: 14 }}>
+            {configured && (
+              <div
+                style={{
+                  margin: '18px 0 0',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  padding: '9px 13px',
+                  borderRadius: 999,
+                  fontSize: 13,
+                  fontWeight: 600,
+                  lineHeight: 1.35,
+                  color: '#1d4ed8',
+                  background: '#eff6ff',
+                  border: '1px solid #bfdbfe',
+                }}
+              >
+                <InfoIcon />
+                <span>
+                  {evaluationTimeEstimateMessage(
+                    imported.validProfiles,
+                    criteria.thinkingMode,
+                  )}
+                </span>
+              </div>
+            )}
+
+            <div style={{ marginTop: configured ? 12 : 22, display: 'flex', alignItems: 'center', gap: 14 }}>
               {configured ? (
                 <button
                   type="button"
@@ -274,7 +310,7 @@ export function UploadScreen({ flow }: { flow: ReviewFlow }) {
               )}
               <span style={{ fontSize: 12.5, color: '#94a3b8' }}>
                 {configured
-                  ? 'Leva alguns minutos. Você acompanha o progresso.'
+                  ? 'Coleta e fotos podem somar alguns minutos. Você acompanha o progresso.'
                   : 'Defina os critérios para liberar a avaliação.'}
               </span>
             </div>

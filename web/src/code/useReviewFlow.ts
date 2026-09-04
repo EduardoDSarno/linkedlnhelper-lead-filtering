@@ -126,7 +126,12 @@ export function useReviewFlow() {
     setSubmitting(true);
     setError(undefined);
     try {
-      await startReview(processingId, toEvaluationCriteria(criteria), name);
+      await startReview(
+        processingId,
+        toEvaluationCriteria(criteria),
+        name,
+        criteria.thinkingMode,
+      );
       setStatus({ processingId, status: 'running' });
       setResults([]);
       setOverrides({});

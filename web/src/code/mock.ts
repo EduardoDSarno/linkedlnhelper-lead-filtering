@@ -381,6 +381,7 @@ export function startReview(
   processingId: string,
   _criteria: unknown,
   name: string,
+  _thinkingEffort: 'default' | 'max',
 ): Promise<StartReviewResult> {
   statusPolls = 0;
   const systemPrompt = (_criteria as { systemPrompt?: string })?.systemPrompt;

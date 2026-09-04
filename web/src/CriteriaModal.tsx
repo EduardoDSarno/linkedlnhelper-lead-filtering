@@ -6,8 +6,12 @@ import { BRAZIL_STATES, REGION_NAMES } from './data/regions';
 import {
   LOCATION_MODE,
   OPEN_TO_WORK,
+  THINKING_MODE,
+  THINKING_MODE_HINTS,
   criteriaSummary,
+  isCriteriaComplete,
   type CriteriaForm,
+  type ThinkingMode,
 } from './code/criteria';
 
 /** Props: the current form, a patch applier, and the modal's actions. */
@@ -118,13 +122,107 @@ function Chip({
   );
 }
 
+/** Lightning mark used on the max-thinking power toggle. */
+function LightningIcon() {
+  return (
+    <svg
+      width="13"
+      height="13"
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      aria-hidden="true"
+    >
+      <path d="M13 2 4 14h7l-1 8 10-14h-7l0-6z" />
+    </svg>
+  );
+}
+
+/**
+ * Compact Codex-style reasoning switch shown inline beside a section title.
+ *
+ * Two segments in one pill: Padrão is the default; Máximo lights up with a
+ * charged blue look. Hovering a segment shows how time and tokens differ.
+ */
+function ThinkingModeToggle({
+  value,
+  onChange,
+}: {
+  value: ThinkingMode;
+  onChange: (mode: ThinkingMode) => void;
+}) {
+  return (
+    <div
+      className="effort-toggle"
+      role="group"
+      aria-label="Raciocínio da IA"
+    >
+      <EffortSegment
+        mode={THINKING_MODE.default}
+        selected={value === THINKING_MODE.default}
+        onSelect={onChange}
+      >
+        Padrão
+      </EffortSegment>
+      <EffortSegment
+        mode={THINKING_MODE.max}
+        selected={value === THINKING_MODE.max}
+        onSelect={onChange}
+      >
+        <LightningIcon />
+        Máximo
+      </EffortSegment>
+    </div>
+  );
+}
+
+/**
+ * One reasoning option plus its hover card explaining time and token cost.
+ */
+function EffortSegment({
+  mode,
+  selected,
+  onSelect,
+  children,
+}: {
+  mode: ThinkingMode;
+  selected: boolean;
+  onSelect: (mode: ThinkingMode) => void;
+  children: React.ReactNode;
+}) {
+  const hint = THINKING_MODE_HINTS[mode];
+  const tipId = `effort-tip-${mode}`;
+  const isMax = mode === THINKING_MODE.max;
+
+  return (
+    <div className="effort-seg-wrap">
+      <button
+        type="button"
+        className={`effort-seg${isMax ? ' is-max' : ''}${selected ? ' is-on' : ''}`}
+        aria-pressed={selected}
+        aria-describedby={tipId}
+        onClick={() => onSelect(mode)}
+      >
+        {children}
+      </button>
+      <div
+        id={tipId}
+        className={`effort-tip${isMax ? ' is-max' : ''}`}
+        role="tooltip"
+      >
+        <strong>{hint.title}</strong>
+        <span>{hint.body}</span>
+      </div>
+    </div>
+  );
+}
+
 /**
  * The evaluation-criteria modal.
  *
  * It edits every field the backend accepts: the ideal-profile prompt, allowed
- * locations, age and compensation ranges, target seniority, role-keyword
- * exclusions, the photo requirement, the open-to-work filter, and the decision
- * policy. Confirming hands the form back for the run.
+ * locations, age and compensation ranges, role-keyword exclusions, the photo
+ * requirement, the open-to-work filter, the decision policy, and how deeply
+ * the model should think. Padrão is selected until the user switches to Máximo.
  */
 export function CriteriaModal({ form, update, onClose, onConfirm }: CriteriaModalProps) {
   /** Adds a trimmed exclusion keyword when Enter is pressed. */
@@ -146,6 +244,7 @@ export function CriteriaModal({ form, update, onClose, onConfirm }: CriteriaModa
   const band1 = form.manualMin;
   const band2 = Math.max(0, form.approveMin - form.manualMin);
   const band3 = Math.max(0, 100 - form.approveMin);
+  const canConfirm = isCriteriaComplete(form);
 
   // The location field shown depends on the active mode; each keeps its own list.
   const locationField =
@@ -503,6 +602,10 @@ export function CriteriaModal({ form, update, onClose, onConfirm }: CriteriaModa
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
               <span style={{ fontSize: 13, fontWeight: 600 }}>Política de decisão</span>
               <AiPill />
+              <ThinkingModeToggle
+                value={form.thinkingMode}
+                onChange={(thinkingMode) => update({ thinkingMode })}
+              />
             </div>
 
             <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
@@ -650,7 +753,11 @@ export function CriteriaModal({ form, update, onClose, onConfirm }: CriteriaModa
             background: '#fbfcfe',
           }}
         >
-          <span style={{ fontSize: 12, color: '#94a3b8' }}>{criteriaSummary(form)}</span>
+          <span style={{ fontSize: 12, color: '#94a3b8' }}>
+            {canConfirm
+              ? criteriaSummary(form)
+              : 'Descreva o perfil ideal para confirmar os critérios.'}
+          </span>
           <button
             type="button"
             onClick={onClose}
@@ -672,9 +779,10 @@ export function CriteriaModal({ form, update, onClose, onConfirm }: CriteriaModa
           <button
             type="button"
             onClick={onConfirm}
+            disabled={!canConfirm}
             style={{
               all: 'unset',
-              cursor: 'pointer',
+              cursor: canConfirm ? 'pointer' : 'not-allowed',
               background: '#2563eb',
               color: '#fff',
               fontSize: 13,
@@ -682,6 +790,7 @@ export function CriteriaModal({ form, update, onClose, onConfirm }: CriteriaModa
               padding: '10px 18px',
               borderRadius: 9,
               boxShadow: '0 1px 2px rgba(37,99,235,.35)',
+              opacity: canConfirm ? 1 : 0.45,
             }}
           >
             Confirmar critérios

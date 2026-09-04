@@ -39,17 +39,19 @@ export interface StartReviewResult {
  *
  * The backend runs it in the background and returns immediately, so the caller
  * then polls the run's status. The criteria object comes straight from the
- * criteria form's `toEvaluationCriteria`.
+ * criteria form's `toEvaluationCriteria`. Thinking effort is sent beside it
+ * because it is a run setting, not a campaign cut.
  */
 export async function startReview(
     processingId: string,
     criteria: unknown,
     name: string,
+    thinkingEffort: 'default' | 'max',
 ): Promise<StartReviewResult> {
     const response = await fetch('/run_filter', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ processingId, criteria, name }),
+        body: JSON.stringify({ processingId, criteria, name, thinkingEffort }),
     });
 
     if (!response.ok) {
