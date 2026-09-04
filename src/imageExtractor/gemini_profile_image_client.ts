@@ -1,4 +1,4 @@
-import { geminiModelClient } from '../models/index.js';
+import { DEFAULT_THINKING_EFFORT, geminiModelClient } from '../models/index.js';
 import type {
   ModelClient,
   ModelResponse,
@@ -7,9 +7,6 @@ import type {
 import type { LoadedProfileImage } from './profile_image_loader.js';
 import { PROFILE_IMAGE_ASSESSMENT_JSON_SCHEMA } from './profile_image_types.js';
 import type { ProfileImageResolution } from './profile_image_types.js';
-
-/** Matches the thinking effort both current Gemini call sites already use. */
-const IMAGE_THINKING_EFFORT = 'medium' as const;
 
 const IMAGE_ASSESSMENT_PROMPT = `
 Analyze this profile image using only directly visible, neutral properties.
@@ -109,7 +106,7 @@ export async function recognizeProfileImageWithGemini(
       },
     ],
     jsonSchema: PROFILE_IMAGE_ASSESSMENT_JSON_SCHEMA,
-    thinking: IMAGE_THINKING_EFFORT,
+    thinking: DEFAULT_THINKING_EFFORT,
     timeoutMs: request.timeoutMs,
   });
   const usage = response.usage;

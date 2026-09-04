@@ -2,7 +2,7 @@ import {
   CONFIG_NUMBER_MINIMUMS,
   resolveConfigNumber,
 } from '../../helpers/index.js';
-import type { ThinkingEffort } from '../../models/index.js';
+import { DEFAULT_THINKING_EFFORT } from '../../models/index.js';
 import type { ModelEvaluationOptions } from './types.js';
 
 /** Environment variables understood by the model-evaluation stage. */
@@ -24,7 +24,7 @@ export const MODEL_EVALUATION_DEFAULTS = {
   maximumAttempts: 3,
   retryBaseDelayMs: 250,
   retryMaximumDelayMs: 4_000,
-  thinkingEffort: 'medium' satisfies ThinkingEffort,
+  thinkingEffort: DEFAULT_THINKING_EFFORT,
 } as const;
 
 /** Safety ceilings for request scheduling and structured responses. */

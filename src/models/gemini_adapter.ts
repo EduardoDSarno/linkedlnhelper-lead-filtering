@@ -10,7 +10,13 @@ import {
   mapGeminiTokenUsage,
 } from './gemini_client.js';
 import type { GeminiContentGenerator } from './gemini_client.js';
+import {
+  DEFAULT_IMAGE_RESOLUTION,
+  DEFAULT_THINKING_EFFORT,
+  MODEL_RETRY_HTTP_STATUS_CODES,
+} from './model_client.js';
 import type {
+  ImageResolution,
   ModelClient,
   ModelPart,
   ModelRequest,
@@ -21,20 +27,11 @@ import type {
 /** Structured replies are always requested as JSON from every Gemini stage. */
 const GEMINI_JSON_MIME_TYPE = 'application/json';
 
-/** Used when a caller omits thinking; matches both current Gemini call sites. */
-const DEFAULT_THINKING_EFFORT: ThinkingEffort = 'medium';
-
-/** Used when an image part omits resolution; matches the image-stage default. */
-const DEFAULT_IMAGE_RESOLUTION = 'medium';
-
 /**
  * SDK attempts per adapter call. Eval already retries at the app layer, so the
  * SDK must not retry the same request again.
  */
 const GEMINI_SDK_ATTEMPTS_PER_CALL = 1;
-
-/** Transient HTTP statuses the Gemini SDK may retry when it is allowed to. */
-const GEMINI_RETRY_HTTP_STATUS_CODES = [408, 429, 500, 502, 503, 504] as const;
 
 /** Maps the provider-neutral thinking scale onto Gemini's enum. */
 const GEMINI_THINKING_LEVEL: Readonly<Record<ThinkingEffort, ThinkingLevel>> = {
@@ -45,7 +42,7 @@ const GEMINI_THINKING_LEVEL: Readonly<Record<ThinkingEffort, ThinkingLevel>> = {
 
 /** Maps the provider-neutral image resolution onto Gemini media tokens. */
 const GEMINI_MEDIA_RESOLUTION: Readonly<
-  Record<'low' | 'medium' | 'high', PartMediaResolutionLevel>
+  Record<ImageResolution, PartMediaResolutionLevel>
 > = {
   low: PartMediaResolutionLevel.MEDIA_RESOLUTION_LOW,
   medium: PartMediaResolutionLevel.MEDIA_RESOLUTION_MEDIUM,
@@ -103,7 +100,7 @@ function toGeminiParameters(request: ModelRequest): GenerateContentParameters {
         timeout: request.timeoutMs,
         retryOptions: {
           attempts: GEMINI_SDK_ATTEMPTS_PER_CALL,
-          httpStatusCodes: [...GEMINI_RETRY_HTTP_STATUS_CODES],
+          httpStatusCodes: [...MODEL_RETRY_HTTP_STATUS_CODES],
         },
       },
     },
