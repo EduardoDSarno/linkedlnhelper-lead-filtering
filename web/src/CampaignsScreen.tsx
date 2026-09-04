@@ -13,10 +13,27 @@ const STATUS_LABEL: Record<string, { text: string; color: string; bg: string }> 
   expired: { text: 'Expirada', color: '#92400e', bg: '#fffbeb' },
 };
 
+/** Shared grid so the header and every campaign row stay aligned. */
+const CAMPAIGN_TABLE_COLUMNS =
+  'minmax(0,1fr) minmax(0,1fr) 104px 168px 148px 300px';
+
 /** Shortens a system prompt for the table cell. */
 function shorten(text: string | undefined, max = 130): string {
   if (!text) return '—';
   return text.length > max ? `${text.slice(0, max).trimEnd()}…` : text;
+}
+
+/** Formats a campaign timestamp as a pt-BR date and time. */
+function formatUpdatedAt(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return iso;
+  return date.toLocaleString('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }
 
 /** A labeled download button; the approved variant is emphasized. */
@@ -267,7 +284,7 @@ export function CampaignsScreen({ flow }: { flow: ReviewFlow }) {
             <div
               style={{
                 display: 'grid',
-                gridTemplateColumns: 'minmax(0,1fr) minmax(0,1fr) 104px 168px 92px 300px',
+                gridTemplateColumns: CAMPAIGN_TABLE_COLUMNS,
                 gap: 14,
                 padding: '11px 18px',
                 fontSize: 11.5,
@@ -293,7 +310,7 @@ export function CampaignsScreen({ flow }: { flow: ReviewFlow }) {
                   key={run.processingId}
                   style={{
                     display: 'grid',
-                    gridTemplateColumns: 'minmax(0,1fr) minmax(0,1fr) 104px 168px 92px 300px',
+                    gridTemplateColumns: CAMPAIGN_TABLE_COLUMNS,
                     gap: 14,
                     padding: '13px 18px',
                     alignItems: 'center',
@@ -325,7 +342,7 @@ export function CampaignsScreen({ flow }: { flow: ReviewFlow }) {
                   <CountsCell counts={run.counts} />
 
                   <span style={{ fontSize: 12.5, color: '#64748b', whiteSpace: 'nowrap' }}>
-                    {new Date(run.updatedAt ?? run.createdAt).toLocaleDateString('pt-BR')}
+                    {formatUpdatedAt(run.updatedAt ?? run.createdAt)}
                   </span>
 
                   <span style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', alignItems: 'center' }}>
