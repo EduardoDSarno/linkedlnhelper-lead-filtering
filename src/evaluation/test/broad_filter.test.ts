@@ -170,6 +170,83 @@ test('excludes a profile whose current location is known not to match', () => {
   assert.equal(evaluation.results[0]?.excludes, true);
 });
 
+test('sends a country-only location to AI instead of excluding it', () => {
+  const criteria: FullEvaluationCriteria = {
+    location: {
+      locations: ['Goiás', 'São Paulo'],
+      fields: ['text'],
+      match: CRITERIA_MATCH.any,
+    },
+    ...prompts(),
+  };
+
+  const evaluation = evaluateBroadCriteria(
+    profile('profile-1', {
+      location: {
+        text: 'Brazil',
+        country: 'Brazil',
+        countryCode: 'BR',
+      },
+    }),
+    criteria,
+  );
+
+  assert.equal(evaluation.decision, BROAD_DECISION.NextPhase);
+  assert.equal(evaluation.results[0]?.outcome, BROAD_OUTCOME.unknown);
+  assert.equal(evaluation.results[0]?.excludes, false);
+});
+
+test('still excludes a specific place that is outside the campaign area', () => {
+  const criteria: FullEvaluationCriteria = {
+    location: {
+      locations: ['Goiás'],
+      fields: ['text'],
+      match: CRITERIA_MATCH.any,
+    },
+    ...prompts(),
+  };
+
+  const evaluation = evaluateBroadCriteria(
+    profile('profile-1', {
+      location: {
+        text: 'Lisbon, Portugal',
+        city: 'Lisbon',
+        country: 'Portugal',
+      },
+    }),
+    criteria,
+  );
+
+  assert.equal(evaluation.decision, BROAD_DECISION.Failed);
+  assert.equal(evaluation.results[0]?.outcome, BROAD_OUTCOME.notMatched);
+  assert.equal(evaluation.results[0]?.excludes, true);
+});
+
+test('keeps a country-only profile when its text still names an allowed state', () => {
+  const criteria: FullEvaluationCriteria = {
+    location: {
+      locations: ['Goiás'],
+      fields: ['text'],
+      match: CRITERIA_MATCH.any,
+    },
+    ...prompts(),
+  };
+
+  const evaluation = evaluateBroadCriteria(
+    profile('profile-1', {
+      location: {
+        text: 'Goiás, Brazil',
+        country: 'Brazil',
+      },
+    }),
+    criteria,
+  );
+
+  assert.equal(evaluation.decision, BROAD_DECISION.NextPhase);
+  assert.equal(evaluation.results[0]?.outcome, BROAD_OUTCOME.matched);
+  assert.equal(evaluation.results[0]?.excludes, false);
+});
+
 test('sends a profile to AI when location is uncertain', () => {
   const criteria: FullEvaluationCriteria = {
     location: {

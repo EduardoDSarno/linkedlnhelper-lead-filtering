@@ -9,7 +9,9 @@ export type CriteriaMatch = 'any' | 'all';
 /**
  * Allowed current locations for the first pass.
  *
- * A known mismatch excludes the profile. An uncertain location is sent to AI.
+ * A known mismatch excludes the profile. An uncertain location — including a
+ * country-only listing with no city or state — is sent to AI instead of being
+ * dropped, because that person may simply have omitted a more specific place.
  */
 export interface LocationCriteria {
   locations: string[];

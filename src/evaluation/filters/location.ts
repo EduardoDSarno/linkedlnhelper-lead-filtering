@@ -10,6 +10,10 @@ import {
 import { normalizedText } from './helpers.js';
 import type { BroadCriterionResult } from './types.js';
 
+/** Evidence when the profile names a country but not a city or state. */
+const INCOMPLETE_LOCATION_EVIDENCE =
+  'The profile has no city or state, so the location cannot be excluded.';
+
 /** Resolves location matching when some selected fields may be missing. */
 function locationOutcome(
   match: CriteriaMatch,
@@ -95,15 +99,39 @@ export function evaluateLocation(
     notMatched.length,
     knownResults.length === fieldResults.length,
   );
+  const incompleteSpecificPlace =
+    outcome === BROAD_OUTCOME.notMatched &&
+    !locationHasCityOrState(profile.location);
+  const resolvedOutcome = incompleteSpecificPlace
+    ? BROAD_OUTCOME.unknown
+    : outcome;
 
   return {
     criterion: 'location',
-    outcome,
-    excludes: outcome === BROAD_OUTCOME.notMatched,
-    evidence: fieldResults.flatMap(({ field, value, matched: fieldMatched }) =>
-      value
-        ? [`${field}: ${value}${fieldMatched ? ' (matched)' : ''}`]
-        : [`${field}: unavailable`],
-    ),
+    outcome: resolvedOutcome,
+    excludes: resolvedOutcome === BROAD_OUTCOME.notMatched,
+    evidence: [
+      ...fieldResults.flatMap(({ field, value, matched: fieldMatched }) =>
+        value
+          ? [`${field}: ${value}${fieldMatched ? ' (matched)' : ''}`]
+          : [`${field}: unavailable`],
+      ),
+      ...(incompleteSpecificPlace ? [INCOMPLETE_LOCATION_EVIDENCE] : []),
+    ],
   };
+}
+
+/**
+ * Returns whether the profile names a city or state, not only a country.
+ *
+ * Country-only listings are too coarse to prove someone is outside the
+ * campaign area; a forgotten city must not become a hard exclude.
+ */
+function locationHasCityOrState(
+  location: NonNullable<EvaluationProfileData['location']>,
+): boolean {
+  return (
+    normalizedText(location.city ?? '').length > 0 ||
+    normalizedText(location.state ?? '').length > 0
+  );
 }
