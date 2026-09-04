@@ -1,9 +1,8 @@
-import { ThinkingLevel } from '@google/genai';
-
 import {
   CONFIG_NUMBER_MINIMUMS,
   resolveConfigNumber,
 } from '../../helpers/index.js';
+import type { ThinkingEffort } from '../../models/index.js';
 import type { ModelEvaluationOptions } from './types.js';
 
 /** Environment variables understood by the model-evaluation stage. */
@@ -16,7 +15,7 @@ export const MODEL_EVALUATION_ENVIRONMENT_KEYS = {
   retryBaseDelayMs: 'EVALUATION_RETRY_BASE_DELAY_MS',
 } as const;
 
-/** MVP defaults for Gemini evaluation requests. */
+/** MVP defaults for model-evaluation requests. */
 export const MODEL_EVALUATION_DEFAULTS = {
   model: 'gemini-3.8-flash',
   profilesPerRequest: 5,
@@ -25,7 +24,7 @@ export const MODEL_EVALUATION_DEFAULTS = {
   maximumAttempts: 3,
   retryBaseDelayMs: 250,
   retryMaximumDelayMs: 4_000,
-  thinkingLevel: ThinkingLevel.MEDIUM,
+  thinkingEffort: 'medium' satisfies ThinkingEffort,
 } as const;
 
 /** Safety ceilings for request scheduling and structured responses. */

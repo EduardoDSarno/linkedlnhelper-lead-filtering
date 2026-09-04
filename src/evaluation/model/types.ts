@@ -1,7 +1,4 @@
-import type {
-  GeminiContentGenerator,
-  GeminiTokenUsage,
-} from '../../models/index.js';
+import type { ModelClient, ModelTokenUsage } from '../../models/index.js';
 
 /** Final decisions the model stage may return for professional fit. */
 export const MODEL_EVALUATION_DECISION = {
@@ -82,7 +79,7 @@ export interface ProfileModelEvaluation extends ProfileModelAssessment {
 }
 
 /** Tokens consumed by all successful and failed model-evaluation attempts. */
-export type ModelEvaluationTokenUsage = Required<GeminiTokenUsage>;
+export type ModelEvaluationTokenUsage = Required<ModelTokenUsage>;
 
 /** One request group that could not produce a usable structured response. */
 export interface ModelEvaluationFailure {
@@ -115,6 +112,6 @@ export interface ModelEvaluationOptions {
   requestTimeoutMs?: number;
   maximumAttempts?: number;
   retryBaseDelayMs?: number;
-  generateContent?: GeminiContentGenerator;
+  generateContent?: ModelClient;
   wait?: ModelEvaluationWait;
 }

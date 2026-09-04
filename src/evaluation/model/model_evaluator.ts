@@ -1,11 +1,6 @@
-import type { GenerateContentResponse } from '@google/genai';
-
 import { asHttpStatus, asRecord, asString } from '../../helpers/index.js';
-import {
-  generateContentWithGemini,
-  mapGeminiTokenUsage,
-} from '../../models/index.js';
-import type { GeminiTokenUsage } from '../../models/index.js';
+import { geminiModelClient } from '../../models/index.js';
+import type { ModelResponse, ModelTokenUsage } from '../../models/index.js';
 import type { FullEvaluationCriteria } from '../criterias/index.js';
 import type { EvaluationProfileData } from '../context.js';
 import {
@@ -52,10 +47,10 @@ export function emptyModelEvaluationTokenUsage(): ModelEvaluationTokenUsage {
   };
 }
 
-/** Adds optional Gemini usage into a stable run-level total. */
+/** Adds optional model usage into a stable run-level total. */
 function addTokenUsage(
   target: ModelEvaluationTokenUsage,
-  usage: GeminiTokenUsage | ModelEvaluationTokenUsage | undefined,
+  usage: ModelTokenUsage | ModelEvaluationTokenUsage | undefined,
 ): void {
   if (!usage) return;
 
@@ -129,24 +124,18 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-/** Extracts usable response text or explains why Gemini produced none. */
-function responseText(response: GenerateContentResponse): string {
-  const blockReason = response.promptFeedback?.blockReason;
-  if (blockReason) {
+/** Extracts usable response text or explains why the model produced none. */
+function responseText(response: ModelResponse): string {
+  if (response.blockReason) {
     throw new ModelEvaluationResponseError(
-      `Gemini blocked the evaluation request: ${String(blockReason)}.`,
+      `The model blocked the evaluation request: ${response.blockReason}.`,
     );
   }
 
-  const text = response.text?.trim();
+  const text = response.text.trim();
   if (text) return text;
 
-  const finishReason = response.candidates?.[0]?.finishReason;
-  throw new ModelEvaluationResponseError(
-    finishReason
-      ? `Gemini returned no evaluation (${String(finishReason)}).`
-      : 'Gemini returned no evaluation.',
-  );
+  throw new ModelEvaluationResponseError('The model returned no evaluation.');
 }
 
 /** Splits profiles into request-sized groups while preserving input order. */
@@ -182,26 +171,13 @@ async function evaluateProfileGroup(
     try {
       const response = await generateContent({
         model: options.model,
-        contents: [{ text: prompt.userContent }],
-        config: {
-          systemInstruction: prompt.systemInstruction,
-          thinkingConfig: {
-            thinkingLevel: MODEL_EVALUATION_DEFAULTS.thinkingLevel,
-          },
-          responseMimeType: 'application/json',
-          responseJsonSchema: MODEL_EVALUATION_JSON_SCHEMA,
-          httpOptions: {
-            timeout: options.requestTimeoutMs,
-            retryOptions: {
-              attempts: MODEL_EVALUATION_RETRY_POLICY.sdkAttemptsPerCall,
-              httpStatusCodes: [
-                ...MODEL_EVALUATION_RETRY_POLICY.httpStatusCodes,
-              ],
-            },
-          },
-        },
+        system: prompt.systemInstruction,
+        parts: [{ text: prompt.userContent }],
+        jsonSchema: MODEL_EVALUATION_JSON_SCHEMA,
+        thinking: MODEL_EVALUATION_DEFAULTS.thinkingEffort,
+        timeoutMs: options.requestTimeoutMs,
       });
-      addTokenUsage(tokenUsage, mapGeminiTokenUsage(response));
+      addTokenUsage(tokenUsage, response.usage);
 
       const assessments = parseModelEvaluationResponse(
         responseText(response),
@@ -272,7 +248,7 @@ async function evaluateProfileGroup(
       attempts,
       retryable: true,
       retryExhausted: true,
-      error: 'Gemini evaluation exhausted its configured attempt budget.',
+      error: 'Model evaluation exhausted its configured attempt budget.',
       ...(hasTokenUsage(tokenUsage) ? { tokenUsage: { ...tokenUsage } } : {}),
     },
     tokenUsage,
@@ -280,7 +256,7 @@ async function evaluateProfileGroup(
 }
 
 /**
- * Evaluates compact profiles through bounded concurrent Gemini requests.
+ * Evaluates compact profiles through bounded concurrent model requests.
  *
  * Successful groups are retained even when another group fails. Only the
  * transiently failed group is retried, and every returned token count is
@@ -292,8 +268,7 @@ export async function evaluateProfilesWithModel(
   callerOptions: ModelEvaluationOptions = {},
 ): Promise<ModelEvaluationOutcome> {
   const options = resolveModelEvaluationOptions(callerOptions);
-  const generateContent =
-    callerOptions.generateContent ?? generateContentWithGemini;
+  const generateContent = callerOptions.generateContent ?? geminiModelClient;
   const wait = callerOptions.wait ?? waitForRetry;
   const groups = groupProfilesForModelEvaluation(
     profiles,
