@@ -1,4 +1,5 @@
 node_modules
+dist/
 test_data/
 .DS_Store
 .env
@@ -18,3 +19,4 @@ src/dataStorage/
 *.sqlite
 
 .cursor/
+

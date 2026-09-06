@@ -1,5 +1,5 @@
 import { writeFileAtomically } from '../../helpers/index.js';
-import { MODEL_EVALUATION_DECISION } from '../../evaluation/index.js';
+import { MODEL_EVALUATION_DECISION } from '../../evaluation/model/types.js';
 import type { StoredEvaluationRun } from '../../database/index.js';
 import type { RawCsvFile } from '../csv/csvdata.js';
 

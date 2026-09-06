@@ -1,11 +1,9 @@
-import { geminiModelClient } from './gemini_adapter.js';
-import type { ModelClient, ThinkingEffort } from './model_client.js';
+import type { ThinkingEffort } from './model_client.js';
 import {
   DEFAULT_OPENROUTER_THINKING_EFFORT,
   DEFAULT_THINKING_EFFORT,
   THINKING_EFFORTS,
 } from './model_client.js';
-import { openRouterModelClient } from './openrouter_adapter.js';
 
 /** Environment variable that selects the production model adapter. */
 export const MODEL_PROVIDER_ENVIRONMENT_KEY = 'MODEL_PROVIDER';
@@ -55,20 +53,6 @@ export interface ProviderModelIdInput {
   callerModel?: string | undefined;
   geminiEnvironmentModel?: string | undefined;
   geminiDefault: string;
-}
-
-/**
- * Returns the production `ModelClient` for the configured provider.
- *
- * Eval and image call this as their default so both stages follow one switch.
- * Tests keep injecting their own client and never reach this function.
- */
-export function resolveModelClient(
-  environment: NodeJS.ProcessEnv = process.env,
-): ModelClient {
-  return resolveModelProvider(environment) === MODEL_PROVIDERS.openrouter
-    ? openRouterModelClient
-    : geminiModelClient;
 }
 
 /**

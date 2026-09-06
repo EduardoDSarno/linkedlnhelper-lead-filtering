@@ -1,5 +1,6 @@
 import Fastify, { type FastifyInstance } from 'fastify';
 import { processingPaths, saveOriginalCsv } from '../dataCollector/processing/processing.js';
+import type { ProcessingPaths } from '../dataCollector/processing/processing.js';
 import crypto from 'crypto';
 import {
     dbDeleteProcessingRun,
@@ -25,14 +26,12 @@ import {
     API_FIELD,
 } from './constants.js';
 import { asRecord, asString } from '../helpers/type_guards.js';
-import {
-    BROAD_DECISION,
-    MODEL_EVALUATION_DECISION,
-    parseFullEvaluationCriteria,
-} from '../evaluation/index.js';
-import type { ThinkingEffort } from '../models/index.js';
-import { resolveThinkingEffortChoice } from '../models/index.js';
-import { runPipeline } from '../app.js';
+import { parseFullEvaluationCriteria } from '../evaluation/criterias/index.js';
+import type { FullEvaluationCriteria } from '../evaluation/criterias/index.js';
+import { BROAD_DECISION } from '../evaluation/filters/constants.js';
+import { MODEL_EVALUATION_DECISION } from '../evaluation/model/types.js';
+import type { ThinkingEffort } from '../models/model_client.js';
+import { resolveThinkingEffortChoice } from '../models/model_provider.js';
 import type { Logger } from '../logging/index.js';
 import { createReadStream } from 'node:fs';
 import { basename } from 'node:path';
@@ -433,7 +432,7 @@ function registerFilterRoute(server: FastifyInstance)
         // and the client learns the outcome by polling the status route.
         const name = asString(body[API_FIELD.name]);
 
-        void runPipeline(
+        void startReviewPipeline(
             processingId,
             paths,
             validCriteria,
@@ -685,6 +684,27 @@ function registerDeleteRunRoute(server: FastifyInstance)
             db.close();
         }
     });
+}
+
+/**
+ * Loads the review pipeline only when a run starts.
+ *
+ * app.ts pulls Apify and the model SDKs. Importing it at startup left listen()
+ * unreachable, so the API process never bound a port.
+ */
+async function startReviewPipeline(
+    id: string,
+    paths: ProcessingPaths,
+    criteria: FullEvaluationCriteria,
+    logger: Logger,
+    name: string | undefined,
+    options: {
+        skipCollection: boolean;
+        modelEvaluation: { thinkingEffort: ThinkingEffort };
+    },
+): Promise<void> {
+    const { runPipeline } = await import('../app.js');
+    await runPipeline(id, paths, criteria, logger, name, options);
 }
 
 /**

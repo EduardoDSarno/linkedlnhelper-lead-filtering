@@ -1,6 +1,5 @@
 import 'dotenv/config';
 
-import { buildServer } from './index.js';
 import {
   CLEANUP_INTERVAL_MS,
   DEFAULT_PORT,
@@ -9,10 +8,23 @@ import {
 } from './constants.js';
 import { cleanupExpiredRuns } from '../dataCollector/processing/cleanup.js';
 import { dbFailInterruptedRuns, openDatabase } from '../database/index.js';
-import type { FastifyInstance } from 'fastify';
+
+/** The Fastify methods startup uses, typed locally so this file never loads the SDK. */
+interface ListeningApp {
+  log: {
+    warn: (payload: object, message: string) => void;
+    error: (error: unknown, message?: string) => void;
+    info: (payload: object | string, message?: string) => void;
+  };
+  listen: (
+    options: { port: number; host?: string },
+    callback: (error: Error | null, address: string) => void,
+  ) => void;
+}
 
 /** Builds the app and starts listening, exiting the process on a failed bind. */
 async function startServer(): Promise<void> {
+    const { buildServer } = await import('./index.js');
     const app = await buildServer();
     const host = getHostFromEnv();
 
@@ -38,7 +50,7 @@ async function startServer(): Promise<void> {
  * to a run that died with the last process. Failing it keeps the retained
  * original CSV retryable through the filter route.
  */
-function recoverInterruptedRuns(app: FastifyInstance): void {
+function recoverInterruptedRuns(app: ListeningApp): void {
   const db = openDatabase();
   try {
     const recovered = dbFailInterruptedRuns(db);
@@ -55,7 +67,7 @@ function recoverInterruptedRuns(app: FastifyInstance): void {
  *
  * The timer is unreferenced so it never keeps the process alive on its own.
  */
-function startCleanupSchedule(app: FastifyInstance): void {
+function startCleanupSchedule(app: ListeningApp): void {
   const ttlHours = getTtlHoursFromEnv();
 
   const sweep = async (): Promise<void> => {
@@ -84,10 +96,9 @@ function getTtlHoursFromEnv(): number {
     ? parsed
     : DEFAULT_PROCESSING_TTL_HOURS;
 }
-  
+
 void startServer();
 
-  
 /** Reads the port from the environment, falling back to the default. */
 function getPortFromEnv(): number {
   const port = process.env['PORT']?.trim();
@@ -104,4 +115,3 @@ function getPortFromEnv(): number {
 function getHostFromEnv(): string | undefined {
   return process.env['HOST']?.trim() || undefined;
 }
-

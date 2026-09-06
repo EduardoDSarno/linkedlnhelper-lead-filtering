@@ -4,8 +4,10 @@ import type {
   ManualOverride,
   StoredEvaluationRun,
 } from '../../database/index.js';
-import { MODEL_EVALUATION_DECISION } from '../../evaluation/index.js';
-import type { ProfileModelEvaluation } from '../../evaluation/index.js';
+import {
+  MODEL_EVALUATION_DECISION,
+  type ProfileModelEvaluation,
+} from '../../evaluation/model/types.js';
 import type { FullProfile } from '../../profile/index.js';
 
 /** UTF-8 BOM so spreadsheets open accented names in the correct encoding. */
