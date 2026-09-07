@@ -1,17 +1,20 @@
 import { setTimeout as delay } from 'node:timers/promises';
 
+import { resolveApifyCollectorConfig } from './config.js';
 import {
-  APIFY_RETRY_JITTER_MS,
-  resolveApifyCollectorConfig,
-} from './config.js';
+  apifyBatchProgress,
+  chunkProfiles,
+  providerRequestedUrl,
+  retryDelayMs,
+} from './collection_helpers.js';
 import {
   classifyProviderRecord,
   classifyThrownError,
-  finalFailure,
+  decideFailureOutcome,
 } from './error_handling.js';
 import type { FailureDescriptor } from './error_handling.js';
 import { normalizeLinkedinUrl } from '../../linkedin/index.js';
-import { asRecord, asString, deduplicateBy } from '../../helpers/index.js';
+import { deduplicateBy } from '../../helpers/index.js';
 import {
   PIPELINE_PROGRESS_MESSAGE,
   PIPELINE_STAGE,
@@ -29,52 +32,9 @@ import type {
   CollectedProfile,
   PendingProfile,
   RawApifyProfile,
+  RoundExecutionContext,
+  RoundProgress,
 } from './types.js';
-
-/**
- * Splits the pending profiles into batches of at most `batchSize`, which is the
- * unit one Actor run accepts. The final batch is short whenever the count does
- * not divide evenly. Relies on `batchSize` being a positive integer, which
- * the configuration resolver guarantees: a zero would never advance the loop.
- */
-function chunkProfiles(
-  profiles: readonly PendingProfile[],
-  batchSize: number,
-): PendingProfile[][] {
-  const batches: PendingProfile[][] = [];
-
-  for (let start = 0; start < profiles.length; start += batchSize) {
-    batches.push(profiles.slice(start, start + batchSize));
-  }
-
-  return batches;
-}
-
-/**
- * Recovers the URL a record was requested with, so it can be matched back to
- * its input. The Actor has used several shapes for this over time — a plain
- * `originalQuery` string, an object with `query` or `url`, or a separate
- * `query` object — so each is tried before falling back to the record's own
- * `linkedinUrl`.
- */
-function providerQuery(record: RawApifyProfile): string | undefined {
-  const originalQuery = record['originalQuery'];
-  if (typeof originalQuery === 'string') return asString(originalQuery);
-
-  const originalQueryRecord = asRecord(originalQuery);
-  const queryRecord = asRecord(record['query']);
-
-  return (
-    (originalQueryRecord
-      ? asString(originalQueryRecord['query']) ??
-        asString(originalQueryRecord['url'])
-      : undefined) ??
-    (queryRecord
-      ? asString(queryRecord['query']) ?? asString(queryRecord['url'])
-      : undefined) ??
-    asString(record['linkedinUrl'])
-  );
-}
 
 /**
  * Correlates dataset items back to their requested URLs.
@@ -95,6 +55,8 @@ function matchProviderRecords(
   const recordsByInputIndex = new Map<number, RawApifyProfile>();
   const profilesByUrl = new Map<string, PendingProfile>();
 
+  // Build the lookup every record will be matched against below, keyed by the
+  // same normalization used to read a record's own identity.
   for (const profile of profiles) {
     profilesByUrl.set(normalizeLinkedinUrl(profile.linkedinUrl), profile);
   }
@@ -102,7 +64,7 @@ function matchProviderRecords(
   // First pass: reserve all records that identify their requested profile.
   // This prevents a query-less warning record from taking their position.
   for (const [recordIndex, record] of records.entries()) {
-    const query = providerQuery(record);
+    const query = providerRequestedUrl(record);
     const profile = query
       ? profilesByUrl.get(normalizeLinkedinUrl(query))
       : undefined;
@@ -120,7 +82,7 @@ function matchProviderRecords(
   // attach the wrong person to the requested URL.
   for (const [recordIndex, record] of records.entries()) {
     if (assignedRecordIndexes.has(recordIndex)) continue;
-    if (providerQuery(record) !== undefined) continue;
+    if (providerRequestedUrl(record) !== undefined) continue;
 
     const positionalProfile = profiles[recordIndex];
     const profile =
@@ -140,6 +102,9 @@ function matchProviderRecords(
   }
 
   return {
+    // Every requested profile gets an entry, with or without a matched
+    // record — this is what lets the caller tell "collected" from "no record
+    // came back" apart from "matched to something the record didn't identify."
     matches: profiles.map((profile) => {
       const record = recordsByInputIndex.get(profile.inputIndex);
       return {
@@ -147,19 +112,112 @@ function matchProviderRecords(
         ...(record ? { record } : {}),
       };
     }),
+    // Records that never got claimed above — the provider returned more, or
+    // different, data than was requested.
     unexpectedRecords: Math.max(0, records.length - assignedRecordIndexes.size),
   };
+}
+
+/**
+ * Claims and executes Actor batches until the round is exhausted.
+ *
+ * Several instances of this run concurrently, each pulling the next unclaimed
+ * batch from the shared `roundState.nextBatchIndex`. Claiming a batch (reading
+ * the index, then incrementing it) must stay synchronous, with no `await` in
+ * between — otherwise two runners could read the same index before either
+ * increments it, and claim the same batch twice.
+ */
+async function claimAndRunBatches(
+  roundContext: RoundExecutionContext,
+  roundState: RoundProgress,
+): Promise<void> {
+  while (roundState.nextBatchIndex < roundContext.batches.length) {
+    // Claim this batch before doing anything else with it — see the docstring
+    // above for why these two lines must stay adjacent, with no `await`.
+    const batchIndex = roundState.nextBatchIndex;
+    roundState.nextBatchIndex += 1;
+    const batch = roundContext.batches[batchIndex];
+    if (!batch) continue;
+
+    const context: ApifyBatchContext = {
+      round: roundContext.round,
+      batchNumber: batchIndex + 1,
+      totalBatches: roundContext.batches.length,
+    };
+    const startedAt = Date.now();
+    const progress = apifyBatchProgress(
+      batch,
+      context,
+      roundContext.concurrency,
+      roundContext.runRequestedProfiles,
+    );
+
+    roundContext.logger?.info(progress, PIPELINE_PROGRESS_MESSAGE.apifyBatchStarted);
+
+    try {
+      // The actual Apify Actor call — everything above is bookkeeping for it,
+      // everything below is recording what it returned.
+      const execution = await roundContext.executeBatch(
+        batch.map((profile) => profile.linkedinUrl),
+        context,
+      );
+      const durationMs = elapsedMs(startedAt);
+      roundState.outcomes[batchIndex] = {
+        profiles: batch,
+        context,
+        durationMs,
+        execution,
+      };
+      roundState.completedBatches += 1;
+
+      roundContext.logger?.info(
+        {
+          ...progress,
+          completed: roundState.completedBatches,
+          durationMs,
+          requestedProfiles: batch.length,
+          receivedRecords: execution.records.length,
+          actorRunId: execution.actorRunId,
+        },
+        PIPELINE_PROGRESS_MESSAGE.apifyBatchCompleted,
+      );
+    } catch (error: unknown) {
+      // The whole batch failed (e.g. the Actor run itself errored) rather
+      // than any one profile. Caught here, not left to reject `Promise.all`,
+      // so one bad batch cannot cancel the batches still running concurrently.
+      const durationMs = elapsedMs(startedAt);
+      roundState.outcomes[batchIndex] = {
+        profiles: batch,
+        context,
+        durationMs,
+        error,
+      };
+      roundState.completedBatches += 1;
+
+      roundContext.logger?.warn(
+        {
+          ...progress,
+          completed: roundState.completedBatches,
+          durationMs,
+          requestedProfiles: batch.length,
+          linkedinUrls: batch.map((profile) => profile.linkedinUrl),
+          err: error,
+        },
+        PIPELINE_PROGRESS_MESSAGE.apifyBatchFailed,
+      );
+    }
+  }
 }
 
 /**
  * Runs one full collection round and returns an outcome per batch, successful
  * or failed.
  *
- * A fixed pool of `concurrency` workers pulls from a shared batch index, so
- * slow batches never leave workers idle and no more than `concurrency` Actor
- * runs are ever in flight. Each batch's error is captured into its outcome
- * rather than thrown, which is what stops one failed batch from cancelling the
- * rest of the round.
+ * A fixed pool of `concurrency` batch runners pulls from a shared batch index,
+ * so slow batches never leave runners idle and no more than `concurrency`
+ * Actor runs are ever in flight. Each batch's error is captured into its
+ * outcome rather than thrown, which is what stops one failed batch from
+ * cancelling the rest of the round.
  */
 async function executeRound(
   profiles: readonly PendingProfile[],
@@ -171,105 +229,31 @@ async function executeRound(
   runRequestedProfiles: number,
 ): Promise<BatchOutcome[]> {
   const batches = chunkProfiles(profiles, batchSize);
-  const outcomes = new Array<BatchOutcome>(batches.length);
-  let nextBatchIndex = 0;
-  let completedBatches = 0;
+  // Read-only for every runner below, and the shared claim state they mutate.
+  const roundContext: RoundExecutionContext = {
+    round,
+    batches,
+    concurrency,
+    executeBatch,
+    logger,
+    runRequestedProfiles,
+  };
+  const roundState: RoundProgress = {
+    nextBatchIndex: 0,
+    completedBatches: 0,
+    outcomes: new Array<BatchOutcome>(batches.length),
+  };
 
-  /** Claims and executes Actor batches until the current round is exhausted. */
-  async function worker(): Promise<void> {
-    while (nextBatchIndex < batches.length) {
-      const batchIndex = nextBatchIndex;
-      nextBatchIndex += 1;
-      const batch = batches[batchIndex];
-      if (!batch) continue;
-
-      const context: ApifyBatchContext = {
-        round,
-        batchNumber: batchIndex + 1,
-        totalBatches: batches.length,
-      };
-      const startedAt = Date.now();
-      const progress = apifyBatchProgress(
-        batch,
-        context,
-        concurrency,
-        runRequestedProfiles,
-      );
-
-      logger?.info(progress, PIPELINE_PROGRESS_MESSAGE.apifyBatchStarted);
-
-      try {
-        const execution = await executeBatch(
-          batch.map((profile) => profile.linkedinUrl),
-          context,
-        );
-        const durationMs = elapsedMs(startedAt);
-        outcomes[batchIndex] = {
-          profiles: batch,
-          context,
-          durationMs,
-          execution,
-        };
-        completedBatches += 1;
-
-        logger?.info(
-          {
-            ...progress,
-            completed: completedBatches,
-            durationMs,
-            requestedProfiles: batch.length,
-            receivedRecords: execution.records.length,
-            actorRunId: execution.actorRunId,
-          },
-          PIPELINE_PROGRESS_MESSAGE.apifyBatchCompleted,
-        );
-      } catch (error: unknown) {
-        const durationMs = elapsedMs(startedAt);
-        outcomes[batchIndex] = {
-          profiles: batch,
-          context,
-          durationMs,
-          error,
-        };
-        completedBatches += 1;
-
-        logger?.warn(
-          {
-            ...progress,
-            completed: completedBatches,
-            durationMs,
-            requestedProfiles: batch.length,
-            linkedinUrls: batch.map((profile) => profile.linkedinUrl),
-            err: error,
-          },
-          PIPELINE_PROGRESS_MESSAGE.apifyBatchFailed,
-        );
-      }
-    }
-  }
-
+  // Never spawn more runners than there are batches — a small round should
+  // not create idle runners that immediately find nothing left to claim.
   await Promise.all(
     Array.from(
       { length: Math.min(concurrency, batches.length) },
-      async () => worker(),
+      async () => claimAndRunBatches(roundContext, roundState),
     ),
   );
 
-  return outcomes;
-}
-
-/**
- * Exponential backoff with jitter for the wait between retry rounds: the delay
- * doubles each round, plus a bounded random offset. The jitter
- * matters because all the failures of a round retry together — without it they
- * would hit the provider in a synchronized burst. A base delay of zero disables
- * waiting entirely, which is what keeps tests fast.
- */
-function retryDelayMs(baseDelayMs: number, completedRound: number): number {
-  if (baseDelayMs === 0) return 0;
-
-  const exponentialDelay = baseDelayMs * 2 ** (completedRound - 1);
-  return exponentialDelay + Math.floor(Math.random() * APIFY_RETRY_JITTER_MS);
+  return roundState.outcomes;
 }
 
 /**
@@ -286,6 +270,8 @@ export async function collectApifyProfilesWithExecutor(
   options: ApifyCollectorOptions = {},
 ): Promise<ApifyCollectionResult> {
   const config = resolveApifyCollectorConfig(options);
+  // `inputIndex` is assigned here, before dedup, so it always reflects the
+  // caller's original ordering — the final result is sorted back into it.
   const cleanedProfiles = profileLinks
     .map((linkedinUrl, inputIndex) => ({
       linkedinUrl: linkedinUrl.trim(),
@@ -313,6 +299,8 @@ export async function collectApifyProfilesWithExecutor(
     PIPELINE_PROGRESS_MESSAGE.apifyStarted,
   );
 
+  // All keyed by inputIndex, so a profile's state can be found regardless of
+  // which round or batch last touched it.
   const collected = new Map<number, CollectedProfile>();
   const failures = new Map<number, ApifyProfileFailure>();
   const retriedProfiles = new Set<number>();
@@ -322,6 +310,9 @@ export async function collectApifyProfilesWithExecutor(
   let actorRuns = 0;
   let unexpectedProviderRecords = 0;
 
+  // One iteration = one full round of Actor runs, across every still-pending
+  // profile. Stops when nothing is pending, or the attempt budget runs out —
+  // whichever comes first.
   while (
     pending.length > 0 &&
     roundsCompleted < config.maxAttempts
@@ -341,50 +332,49 @@ export async function collectApifyProfilesWithExecutor(
     actorRuns += outcomes.length;
     const retryCandidates: PendingProfile[] = [];
 
-    /** Records one failure or schedules the profile for its next safe attempt. */
-    function processFailure(
+    /**
+     * Decides one failed attempt's outcome, then applies it: abort the whole
+     * collection, queue the profile for its next attempt, or record it as a
+     * final failure. The decision itself lives in `decideFailureOutcome`,
+     * which touches nothing outside its arguments; this is only the part that
+     * writes to the round's shared retry queue, failure map, and log.
+     */
+    function applyFailureOutcome(
       profile: PendingProfile,
       descriptor: FailureDescriptor,
     ): void {
-      const attempts = profile.attempts + 1;
-      profileAttempts.set(profile.inputIndex, attempts);
+      const outcome = decideFailureOutcome(profile, descriptor, config.maxAttempts);
 
-      if (descriptor.category === 'authentication') {
-        throw new Error(
-          `Apify authentication/authorization failed: ${descriptor.error}`,
-        );
-      }
+      // Authentication failures abort the whole collection rather than just
+      // this profile — see decideFailureOutcome for why.
+      if (outcome.kind === 'abort') throw new Error(outcome.message);
 
-      if (
-        descriptor.retryable &&
-        attempts < config.maxAttempts
-      ) {
-        retryCandidates.push({ ...profile, attempts });
+      if (outcome.kind === 'retry') {
+        // Queued for this round's retryCandidates, not requested again yet —
+        // the whole round finishes first, then every retry candidate goes
+        // into the next round's batches together.
+        profileAttempts.set(profile.inputIndex, outcome.profile.attempts);
+        retryCandidates.push(outcome.profile);
         retriedProfiles.add(profile.inputIndex);
         return;
       }
 
-      const retryExhausted =
-        descriptor.retryable && attempts >= config.maxAttempts;
-      const failure = finalFailure(
-        profile,
-        descriptor,
-        attempts,
-        retryExhausted,
-      );
-      failures.set(profile.inputIndex, failure);
+      // Retry budget exhausted, or the failure category was never retryable
+      // to begin with (e.g. a 404) — this profile is done.
+      profileAttempts.set(profile.inputIndex, outcome.failure.attempts);
+      failures.set(profile.inputIndex, outcome.failure);
       logger?.warn(
         {
           stage: PIPELINE_STAGE.apify,
-          linkedinUrl: failure.linkedinUrl,
-          profileIndex: displayIndex(failure.inputIndex),
+          linkedinUrl: outcome.failure.linkedinUrl,
+          profileIndex: displayIndex(outcome.failure.inputIndex),
           requestedProfiles: uniqueProfiles.length,
-          category: failure.category,
-          status: failure.status,
-          attempts: failure.attempts,
-          retryable: failure.retryable,
-          retryExhausted: failure.retryExhausted,
-          error: failure.error,
+          category: outcome.failure.category,
+          status: outcome.failure.status,
+          attempts: outcome.failure.attempts,
+          retryable: outcome.failure.retryable,
+          retryExhausted: outcome.failure.retryExhausted,
+          error: outcome.failure.error,
         },
         PIPELINE_PROGRESS_MESSAGE.apifyProfileFailed,
       );
@@ -394,15 +384,20 @@ export async function collectApifyProfilesWithExecutor(
     // lets failures from different batches be combined into efficient retries.
     for (const outcome of outcomes) {
       if (outcome.error !== undefined) {
+        // The whole batch's Actor run threw — every profile in it gets the
+        // same failure, classified once rather than per profile.
         const descriptor = classifyThrownError(outcome.error);
         for (const profile of outcome.profiles) {
-          processFailure(profile, descriptor);
+          applyFailureOutcome(profile, descriptor);
         }
         continue;
       }
 
       if (!outcome.execution) continue;
 
+      // The batch itself succeeded, but that says nothing about individual
+      // profiles yet — each returned record still needs matching and
+      // classifying below.
       const matched = matchProviderRecords(
         outcome.profiles,
         outcome.execution.records,
@@ -411,7 +406,9 @@ export async function collectApifyProfilesWithExecutor(
 
       for (const { profile, record } of matched.matches) {
         if (!record) {
-          processFailure(profile, {
+          // Nothing came back for this profile at all — treated as
+          // retryable, since a missing record is usually transient.
+          applyFailureOutcome(profile, {
             category: 'invalid_response',
             error: 'Provider returned no record for the requested profile.',
             retryable: true,
@@ -419,9 +416,11 @@ export async function collectApifyProfilesWithExecutor(
           continue;
         }
 
+        // A record came back, but it may itself be an error the provider
+        // embedded inside a "successful" batch (e.g. a per-profile 404).
         const descriptor = classifyProviderRecord(record);
         if (descriptor) {
-          processFailure(profile, descriptor);
+          applyFailureOutcome(profile, descriptor);
           continue;
         }
 
@@ -434,6 +433,8 @@ export async function collectApifyProfilesWithExecutor(
       }
     }
 
+    // Sorted so the next round's batches are built in a stable, predictable
+    // order rather than whatever order batches happened to settle in.
     retryCandidates.sort((left, right) => left.inputIndex - right.inputIndex);
     pending = retryCandidates;
 
@@ -453,6 +454,8 @@ export async function collectApifyProfilesWithExecutor(
     );
 
     if (pending.length > 0) {
+      // Wait before the next round only — a round that collected everything
+      // returns immediately, with no delay tacked onto the end.
       const waitMs = retryDelayMs(
         config.retryBaseDelayMs,
         roundsCompleted,
@@ -470,6 +473,8 @@ export async function collectApifyProfilesWithExecutor(
     }
   }
 
+  // Collection can finish profiles in any order across rounds and batches —
+  // sort both back into the caller's original input order before returning.
   const orderedProfiles = [...collected.values()]
     .sort((left, right) => left.inputIndex - right.inputIndex)
     .map((profile) => profile.raw);
@@ -505,40 +510,3 @@ export async function collectApifyProfilesWithExecutor(
   };
 }
 
-/**
- * Shared N-of-total fields for one Actor batch so start, success, and failure
- * lines can be grepped as a single progress sequence.
- */
-function apifyBatchProgress(
-  batch: readonly PendingProfile[],
-  context: ApifyBatchContext,
-  concurrency: number,
-  runRequestedProfiles: number,
-): {
-  stage: typeof PIPELINE_STAGE.apify;
-  round: number;
-  batchNumber: number;
-  totalBatches: number;
-  total: number;
-  batchSize: number;
-  concurrency: number;
-  runRequestedProfiles: number;
-  profileStart: number;
-  profileEnd: number;
-} {
-  const first = batch[0];
-  const last = batch[batch.length - 1];
-
-  return {
-    stage: PIPELINE_STAGE.apify,
-    round: context.round,
-    batchNumber: context.batchNumber,
-    totalBatches: context.totalBatches,
-    total: context.totalBatches,
-    batchSize: batch.length,
-    concurrency,
-    runRequestedProfiles,
-    profileStart: first ? displayIndex(first.inputIndex) : 0,
-    profileEnd: last ? displayIndex(last.inputIndex) : 0,
-  };
-}

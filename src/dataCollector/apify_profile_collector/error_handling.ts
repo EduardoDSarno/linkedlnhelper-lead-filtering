@@ -224,3 +224,56 @@ export function finalFailure(
     ...(descriptor.raw ? { raw: descriptor.raw } : {}),
   };
 }
+
+/**
+ * What one failed attempt means for a profile: stop the whole collection,
+ * try the profile again, or give up on it. A separate type per case (rather
+ * than one shape with optional fields) is what lets the collector switch on
+ * `kind` and have every branch's fields fully known.
+ */
+export type FailureOutcome =
+  | { kind: 'abort'; message: string }
+  | { kind: 'retry'; profile: PendingProfile }
+  | { kind: 'final'; failure: ApifyProfileFailure };
+
+/**
+ * Decides what a failed attempt means for a profile, without touching
+ * anything outside its own arguments — no retry queue, no logger, no shared
+ * counters. That decision-only contract is what makes this safe to unit-test
+ * with plain inputs and outputs, unlike the mutation and logging the caller
+ * does in response.
+ *
+ * Authentication failures always abort rather than fail one profile: a bad or
+ * revoked key will fail every remaining profile identically, one at a time,
+ * so continuing would just waste the rest of the attempt budget on the same
+ * error.
+ */
+export function decideFailureOutcome(
+  profile: PendingProfile,
+  descriptor: FailureDescriptor,
+  maxAttempts: number,
+): FailureOutcome {
+  // Computed once, before branching, since every branch needs "attempts so
+  // far, including this one" — not the caller's pre-attempt count.
+  const attempts = profile.attempts + 1;
+
+  if (descriptor.category === 'authentication') {
+    return {
+      kind: 'abort',
+      message: `Apify authentication/authorization failed: ${descriptor.error}`,
+    };
+  }
+
+  // Still within budget and worth another try.
+  if (descriptor.retryable && attempts < maxAttempts) {
+    return { kind: 'retry', profile: { ...profile, attempts } };
+  }
+
+  // Either not retryable at all (e.g. a 404), or it was retryable but every
+  // attempt has now been spent — either way, this is final.
+  const retryExhausted = descriptor.retryable && attempts >= maxAttempts;
+  return {
+    kind: 'final',
+    failure: finalFailure(profile, descriptor, attempts, retryExhausted),
+  };
+}

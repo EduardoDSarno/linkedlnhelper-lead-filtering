@@ -1,3 +1,5 @@
+import type { Logger } from '../../logging/index.js';
+
 /** A provider record is intentionally permissive and remains untouched. */
 export type RawApifyProfile = Record<string, unknown>;
 
@@ -119,4 +121,24 @@ export interface BatchOutcome {
   durationMs: number;
   execution?: ApifyBatchExecution;
   error?: unknown;
+}
+
+/** Fixed inputs for one round, the same for every concurrent batch runner. */
+export interface RoundExecutionContext {
+  readonly round: number;
+  readonly batches: readonly PendingProfile[][];
+  readonly concurrency: number;
+  readonly executeBatch: ApifyBatchExecutor;
+  readonly logger: Logger | undefined;
+  readonly runRequestedProfiles: number;
+}
+
+/**
+ * The claim ticket and result bucket every concurrent batch runner shares.
+ * `nextBatchIndex` is how runners avoid claiming the same batch twice.
+ */
+export interface RoundProgress {
+  nextBatchIndex: number;
+  completedBatches: number;
+  outcomes: BatchOutcome[];
 }

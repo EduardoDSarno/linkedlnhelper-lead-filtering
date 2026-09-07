@@ -10,6 +10,7 @@
     "review": "tsx src/index.ts --review",
     "serve": "tsc -p tsconfig.serve.json && node dist/api/server.js",
     "benchmark:apify": "tsx src/benchmark/apify_profile_collector/index.ts",
+    "benchmark:bebity": "tsx src/benchmark/bebity_profile_collector/index.ts",
     "test": "npm run typecheck && npm run test:unit",
     "typecheck": "tsc --noEmit --noUnusedLocals --noUnusedParameters",
     "test:unit": "node --import tsx --test 'src/**/test/*.test.ts' 'scripts/**/test/*.test.ts'"
