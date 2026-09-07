@@ -55,11 +55,17 @@ export interface HybridCollectionResult extends ApifyCollectionResult {
  * the cheap path without ever accepting one of Bebity's known failure modes
  * — wrong-profile misattribution on a truncated slug, or a NOT_FOUND record
  * silently treated as a success — as a final answer.
+ *
+ * `expectedNames` (URL -> display name from the source data) is passed
+ * straight through to both providers; only Bebity actually uses it, to
+ * recover a profile returned under a changed vanity URL (see
+ * collectBebityProfiles) without reopening the truncation-bug risk.
  */
 export async function collectHybridProfiles(
   profileLinks: readonly string[],
   logger?: Logger,
   options: ApifyCollectorOptions = {},
+  expectedNames?: ReadonlyMap<string, string>,
   collectors: HybridProfileCollectors = DEFAULT_HYBRID_COLLECTORS,
 ): Promise<HybridCollectionResult> {
   if (profileLinks.length === 0) {
@@ -82,10 +88,10 @@ export async function collectHybridProfiles(
   // skipped when its slice is empty, since the shared collection engine
   // throws on an empty input array rather than returning a no-op result.
   const bebityPromise = bebityCompatible.length > 0
-    ? collectors.collectBebity(bebityCompatible, logger, options)
+    ? collectors.collectBebity(bebityCompatible, logger, options, expectedNames)
     : emptyCollectionResult();
   const firstHarvestPromise = requiresHarvest.length > 0
-    ? collectors.collectHarvest(requiresHarvest, logger, options)
+    ? collectors.collectHarvest(requiresHarvest, logger, options, expectedNames)
     : emptyCollectionResult();
   const [bebityResult, firstHarvestResult] = await Promise.all([
     bebityPromise,
@@ -102,7 +108,7 @@ export async function collectHybridProfiles(
   );
   const secondHarvestResult =
     bebityFailedUrls.length > 0
-      ? await collectors.collectHarvest(bebityFailedUrls, logger, options)
+      ? await collectors.collectHarvest(bebityFailedUrls, logger, options, expectedNames)
       : emptyCollectionResult();
 
   // Step 4: Bebity's raw records use different field names than Harvest's

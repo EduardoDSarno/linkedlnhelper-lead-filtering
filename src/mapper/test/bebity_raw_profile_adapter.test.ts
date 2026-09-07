@@ -74,6 +74,27 @@ test('parses a recognized Brazilian state out of the flat location string', () =
   assert.equal(parsed['countryCode'], 'BR');
 });
 
+test('parses the state regardless of what language the country word is localized to', () => {
+  // Both observed live: Bebity does not always render the country word as
+  // "Brasil"/"Brazil" — it can come back in whatever locale scraped the
+  // profile. A country-word allowlist would miss these; matching on the
+  // state segment itself does not care what language surrounds it.
+  for (const localizedLocation of [
+    'Goiânia, Goiás, Brésil',
+    'Goiânia, Goiás, Brezilya',
+  ]) {
+    const adapted = adaptBebityRawProfile({
+      ...BEBITY_RAW_PROFILE,
+      location: localizedLocation,
+    });
+    const location = adapted['location'] as Record<string, unknown>;
+    const parsed = location['parsed'] as Record<string, unknown>;
+
+    assert.equal(parsed['city'], 'Goiânia', localizedLocation);
+    assert.equal(parsed['state'], 'Goiás', localizedLocation);
+  }
+});
+
 test('keeps the full text without inventing city/state for an unrecognized location', () => {
   const adapted = adaptBebityRawProfile({
     ...BEBITY_RAW_PROFILE,

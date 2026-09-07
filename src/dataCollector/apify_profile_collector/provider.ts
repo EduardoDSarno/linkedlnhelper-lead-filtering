@@ -25,11 +25,18 @@ export type ProfileCollectorProvider =
 export const DEFAULT_PROFILE_COLLECTOR_PROVIDER: ProfileCollectorProvider =
   'hybrid';
 
-/** A collector entry point, shared by every provider and by benchmark fakes. */
+/**
+ * A collector entry point, shared by every provider and by benchmark fakes.
+ * `expectedNames` (URL -> display name from the source data) is optional and
+ * provider-specific in effect: Harvest already resolves identity via its own
+ * `originalQuery` field and ignores it, while Bebity uses it to recover a
+ * profile returned under a changed vanity URL. See collectBebityProfiles.
+ */
 export type ProfileCollector = (
   profileLinks: readonly string[],
   logger?: Logger,
   options?: ApifyCollectorOptions,
+  expectedNames?: ReadonlyMap<string, string>,
 ) => Promise<ApifyCollectionResult>;
 
 const COLLECTORS: Readonly<Record<ProfileCollectorProvider, ProfileCollector>> =

@@ -1,7 +1,7 @@
 import { getLinkedlnProfileDataFromExternalProvidor } from '../dataCollector/csv/csvdata.js';
 import type { ImportedCsvData } from '../dataCollector/csv/csvdata.js';
 import { asRecord, asString } from '../helpers/index.js';
-import { linkedinProfileKey } from '../linkedin/index.js';
+import { linkedinProfileKey, normalizeLinkedinUrl } from '../linkedin/index.js';
 import type { Logger } from '../logging/index.js';
 import { mapApifyProfile } from '../mapper/index.js';
 import { attachLinkedHelperPublicId } from '../profile/index.js';
@@ -45,6 +45,8 @@ interface LinkedHelperIdentity {
   publicId: string;
   /** The exact profile_url from the Linked Helper CSV. */
   profileUrl: string;
+  /** The name Linked Helper recorded; empty when the export had none. */
+  fullName: string;
 }
 
 /** Reads the URL the provider was asked to scrape, echoed back on the record. */
@@ -113,14 +115,33 @@ function linkedHelperIdentitiesByProfileKey(
   const identities = new Map<string, LinkedHelperIdentity>();
 
   for (const importedProfile of Object.values(importedData.records)) {
-    const { publicId, profileUrl } = importedProfile.summary;
+    const { publicId, profileUrl, fullName } = importedProfile.summary;
     const profileKey = linkedinProfileKey(profileUrl);
     if (!profileKey || identities.has(profileKey)) continue;
 
-    identities.set(profileKey, { publicId, profileUrl });
+    identities.set(profileKey, { publicId, profileUrl, fullName });
   }
 
   return identities;
+}
+
+/**
+ * Builds the URL -> name lookup the collector uses to recover a profile
+ * returned under a changed vanity URL (see collectBebityProfiles). Keyed the
+ * same way the collection engine normalizes a profile's own URL, so a direct
+ * map lookup there finds this without re-deriving the key.
+ */
+function expectedNamesByUrl(
+  linkedHelperIdentities: ReadonlyMap<string, LinkedHelperIdentity>,
+): ReadonlyMap<string, string> {
+  const names = new Map<string, string>();
+
+  for (const identity of linkedHelperIdentities.values()) {
+    if (!identity.fullName) continue;
+    names.set(normalizeLinkedinUrl(identity.profileUrl), identity.fullName);
+  }
+
+  return names;
 }
 
 /** Builds the serializable totals and failure details for one completed run. */
@@ -219,7 +240,14 @@ export async function runFullProfilePipelineWithDependencies(
     // Step 3: collect complete Apify records. The collector runs bounded batches
     // concurrently. Once a round settles, it pools only transiently failed URLs
     // into the next retry round; successes and permanent failures are not rerun.
-    const collection = await dependencies.collectProfiles(profileLinks, logger);
+    // The expected-names lookup lets the collector recover a profile a
+    // provider returns under a changed vanity URL — see collectBebityProfiles.
+    const collection = await dependencies.collectProfiles(
+      profileLinks,
+      logger,
+      undefined,
+      expectedNamesByUrl(linkedHelperIdentities),
+    );
     const rawProfiles = collection.profiles;
 
     // Step 4: persist successful raw responses and final provider failures as

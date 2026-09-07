@@ -14,14 +14,19 @@ function adaptBebityDate(value: unknown): { text: string } | undefined {
 }
 
 /**
- * Parses Bebity's flat "City, State, Brasil" location text into the
+ * Parses Bebity's flat "City, State, Country" location text into the
  * structured shape `mapLocation` (in apify_profile_mapper.ts) already
  * expects, using the same Brazilian state/UF table the deterministic
  * location filter trusts (brazil_location.ts).
  *
- * Deliberately conservative: a segment that doesn't resolve to a known
- * Brazilian state is left unparsed rather than guessed at. The full text is
- * always kept under `linkedinText`/`parsed.text`, so nothing is lost — a
+ * Deliberately does not assume the trailing segment is the country: live
+ * Bebity data shows the country word localized to whatever locale scraped
+ * the profile ("Brésil", "Brezilya", ...), not just "Brasil"/"Brazil" — a
+ * fixed country-word list would miss most of them. Instead this searches
+ * every segment for one that resolves to a real Brazilian state, wherever it
+ * falls, and treats everything before that segment as the city. A location
+ * with no segment that resolves is left unparsed rather than guessed at —
+ * the full text is always kept under `linkedinText`/`parsed.text`, so a
  * non-Brazilian or unusual location just doesn't get broken into city/state.
  */
 function adaptBebityLocation(locationText: string): Record<string, unknown> {
@@ -29,21 +34,16 @@ function adaptBebityLocation(locationText: string): Record<string, unknown> {
     .split(',')
     .map((segment) => segment.trim())
     .filter(Boolean);
-  const lastSegment = segments[segments.length - 1] ?? '';
-  const hasCountrySegment = ['brasil', 'brazil'].includes(
-    lastSegment.toLowerCase(),
+  const stateIndex = segments.findIndex(
+    (segment) => resolveBrazilRegion(segment) !== undefined,
   );
-  const withoutCountry = hasCountrySegment ? segments.slice(0, -1) : segments;
-  const stateCandidate = withoutCountry[withoutCountry.length - 1];
-  const resolvedState = stateCandidate
-    ? resolveBrazilRegion(stateCandidate)
-    : undefined;
 
-  if (!resolvedState) {
+  if (stateIndex === -1) {
     return { linkedinText: locationText, parsed: { text: locationText } };
   }
 
-  const city = withoutCountry.slice(0, -1).join(', ') || undefined;
+  const resolvedState = resolveBrazilRegion(segments[stateIndex] as string);
+  const city = segments.slice(0, stateIndex).join(', ') || undefined;
 
   return {
     linkedinText: locationText,
@@ -51,7 +51,7 @@ function adaptBebityLocation(locationText: string): Record<string, unknown> {
     parsed: {
       text: locationText,
       ...(city ? { city } : {}),
-      state: resolvedState.state,
+      state: resolvedState?.state,
       country: 'Brasil',
       countryCode: 'BR',
     },

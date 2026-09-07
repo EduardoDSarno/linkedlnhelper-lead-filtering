@@ -7,6 +7,7 @@ import type {
   ApifyBatchExecutor,
   RawApifyProfile,
 } from '../index.js';
+import { normalizeLinkedinUrl } from '../../../linkedin/index.js';
 import { PIPELINE_PROGRESS_MESSAGE } from '../../../logging/index.js';
 import { recordingLogger } from '../../../test_support/pipeline_fakes.js';
 
@@ -209,6 +210,81 @@ test('never assigns an explicitly unrelated provider record by position', async 
       retryExhausted: true,
     },
   ]);
+});
+
+test('recovers a record returned under a changed URL, using a unique name match', async () => {
+  // Mirrors a real case: a person renamed their LinkedIn vanity URL after the
+  // source data was exported. The provider correctly resolves the old URL to
+  // the right person, but returns their *current* URL — which alone looks
+  // identical to an unrelated record, unless a name is available to confirm it.
+  const requestedUrl = 'https://linkedin.com/in/danillo-emanuel-de-moura-8231263a9';
+  const returnedUrl = 'https://linkedin.com/in/danilloemanuel';
+  const expectedNames = new Map([[normalizeLinkedinUrl(requestedUrl), 'Danillo Moura']]);
+
+  const result = await collectApifyProfilesWithExecutor(
+    [requestedUrl],
+    async () => ({
+      records: [
+        { linkedinUrl: returnedUrl, firstName: 'Danillo', lastName: 'Emanuel de Moura' },
+      ],
+    }),
+    undefined,
+    { maxAttempts: 1, retryBaseDelayMs: 0 },
+    expectedNames,
+  );
+
+  assert.equal(result.profiles.length, 1);
+  assert.equal(result.profiles[0]?.['linkedinUrl'], returnedUrl);
+  assert.equal(result.failures.length, 0);
+});
+
+test('still rejects an unrelated record when expectedNames is set but the name does not match', async () => {
+  // Same shape as the truncation bug: a garbled request resolves to a
+  // completely different real person. A name lookup must not turn that into
+  // an accepted match just because it is the only candidate available.
+  const requestedUrl = 'https://linkedin.com/in/jose-ilario-6a67998b';
+  const unrelatedUrl = 'https://linkedin.com/in/jos';
+  const expectedNames = new Map([[normalizeLinkedinUrl(requestedUrl), 'José Ilário']]);
+
+  const result = await collectApifyProfilesWithExecutor(
+    [requestedUrl],
+    async () => ({
+      records: [
+        { linkedinUrl: unrelatedUrl, firstName: 'Shubhankar', lastName: 'Joshi' },
+      ],
+    }),
+    undefined,
+    { maxAttempts: 1, retryBaseDelayMs: 0 },
+    expectedNames,
+  );
+
+  assert.equal(result.profiles.length, 0);
+  assert.equal(result.failures[0]?.linkedinUrl, requestedUrl);
+});
+
+test('does not guess when a name matches more than one still-open profile', async () => {
+  const firstUrl = 'https://linkedin.com/in/daiany-a';
+  const secondUrl = 'https://linkedin.com/in/daiany-b';
+  const returnedUrl = 'https://linkedin.com/in/daiany-current';
+  const expectedNames = new Map([
+    [normalizeLinkedinUrl(firstUrl), 'Daiany Reis'],
+    [normalizeLinkedinUrl(secondUrl), 'Daiany Reis'],
+  ]);
+
+  const result = await collectApifyProfilesWithExecutor(
+    [firstUrl, secondUrl],
+    async () => ({
+      records: [
+        { linkedinUrl: returnedUrl, firstName: 'Daiany', lastName: 'Reis' },
+      ],
+    }),
+    undefined,
+    { maxAttempts: 1, retryBaseDelayMs: 0 },
+    expectedNames,
+  );
+
+  assert.equal(result.profiles.length, 0);
+  assert.equal(result.failures.length, 2);
 });
 
 test('does not use a duplicate identified record to fill a missing profile', async () => {

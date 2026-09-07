@@ -54,11 +54,20 @@ export function markBebityNotFoundAsFailed(item: RawApifyProfile): RawApifyProfi
   return { ...item, error: `Bebity marked this profile as not found (${reason}).` };
 }
 
-/** Benchmark-only collector; it deliberately preserves Bebity records unchanged. */
+/**
+ * Benchmark-only collector; it deliberately preserves Bebity records
+ * unchanged. `expectedNames` (URL -> display name from the source data) lets
+ * the shared matching engine recover a profile whose vanity URL changed
+ * since the source data was exported — Bebity has no `originalQuery`-style
+ * field of its own, so without a name to fall back on, that case would
+ * otherwise look identical to a wrong-person mismatch and get discarded.
+ */
 export async function collectBebityProfiles(
-  profileLinks: readonly string[], 
+  profileLinks: readonly string[],
   logger?: Logger,
-  options: ApifyCollectorOptions = {}): Promise<ApifyCollectionResult> {
+  options: ApifyCollectorOptions = {},
+  expectedNames?: ReadonlyMap<string, string>,
+): Promise<ApifyCollectionResult> {
 
   const client = new ApifyClient({ token: requireApifyApiKey() });
 
@@ -73,7 +82,13 @@ export async function collectBebityProfiles(
       datasetId: run.defaultDatasetId,
     };
   };
-  return collectApifyProfilesWithExecutor(profileLinks, executeBatch, logger, options);
+  return collectApifyProfilesWithExecutor(
+    profileLinks,
+    executeBatch,
+    logger,
+    options,
+    expectedNames,
+  );
 }
 
 function isRawProfileRecord(value: unknown): value is RawApifyProfile {

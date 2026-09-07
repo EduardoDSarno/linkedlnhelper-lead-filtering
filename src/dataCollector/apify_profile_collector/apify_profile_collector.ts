@@ -4,7 +4,9 @@ import { resolveApifyCollectorConfig } from './config.js';
 import {
   apifyBatchProgress,
   chunkProfiles,
+  namesLikelyMatch,
   providerRequestedUrl,
+  recordDisplayName,
   retryDelayMs,
 } from './collection_helpers.js';
 import {
@@ -42,10 +44,21 @@ import type {
  * HarvestAPI normally preserves query order and includes `originalQuery`, but
  * query matching is preferred so one missing result cannot shift later items.
  * Positional matching is retained only as a compatibility fallback.
+ *
+ * `expectedNames` (URL, normalized the same way as `profilesByUrl` below, ->
+ * display name from the source data) enables one further pass: a record
+ * whose own identity legitimately differs from what was requested — e.g. the
+ * person renamed their LinkedIn vanity URL since the source data was
+ * exported, so the provider correctly returns them under their *current*
+ * URL — no longer has to be dropped as unmatched, as long as its name
+ * uniquely confirms which still-open profile it belongs to. Optional: a
+ * caller with no name data (or a provider that doesn't need this, like
+ * Harvest with its own `originalQuery`) simply skips this pass.
  */
 function matchProviderRecords(
   profiles: readonly PendingProfile[],
   records: readonly RawApifyProfile[],
+  expectedNames?: ReadonlyMap<string, string>,
 ): {
   matches: Array<{ profile: PendingProfile; record?: RawApifyProfile }>;
   unexpectedRecords: number;
@@ -99,6 +112,37 @@ function matchProviderRecords(
     assignedProfileIndexes.add(profile.inputIndex);
     assignedRecordIndexes.add(recordIndex);
     recordsByInputIndex.set(profile.inputIndex, record);
+  }
+
+  // Third pass: a record that identifies a URL matching nothing requested —
+  // excluded from the position-based second pass above, on purpose — gets
+  // one more chance if its name uniquely confirms one still-open profile.
+  // Requiring a *unique* match (not just "first name matches") is what keeps
+  // this from reopening the truncation-bug risk that pass two guards
+  // against: an ambiguous or absent name still leaves the record unclaimed.
+  if (expectedNames && expectedNames.size > 0) {
+    for (const [recordIndex, record] of records.entries()) {
+      if (assignedRecordIndexes.has(recordIndex)) continue;
+      if (providerRequestedUrl(record) === undefined) continue;
+
+      const actualName = recordDisplayName(record);
+      if (!actualName) continue;
+
+      const candidates = profiles.filter((candidate) => {
+        if (assignedProfileIndexes.has(candidate.inputIndex)) return false;
+        const expectedName = expectedNames.get(
+          normalizeLinkedinUrl(candidate.linkedinUrl),
+        );
+        return namesLikelyMatch(expectedName, actualName);
+      });
+
+      if (candidates.length !== 1) continue;
+      const profile = candidates[0] as PendingProfile;
+
+      assignedProfileIndexes.add(profile.inputIndex);
+      assignedRecordIndexes.add(recordIndex);
+      recordsByInputIndex.set(profile.inputIndex, record);
+    }
   }
 
   return {
@@ -268,6 +312,7 @@ export async function collectApifyProfilesWithExecutor(
   executeBatch: ApifyBatchExecutor,
   logger?: Logger,
   options: ApifyCollectorOptions = {},
+  expectedNames?: ReadonlyMap<string, string>,
 ): Promise<ApifyCollectionResult> {
   const config = resolveApifyCollectorConfig(options);
   // `inputIndex` is assigned here, before dedup, so it always reflects the
@@ -401,6 +446,7 @@ export async function collectApifyProfilesWithExecutor(
       const matched = matchProviderRecords(
         outcome.profiles,
         outcome.execution.records,
+        expectedNames,
       );
       unexpectedProviderRecords += matched.unexpectedRecords;
 

@@ -111,6 +111,7 @@ test('sends only ASCII-compatible URLs to Bebity and adapts its raw records', as
     [ASCII_URL_A, ASCII_URL_B, NON_ASCII_URL],
     undefined,
     {},
+    undefined,
     {
       collectBebity: fakeCollector(bebityRawProfile),
       collectHarvest: harvestTracker.collector,
@@ -136,6 +137,7 @@ test('retries a Bebity failure through Harvest as a separate second pass', async
     [ASCII_URL_A, NON_ASCII_URL],
     undefined,
     {},
+    undefined,
     {
       collectBebity: fakeCollector(bebityRawProfile, [ASCII_URL_A]),
       collectHarvest: harvestTracker.collector,
@@ -165,6 +167,7 @@ test('launches Bebity and Harvest\'s first pass concurrently, not sequentially',
     [ASCII_URL_A, NON_ASCII_URL],
     undefined,
     {},
+    undefined,
     {
       collectBebity: delayedCollector(bebityRawProfile),
       collectHarvest: delayedCollector(harvestRawProfile),
@@ -185,6 +188,7 @@ test('a failure that persists through Harvest is the only final failure, not dup
     [ASCII_URL_A, ASCII_URL_B],
     undefined,
     {},
+    undefined,
     {
       collectBebity: fakeCollector(bebityRawProfile, [ASCII_URL_A]),
       collectHarvest: fakeCollector(harvestRawProfile, [ASCII_URL_A]),
@@ -201,6 +205,7 @@ test('requestedProfiles reflects the true input count, not a sum that double-cou
     [ASCII_URL_A, NON_ASCII_URL],
     undefined,
     {},
+    undefined,
     {
       collectBebity: fakeCollector(bebityRawProfile, [ASCII_URL_A]),
       collectHarvest: fakeCollector(harvestRawProfile),
@@ -215,6 +220,7 @@ test('returns each provider\'s own stats untouched, alongside the merged totals'
     [ASCII_URL_A, NON_ASCII_URL],
     undefined,
     {},
+    undefined,
     {
       collectBebity: fakeCollector(bebityRawProfile),
       collectHarvest: fakeCollector(harvestRawProfile),
@@ -232,6 +238,7 @@ test('never calls Harvest when every URL is Bebity-compatible and none fail', as
     [ASCII_URL_A, ASCII_URL_B],
     undefined,
     {},
+    undefined,
     {
       collectBebity: fakeCollector(bebityRawProfile),
       collectHarvest: unreachableCollector,
@@ -247,6 +254,7 @@ test('never calls Bebity when every URL requires Harvest', async () => {
     [NON_ASCII_URL],
     undefined,
     {},
+    undefined,
     {
       collectBebity: unreachableCollector,
       collectHarvest: fakeCollector(harvestRawProfile),
@@ -260,7 +268,7 @@ test('never calls Bebity when every URL requires Harvest', async () => {
 test('rejects an empty input instead of silently returning a no-op result', async () => {
   await assert.rejects(
     () =>
-      collectHybridProfiles([], undefined, {}, {
+      collectHybridProfiles([], undefined, {}, undefined, {
         collectBebity: unreachableCollector,
         collectHarvest: unreachableCollector,
       }),

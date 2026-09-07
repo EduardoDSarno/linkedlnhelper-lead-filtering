@@ -3,6 +3,7 @@ import type { DatabaseSync } from 'node:sqlite';
 import type {
   ApifyCollectionResult,
   ApifyCollectionStats,
+  ApifyCollectorOptions,
   ApifyProfileFailure,
 } from '../dataCollector/apify_profile_collector/index.js';
 import type { StoredEvaluationRun } from '../database/types.js';
@@ -73,6 +74,9 @@ export interface FullProfilePipelineDependencies {
   collectProfiles: (
     profileLinks: readonly string[],
     logger: Logger,
+    options?: ApifyCollectorOptions,
+    /** URL -> the person's name as recorded in the imported source data. */
+    expectedNames?: ReadonlyMap<string, string>,
   ) => Promise<ApifyCollectionResult>;
 
   extractImages: ProfileImageAnalyzer;

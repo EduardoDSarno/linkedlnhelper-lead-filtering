@@ -56,6 +56,59 @@ export function providerRequestedUrl(
   );
 }
 
+/** Reads the display name off a raw record, when the provider supplied one. */
+export function recordDisplayName(record: RawApifyProfile): string | undefined {
+  const firstName = asString(record['firstName']);
+  const lastName = asString(record['lastName']);
+  const combined = [firstName, lastName].filter(Boolean).join(' ');
+  return combined || undefined;
+}
+
+/**
+ * Splits a name into comparable tokens: trimmed, lowercased, whitespace-
+ * collapsed. Uses `toLowerCase`, not `toLocaleLowerCase` — this builds a
+ * comparison key, and a key must fold the same way on every machine. Under a
+ * Turkish locale `toLocaleLowerCase` maps "I" to a dotless "ı", which would
+ * make the same name stop matching itself depending on server locale.
+ */
+function nameTokens(value: string | undefined): string[] {
+  return (
+    value
+      ?.trim()
+      .toLowerCase()
+      .split(/\s+/)
+      .filter(Boolean) ?? []
+  );
+}
+
+/**
+ * Reports whether two names plausibly belong to the same person: same first
+ * token, and — when both names have more than one token — at least one
+ * shared token beyond the first (typically a surname).
+ *
+ * Deliberately not exact-string equality: a person's recorded name is often a
+ * shorter or fuller form than the provider's ("Daiany Reis" vs "Daiany
+ * Monteiro Reis" — the same real person; requiring an exact match would
+ * reject that pairing along with every other one across sources).
+ * Deliberately not first-name-only either: "Daiany" alone matches too many
+ * different people to safely resolve an ambiguous record to one of them.
+ */
+export function namesLikelyMatch(
+  expectedName: string | undefined,
+  actualName: string | undefined,
+): boolean {
+  const expectedTokens = nameTokens(expectedName);
+  const actualTokens = nameTokens(actualName);
+  if (expectedTokens.length === 0 || actualTokens.length === 0) return false;
+  if (expectedTokens[0] !== actualTokens[0]) return false;
+
+  const expectedRest = expectedTokens.slice(1);
+  const actualRest = actualTokens.slice(1);
+  if (expectedRest.length === 0 || actualRest.length === 0) return true;
+
+  return expectedRest.some((token) => actualRest.includes(token));
+}
+
 /**
  * Exponential backoff with jitter for the wait between retry rounds: the delay
  * doubles each round, plus a bounded random offset. The jitter
