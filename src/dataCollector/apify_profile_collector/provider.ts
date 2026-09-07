@@ -1,3 +1,4 @@
+import { collectHybridProfiles } from './apify_pipeline.js';
 import { collectBebityProfiles } from './bebity_profile_collector/index.js';
 import { collectHarvestProfiles } from './harvest_profile_collector/index.js';
 import type {
@@ -9,14 +10,20 @@ import type { Logger } from '../../logging/index.js';
 /** Environment variable selecting which Apify Actor collects full profiles. */
 export const PROFILE_COLLECTOR_ENVIRONMENT_KEY = 'APIFY_PROFILE_COLLECTOR';
 
-export const PROFILE_COLLECTOR_PROVIDERS = ['bebity', 'harvest'] as const;
+/**
+ * `hybrid` is Bebity with Harvest as a fallback for what Bebity can't handle
+ * (see apify_pipeline.ts) — the production default. `bebity` and `harvest`
+ * remain available as explicit single-provider overrides, for cost
+ * benchmarking or isolating which provider produced a given result.
+ */
+export const PROFILE_COLLECTOR_PROVIDERS = ['hybrid', 'bebity', 'harvest'] as const;
 
 export type ProfileCollectorProvider =
   (typeof PROFILE_COLLECTOR_PROVIDERS)[number];
 
 /** Provider used when the environment does not select one. */
 export const DEFAULT_PROFILE_COLLECTOR_PROVIDER: ProfileCollectorProvider =
-  'bebity';
+  'hybrid';
 
 /** A collector entry point, shared by every provider and by benchmark fakes. */
 export type ProfileCollector = (
@@ -27,6 +34,7 @@ export type ProfileCollector = (
 
 const COLLECTORS: Readonly<Record<ProfileCollectorProvider, ProfileCollector>> =
   {
+    hybrid: collectHybridProfiles,
     bebity: collectBebityProfiles,
     harvest: collectHarvestProfiles,
   };
