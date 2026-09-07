@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import { collectApifyProfiles } from '../dataCollector/apify_profile_collector/index.js';
+import { resolveProfileCollector } from '../dataCollector/apify_profile_collector/index.js';
 import {
   dbInsertEvaluationRun,
   dbInsertProfile,
@@ -63,9 +63,15 @@ function createReviewRunId(): string {
   return randomUUID();
 }
 
-/** Production implementations for every external boundary used by the pipeline. */
+/**
+ * Production implementations for every external boundary used by the pipeline.
+ *
+ * The collector is chosen from the environment at module load, after
+ * `dotenv/config` has run in every entry point, so one deployment can switch
+ * Actors without a code change.
+ */
 export const DEFAULT_PIPELINE_DEPENDENCIES = {
-  collectProfiles: collectApifyProfiles,
+  collectProfiles: resolveProfileCollector(),
   extractImages: DEFAULT_PROFILE_IMAGE_ANALYZER,
   writeJson: writeJsonAtomically,
   openDatabase,

@@ -1,9 +1,7 @@
 import { join } from 'node:path';
 
-import {
-  collectApifyProfiles,
-  resolveApifyCollectorConfig,
-} from '../../dataCollector/apify_profile_collector/index.js';
+import { resolveApifyCollectorConfig } from '../../dataCollector/apify_profile_collector/index.js';
+import { collectHarvestProfiles } from '../../dataCollector/apify_profile_collector/harvest_profile_collector/index.js';
 import type {
   ApifyCollectionResult,
   RawApifyProfile,
@@ -36,7 +34,7 @@ function currentDate(): Date {
 }
 
 const DEFAULT_DEPENDENCIES: ApifyBenchmarkDependencies = {
-  collectProfiles: collectApifyProfiles,
+  collectProfiles: collectHarvestProfiles,
   environment: process.env,
   now: currentDate,
 };

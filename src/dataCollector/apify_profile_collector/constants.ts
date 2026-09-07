@@ -1,7 +1,3 @@
-export const LINKEDIN_PROFILE_SCRAPER_ACTOR =
-  'harvestapi/linkedin-profile-scraper';
-export const PROFILE_DETAILS_MODE = 'Profile details no email ($4 per 1k)';
-
 // HTTP statuses this module reacts to by name. HTTP_CLIENT_ERROR and
 // HTTP_SERVER_ERROR are range floors, not single statuses: any status at or
 // above them is treated as that class of error.

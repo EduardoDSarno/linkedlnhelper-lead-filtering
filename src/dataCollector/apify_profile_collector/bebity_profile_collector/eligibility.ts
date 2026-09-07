@@ -1,4 +1,4 @@
-import { linkedinProfileKey } from '../../linkedin/index.js';
+import { linkedinProfileKey } from '../../../linkedin/index.js';
 
 const BEBITY_COMPATIBLE_SLUG_PATTERN = /^[a-z0-9-]+$/;
 
