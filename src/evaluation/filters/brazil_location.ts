@@ -208,7 +208,7 @@ function remainderAllowsCityMatch(
 }
 
 /** Resolves a UF code or official state name to both forms. */
-function resolveBrazilRegion(
+export function resolveBrazilRegion(
   value: string,
 ): { state: string; uf: string } | undefined {
   const compact = value.trim().toUpperCase();
