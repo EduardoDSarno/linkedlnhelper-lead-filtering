@@ -4,8 +4,19 @@ import { defineConfig } from 'vite'
 /** Where the Fastify API listens in development (its default port). */
 const API_SERVER = 'http://localhost:3000'
 
-/** Backend paths this app calls; the dev server forwards them to the API. */
-const API_PATHS = ['/import', '/run_filter', '/download', '/runs']
+/**
+ * Backend paths this app calls; the dev server forwards them to the API.
+ *
+ * This is an allowlist, so a new backend route reaches Fastify in production
+ * but 404s against Vite in development until it is added here.
+ */
+const API_PATHS = [
+  '/import',
+  '/run_filter',
+  '/download',
+  '/runs',
+  '/criteria_presets',
+]
 
 /** Current ngrok hostname allowed through Vite's development host check. */
 const NGROK_ALLOWED_HOST =
