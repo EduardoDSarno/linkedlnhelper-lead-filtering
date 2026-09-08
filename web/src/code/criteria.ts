@@ -151,7 +151,12 @@ export interface CriteriaForm {
   /** When true, profiles without a photo are excluded before the model. */
   requirePhoto: boolean;
 
-  /** When true, skips photo analysis: faster and cheaper, no apparent-age signal. */
+  /**
+   * When true, no photo is sent with the evaluation request. Age is then
+   * estimated from the career timeline alone and no image assessment is
+   * returned. Photos no longer cost a separate model call, so the saving is
+   * only the image tokens inside a request that runs either way.
+   */
   skipImageAnalysis: boolean;
 
   openToWork: OpenToWork;
@@ -179,7 +184,7 @@ export const DEFAULT_CRITERIA: CriteriaForm = {
   compMin: 10000,
   compMax: 30000,
   requirePhoto: false,
-  skipImageAnalysis: true,
+  skipImageAnalysis: false,
   openToWork: OPEN_TO_WORK.ignore,
   automatic: true,
   approveMin: 75,

@@ -220,11 +220,11 @@ function EffortSegment({
 const PHOTO_ANALYSIS_HINTS = {
   analyze: {
     title: 'Analisar',
-    body: 'A IA avalia cada foto: idade aparente, nitidez, enquadramento e outros sinais neutros entram na avaliação do perfil.',
+    body: 'A foto é enviada junto com o perfil na mesma chamada. A IA usa o rosto para confirmar a idade estimada pelas datas de formação e experiência, e avalia nitidez, enquadramento e outros sinais neutros.',
   },
   skip: {
     title: 'Pular',
-    body: 'Avaliação mais rápida e mais barata, mas sem estimativa de idade aparente nem os outros sinais da foto.',
+    body: 'A foto não é enviada. A idade continua sendo estimada pelas datas de formação e experiência, mas sem confirmação visual, e os sinais da foto não aparecem na revisão.',
   },
 } as const;
 
