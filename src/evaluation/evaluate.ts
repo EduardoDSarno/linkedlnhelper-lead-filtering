@@ -11,6 +11,8 @@ import {
   resolveProfileImageExtractionOptions,
 } from '../imageExtractor/index.js';
 import { errorMessage } from '../helpers/index.js';
+import { PIPELINE_PROGRESS_MESSAGE } from '../logging/index.js';
+import type { Logger } from '../logging/index.js';
 
 /** One profile whose photo could not be downloaded for the model request. */
 export interface ProfilePhotoLoadFailure {
@@ -30,6 +32,8 @@ export interface EvaluationRunResult {
 export interface EvaluationPhotoOptions {
   /** Skips downloading photos entirely; the model then sees text only. */
   skipPhotos?: boolean;
+  /** Structured logger, used to report download progress. */
+  logger?: Logger;
   /** Photos downloaded at once. */
   concurrency?: number;
   /** Injected loader so tests never contact a real image URL. */
@@ -57,6 +61,12 @@ async function attachProfilePhotos(
   if (options.skipPhotos) {
     return { profiles: [...profiles], failures: [] };
   }
+
+  const withPhotoUrl = profiles.filter((profile) => profile.photoUrl).length;
+  options.logger?.info(
+    { photos: withPhotoUrl, profiles: profiles.length },
+    PIPELINE_PROGRESS_MESSAGE.photoLoadStarted,
+  );
 
   const load = options.loadPhoto ?? loadProfileImage;
   const loadingOptions = resolveProfileImageExtractionOptions();
@@ -96,6 +106,11 @@ async function attachProfilePhotos(
 
   await Promise.all(
     Array.from({ length: Math.min(concurrency, profiles.length) }, worker),
+  );
+
+  options.logger?.info(
+    { photos: withPhotoUrl, failures: failures.length },
+    PIPELINE_PROGRESS_MESSAGE.photoLoadCompleted,
   );
 
   return { profiles: results, failures };

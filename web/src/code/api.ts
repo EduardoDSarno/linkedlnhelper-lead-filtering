@@ -67,10 +67,19 @@ export async function startReview(
 
 export type ProcessingStatus = 'queued' | 'running' | 'completed' | 'failed' | 'expired';
 
+/** How far a running pipeline has got, present only while it runs. */
+export interface RunProgress
+{
+    stage: 'collecting' | 'loading_photos' | 'evaluating';
+    completed: number;
+    total: number;
+}
+
 export interface RunStatus
 {
     processingId: string;
     status: ProcessingStatus;
+    progress?: RunProgress;     // present only while running
     evaluationRunId?: string;   // present once the run produced results
     error?: string;             // present only on 'failed'
     completedAt?: string;       // present once finished

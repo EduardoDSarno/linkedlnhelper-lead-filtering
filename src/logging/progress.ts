@@ -24,6 +24,8 @@ export const PIPELINE_PROGRESS_MESSAGE = {
   apifyBatchFailed: 'Apify collection batch failed.',
   apifyRoundProgress: 'Apify collection progress.',
   apifyProfileFailed: 'Apify profile collection failed.',
+  photoLoadStarted: 'Starting profile photo download.',
+  photoLoadCompleted: 'Completed profile photo download.',
   imageStarted: 'Starting profile image analysis.',
   imageSkipped: 'Skipped profile image analysis by campaign criteria.',
   imageCompleted: 'Completed profile image analysis.',

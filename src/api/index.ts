@@ -3,6 +3,11 @@ import { processingPaths, saveOriginalCsv } from '../dataCollector/processing/pr
 import type { ProcessingPaths } from '../dataCollector/processing/processing.js';
 import crypto from 'crypto';
 import {
+    clearRunProgress,
+    progressReportingLogger,
+    runProgress,
+} from './run_progress.js';
+import {
     dbDeleteProcessingRun,
     dbGetEvaluationRunById,
     dbGetProcessingRunById,
@@ -129,6 +134,8 @@ function registerGetProccessByIdRoute(server: FastifyInstance)
                 processingId: run.id,
                 status: run.status,
                 ...(run.name ? { name: run.name } : {}),
+                // Live only while this process is running the pipeline.
+                ...(runProgress(run.id) ? { progress: runProgress(run.id) } : {}),
                 ...(run.evaluationRunId ? { evaluationRunId: run.evaluationRunId } : {}),
                 ...(run.error ? { error: run.error } : {}),
                 ...(run.completedAt ? { completedAt: run.completedAt } : {}),
@@ -441,13 +448,14 @@ function registerFilterRoute(server: FastifyInstance)
             processingId,
             paths,
             validCriteria,
-            request.log as Logger,
+            progressReportingLogger(processingId, request.log as Logger),
             name,
             {
                 skipCollection: skipCollection === true,
                 modelEvaluation: { thinkingEffort },
             },
         )
+        .finally(() => clearRunProgress(processingId))
         .catch((error) =>
         {
             request.log.error({ err: error }, 'Review run failed');

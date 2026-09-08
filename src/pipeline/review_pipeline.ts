@@ -75,7 +75,7 @@ export async function runReviewPipelineWithDependencies(
     { ...options.modelEvaluation, logger },
     // The campaign's skipImageAnalysis choice now decides whether photos are
     // attached to the evaluation request, since there is no separate image stage.
-    { ...(criteria.skipImageAnalysis ? { skipPhotos: true } : {}) },
+    { logger, ...(criteria.skipImageAnalysis ? { skipPhotos: true } : {}) },
   );
   const evaluationRun = {
     id: dependencies.createRunId(),

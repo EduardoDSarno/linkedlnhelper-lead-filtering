@@ -15,6 +15,7 @@ import {
   type ListTab,
 } from './code/listView';
 import type { ReviewFlow } from './code/useReviewFlow';
+import type { RunProgress } from './code/api';
 
 /** Keys that must not trigger row actions while a field is focused. */
 const TYPING_TAGS = new Set(['INPUT', 'TEXTAREA', 'SELECT']);
@@ -139,7 +140,7 @@ export function ListScreen({ flow }: { flow: ReviewFlow }) {
     return () => window.removeEventListener('keydown', onKey);
   }, [decide, selectedIndex, visible]);
 
-  if (loading) return <LoadingState />;
+  if (loading) return <LoadingState progress={status?.progress} />;
 
   const summary = runSummary(
     results.length,
@@ -347,8 +348,93 @@ function Kbd({ children }: { children: string }) {
   );
 }
 
-/** Indeterminate progress shown while the pipeline is still running. */
-function LoadingState() {
+/** Portuguese label and running order for each reported stage. */
+const PROGRESS_STAGES = [
+  { key: 'collecting', label: 'Coletando perfis' },
+  { key: 'loading_photos', label: 'Baixando fotos' },
+  { key: 'evaluating', label: 'Avaliando com a IA' },
+] as const;
+
+/**
+ * Progress shown while the pipeline runs.
+ *
+ * Falls back to an indeterminate bar until the first stage reports, and after
+ * a server restart, when in-memory progress is gone but the run may not be.
+ */
+function LoadingState({ progress }: { progress?: RunProgress }) {
+  if (progress) {
+    const activeIndex = PROGRESS_STAGES.findIndex(
+      (stage) => stage.key === progress.stage,
+    );
+
+    return (
+      <div
+        style={{
+          flex: 1,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 18,
+        }}
+      >
+        <div style={{ width: 320, display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {PROGRESS_STAGES.map((stage, index) => {
+            const done = index < activeIndex;
+            const active = index === activeIndex;
+            // Only the active stage knows its counts; earlier ones are complete
+            // and later ones have not started, so neither shows a number.
+            const ratio =
+              done || (active && progress.total > 0)
+                ? done
+                  ? 1
+                  : Math.min(1, progress.completed / progress.total)
+                : 0;
+
+            return (
+              <div key={stage.key} style={{ opacity: done || active ? 1 : 0.45 }}>
+                <div
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    fontSize: 12.5,
+                    fontWeight: active ? 700 : 600,
+                    color: active ? '#1d4ed8' : '#475569',
+                    marginBottom: 5,
+                  }}
+                >
+                  <span>{stage.label}</span>
+                  {active && progress.total > 0 && (
+                    <span style={{ fontVariantNumeric: 'tabular-nums' }}>
+                      {progress.completed} / {progress.total}
+                    </span>
+                  )}
+                  {done && <span>✓</span>}
+                </div>
+                <div
+                  style={{ height: 5, borderRadius: 99, background: '#e6e9ef', overflow: 'hidden' }}
+                >
+                  <div
+                    style={{
+                      height: '100%',
+                      width: `${String(Math.round(ratio * 100))}%`,
+                      background: done ? '#22c55e' : '#2563eb',
+                      borderRadius: 99,
+                      transition: 'width .4s ease',
+                    }}
+                  />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <div style={{ fontSize: 12.5, color: '#94a3b8' }}>
+          Isso leva alguns minutos. Pode deixar a aba aberta.
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
       style={{
