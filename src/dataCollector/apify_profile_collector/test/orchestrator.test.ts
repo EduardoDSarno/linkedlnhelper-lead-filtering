@@ -12,7 +12,10 @@ import type { ProfileCollector } from '../provider.js';
 
 const ASCII_URL_A = 'https://www.linkedin.com/in/jane-doe-123/';
 const ASCII_URL_B = 'https://www.linkedin.com/in/john-smith-456/';
-const NON_ASCII_URL = 'https://www.linkedin.com/in/josé-silva-789/';
+// A symbol Bebity still truncates on. Accented letters no longer belong
+// here — Bebity resolves those correctly now, so they go to Bebity.
+const REQUIRES_HARVEST_URL =
+  'https://www.linkedin.com/in/roberto-alencar-cfp®-cpro-i-892529a/';
 
 function stats(overrides: Partial<ApifyCollectionStats> = {}): ApifyCollectionStats {
   return {
@@ -104,11 +107,11 @@ function trackCalls(base: ProfileCollector): {
   return { collector, calls };
 }
 
-test('sends only ASCII-compatible URLs to Bebity and adapts its raw records', async () => {
+test('sends only Bebity-compatible URLs to Bebity and adapts its raw records', async () => {
   const harvestTracker = trackCalls(fakeCollector(harvestRawProfile));
 
   const result = await collectHybridProfiles(
-    [ASCII_URL_A, ASCII_URL_B, NON_ASCII_URL],
+    [ASCII_URL_A, ASCII_URL_B, REQUIRES_HARVEST_URL],
     undefined,
     {},
     undefined,
@@ -118,9 +121,9 @@ test('sends only ASCII-compatible URLs to Bebity and adapts its raw records', as
     },
   );
 
-  // Exactly one Harvest call — the first pass for the non-ASCII URL. With no
+  // Exactly one Harvest call — the first pass for the symbol URL. With no
   // Bebity failures, there is nothing for a second pass to retry.
-  assert.deepEqual(harvestTracker.calls, [[NON_ASCII_URL]]);
+  assert.deepEqual(harvestTracker.calls, [[REQUIRES_HARVEST_URL]]);
   assert.equal(result.profiles.length, 3);
 
   const adaptedBebityProfile = result.profiles.find(
@@ -134,7 +137,7 @@ test('retries a Bebity failure through Harvest as a separate second pass', async
   const harvestTracker = trackCalls(fakeCollector(harvestRawProfile));
 
   const result = await collectHybridProfiles(
-    [ASCII_URL_A, NON_ASCII_URL],
+    [ASCII_URL_A, REQUIRES_HARVEST_URL],
     undefined,
     {},
     undefined,
@@ -147,7 +150,7 @@ test('retries a Bebity failure through Harvest as a separate second pass', async
   // Two separate calls, not one combined batch: the first pass for the
   // ASCII-ineligible URL fires immediately, the second pass for the Bebity
   // failure only happens once Bebity is known to have failed on it.
-  assert.deepEqual(harvestTracker.calls, [[NON_ASCII_URL], [ASCII_URL_A]]);
+  assert.deepEqual(harvestTracker.calls, [[REQUIRES_HARVEST_URL], [ASCII_URL_A]]);
   assert.equal(result.failures.length, 0);
   assert.equal(result.profiles.length, 2);
 });
@@ -164,7 +167,7 @@ test('launches Bebity and Harvest\'s first pass concurrently, not sequentially',
 
   const startedAt = Date.now();
   await collectHybridProfiles(
-    [ASCII_URL_A, NON_ASCII_URL],
+    [ASCII_URL_A, REQUIRES_HARVEST_URL],
     undefined,
     {},
     undefined,
@@ -202,7 +205,7 @@ test('a failure that persists through Harvest is the only final failure, not dup
 
 test('requestedProfiles reflects the true input count, not a sum that double-counts a retried URL', async () => {
   const result = await collectHybridProfiles(
-    [ASCII_URL_A, NON_ASCII_URL],
+    [ASCII_URL_A, REQUIRES_HARVEST_URL],
     undefined,
     {},
     undefined,
@@ -217,7 +220,7 @@ test('requestedProfiles reflects the true input count, not a sum that double-cou
 
 test('returns each provider\'s own stats untouched, alongside the merged totals', async () => {
   const result = await collectHybridProfiles(
-    [ASCII_URL_A, NON_ASCII_URL],
+    [ASCII_URL_A, REQUIRES_HARVEST_URL],
     undefined,
     {},
     undefined,
@@ -251,7 +254,7 @@ test('never calls Harvest when every URL is Bebity-compatible and none fail', as
 
 test('never calls Bebity when every URL requires Harvest', async () => {
   const result = await collectHybridProfiles(
-    [NON_ASCII_URL],
+    [REQUIRES_HARVEST_URL],
     undefined,
     {},
     undefined,

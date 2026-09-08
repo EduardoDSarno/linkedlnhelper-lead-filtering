@@ -1,17 +1,30 @@
 import { linkedinProfileKey } from '../../../linkedin/index.js';
 
-const BEBITY_COMPATIBLE_SLUG_PATTERN = /^[a-z0-9-]+$/;
+/**
+ * Letters (including accented ones), digits, and hyphens.
+ *
+ * `\p{M}` covers combining marks for the rare accent that has no composed
+ * form; `linkedinProfileKey` already normalizes to NFC, so most accents
+ * arrive as a single `\p{L}` code point.
+ */
+const BEBITY_COMPATIBLE_SLUG_PATTERN = /^[\p{L}\p{M}0-9-]+$/u;
 
 /**
  * Returns whether Bebity's actor can resolve this profile URL.
  *
- * Confirmed against live Bebity responses: its actor truncates a vanity slug
- * at the first character outside a-z, 0-9, and `-` before matching it against
- * LinkedIn's index. A truncated slug either matches no profile or, worse,
- * matches an unrelated LinkedIn member who happens to hold that shorter slug.
- * Percent-encoding the offending character does not help — encoded and raw
- * input were verified to truncate at the identical position, so there is no
- * request-side workaround; those profiles must go through Harvest instead.
+ * Bebity's actor used to truncate a vanity slug at the first character outside
+ * a-z, 0-9, and `-`, which either matched no profile or, worse, matched an
+ * unrelated LinkedIn member holding that shorter slug. Bebity has since fixed
+ * that for accented letters, verified live: `césar-briceño-44b3562b` and every
+ * other accented slug tested now come back with the full slug intact.
+ *
+ * Non-letter characters still truncate. Verified live, one URL per class
+ * present in real data — `®`, emoji with a zero-width joiner, a zero-width
+ * space, and a right single quotation mark — every one of them still fails,
+ * while an accented control succeeded in the same batch. So the cut is now
+ * letters-versus-symbols rather than ASCII-versus-everything, which is what
+ * moves the overwhelming majority of accented Brazilian names onto the
+ * cheaper provider instead of Harvest.
  */
 export function isBebityCompatibleProfileUrl(url: string): boolean {
   const slug = linkedinProfileKey(url);
