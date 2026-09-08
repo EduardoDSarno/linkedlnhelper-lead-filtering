@@ -169,6 +169,18 @@ test('leaves a degree with no comma untouched', () => {
   });
 });
 
+test('does not split free-text prose that happens to contain a comma', () => {
+  // A real profile (pamellaborges): degreeName here is a training-program
+  // description, not a "degree, field" pair. Splitting it on the first comma
+  // would cut a sentence in half instead of separating anything meaningful.
+  const prose =
+    'Programa focado no desenvolvimento de liderança estratégica e gestão de pessoas, ' +
+    'com ênfase em tomada de decisão, negociação, gestão de conflitos, coaching e mentoring.';
+  const entry = adaptedEducationEntry({ degreeName: prose });
+
+  assert.deepEqual(entry, { schoolName: 'Example University', degree: prose });
+});
+
 test('passes through fields with no Harvest equivalent instead of dropping them', () => {
   const adapted = adaptBebityRawProfile(BEBITY_RAW_PROFILE);
 

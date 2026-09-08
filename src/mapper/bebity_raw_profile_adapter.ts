@@ -100,7 +100,18 @@ function adaptBebityExperienceEntry(
  * Left untouched when Bebity already supplied `fieldOfStudy` (roughly 3% of
  * entries), since a comma inside `degreeName` there is just a compound degree
  * name, not this concatenation.
+ *
+ * Also left untouched when the segment before the first comma is implausibly
+ * long for a degree title. `degreeName` occasionally holds free-text prose
+ * instead — a training description or a bio fragment — that happens to
+ * contain a comma; splitting one of those cuts a sentence in half instead of
+ * separating a degree from a field. Checked against every real degree/field
+ * concatenation in stored data: legitimate degree titles topped out at 52
+ * characters before the comma, and the free-text cases started at 79, so 65
+ * sits in the gap between them.
  */
+const IMPLAUSIBLE_DEGREE_LENGTH = 65;
+
 function splitBebityDegree(
   degreeName: string,
   existingFieldOfStudy: unknown,
@@ -112,7 +123,7 @@ function splitBebityDegree(
 
   const degree = degreeName.slice(0, commaIndex).trim();
   const splitFieldOfStudy = degreeName.slice(commaIndex + 1).trim();
-  return degree && splitFieldOfStudy
+  return degree && splitFieldOfStudy && degree.length <= IMPLAUSIBLE_DEGREE_LENGTH
     ? { degree, fieldOfStudy: splitFieldOfStudy }
     : { degree: degreeName };
 }
