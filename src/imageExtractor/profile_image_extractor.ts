@@ -5,7 +5,6 @@ import {
   displayIndex,
   elapsedMs,
 } from '../logging/index.js';
-import type { Profile } from '../profile/index.js';
 import {
   resolveProfileImageBatchConcurrency,
   resolveProfileImageExtractionOptions,
@@ -66,18 +65,6 @@ export async function extractProfileImage(
     resolution: resolved.resolution,
     ...(response.usage ? { usage: response.usage } : {}),
   };
-}
-
-/** Extracts the photo already present on a normalized Apify profile. */
-export async function extractProfilePhoto(
-  profile: Pick<Profile, 'photo'>,
-  options: ProfileImageExtractionOptions = {},
-): Promise<ProfileImageExtractionResult> {
-  if (!profile.photo) {
-    throw new Error('The profile does not have a photo URL.');
-  }
-
-  return extractProfileImage({ kind: 'url', url: profile.photo }, options);
 }
 
 /**

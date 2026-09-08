@@ -1,3 +1,11 @@
+<!-- Local development: keep experimental scripts out of application checks. -->
+
+Development checks: `npm test` checks and tests application code. Local scripts
+are checked separately with `npm run typecheck:experiments` and
+`npm run test:experiments`; they may require local data and credentials.
+The `scripts/` directory remains ignored. Promote reusable tooling into tracked
+source before making it a dependency of application commands.
+
 <div align="center">
 
 <pre>

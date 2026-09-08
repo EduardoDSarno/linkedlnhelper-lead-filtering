@@ -1,3 +1,4 @@
+import { errorMessage as messageFromThrownError } from '../../helpers/error_message.js';
 import {
   HTTP_BAD_REQUEST,
   HTTP_CLIENT_ERROR,
@@ -62,14 +63,6 @@ export function statusFromThrownError(error: unknown): number | undefined {
     asHttpStatus(errorRecord['status']) ??
     (response ? asHttpStatus(response['status']) : undefined)
   );
-}
-
-/**
- * Turns any thrown value into a message. Anything can be thrown in JavaScript,
- * not only an Error, so non-Error values are stringified rather than dropped.
- */
-export function messageFromThrownError(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }
 
 /**

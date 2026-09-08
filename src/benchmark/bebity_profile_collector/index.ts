@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { BEBITY_LINKEDIN_PREMIUM_ACTOR, collectBebityProfiles, resolveBebityProfileFields } from '../../dataCollector/apify_profile_collector/bebity_profile_collector/index.js';
 import { writeJsonAtomically } from '../../helpers/index.js';
 import { createFileLogger } from '../../logging/index.js';
@@ -33,4 +34,6 @@ async function main(): Promise<void> {
     process.stderr.write(`Bebity benchmark failed. See ${artifacts.log} for details.\n`);
   } finally { await loggerHandle.close(); }
 }
-void main();
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  void main();
+}

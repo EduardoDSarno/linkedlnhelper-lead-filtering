@@ -7,6 +7,7 @@ output/
 .vscode
 markdown/*
 !markdown/CONFIGURATION.md
+# Local experiments are checked separately through the :experiments commands.
 scripts/
 opencode.json
 .claude
@@ -20,5 +21,3 @@ src/dataStorage/
 
 .cursor/
 src/outdated/
-
-src/outdated/*

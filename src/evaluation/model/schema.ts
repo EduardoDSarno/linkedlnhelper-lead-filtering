@@ -1,4 +1,5 @@
 import { asRecord, asString } from '../../helpers/index.js';
+import { errorMessage as parseErrorMessage } from '../../helpers/error_message.js';
 import { MODEL_EVALUATION_LIMITS } from './config.js';
 import {
   type CompensationEstimateConfidence,
@@ -152,11 +153,6 @@ export interface ModelEvaluationParseFailure {
 export interface ParsedModelEvaluationResponse {
   readonly assessments: readonly ProfileModelAssessment[];
   readonly failures: readonly ModelEvaluationParseFailure[];
-}
-
-/** Converts an unknown thrown value into a stable per-profile failure message. */
-function parseErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }
 
 /** Parses one required, non-empty string field. */

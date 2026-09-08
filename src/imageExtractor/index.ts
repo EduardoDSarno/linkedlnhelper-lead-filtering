@@ -2,7 +2,6 @@ export {
   extractProfileImage,
   extractProfileImages,
   extractProfileImagesWithExecutor,
-  extractProfilePhoto,
 } from './profile_image_extractor.js';
 export type { ProfileImageExecutor } from './profile_image_extractor.js';
 

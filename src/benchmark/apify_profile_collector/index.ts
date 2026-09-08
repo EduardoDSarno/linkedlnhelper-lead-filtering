@@ -1,8 +1,10 @@
-// Load local environment variables before resolving collector configuration.
+// This file is the CLI entry point; reusable functions live in sibling modules.
 import 'dotenv/config';
 
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { errorMessage } from '../../helpers/error_message.js';
 
 import { createFileLogger } from '../../logging/index.js';
 import type { Logger } from '../../logging/index.js';
@@ -22,16 +24,6 @@ import { loadApifyBenchmarkInput } from './input_loader.js';
 import type { ApifyBenchmarkResult } from './types.js';
 
 /**
- * Converts any command or provider failure into a stable log message.
- *
- * @param error - Unknown value caught by the CLI lifecycle.
- * @returns The Error message or a string representation of another value.
- */
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
-/**
  * Runs one benchmark command after logging has been initialized.
  *
  * @param arguments_ - Arguments supplied after the benchmark entry point.
@@ -41,7 +33,7 @@ function errorMessage(error: unknown): string {
  * @returns The dry-run or paid benchmark result.
  * @throws For invalid arguments, input loading failures, or fatal collection errors.
  */
-export async function main(
+async function main(
   arguments_: readonly string[],
   runId: string,
   outputDirectory: string,
@@ -143,33 +135,6 @@ async function runApplication(): Promise<void> {
   }
 }
 
-void runApplication();
-
-export {
-  compareApifyBenchmarkIdentities,
-  createApifyBenchmarkArtifactPaths,
-  prepareApifyBenchmark,
-  runApifyBenchmark,
-  validateApifyBenchmarkCollection,
-} from './apify_benchmark_runner.js';
-export {
-  apifyBenchmarkUsage,
-  parseApifyBenchmarkArguments,
-} from './argument_parser.js';
-export { loadApifyBenchmarkInput } from './input_loader.js';
-export type {
-  ApifyBenchmarkArguments,
-  ApifyBenchmarkArtifactPaths,
-  ApifyBenchmarkDependencies,
-  ApifyBenchmarkExpectedIdentity,
-  ApifyBenchmarkIdentityComparison,
-  ApifyBenchmarkIdentityMismatch,
-  ApifyBenchmarkInputKind,
-  ApifyBenchmarkPlan,
-  ApifyBenchmarkRequest,
-  ApifyBenchmarkResult,
-  ApifyBenchmarkStatus,
-  ApifyBenchmarkSummary,
-  ApifyBenchmarkValidation,
-  LoadedApifyBenchmarkInput,
-} from './types.js';
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  void runApplication();
+}

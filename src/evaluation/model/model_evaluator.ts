@@ -1,4 +1,4 @@
-import { asHttpStatus, asRecord, asString } from '../../helpers/index.js';
+import { asHttpStatus, asRecord, asString, errorMessage } from '../../helpers/index.js';
 import {
   EVALUATION_PASS,
   PIPELINE_PROGRESS_MESSAGE,
@@ -155,11 +155,6 @@ function isTimeoutModelError(error: unknown): boolean {
 
   const message = error instanceof Error ? error.message : String(error);
   return /timeout|aborted/i.test(message);
-}
-
-/** Converts an unknown thrown value into a stable failure message. */
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }
 
 /** Extracts usable response text or explains why the model produced none. */

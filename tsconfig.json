@@ -41,5 +41,6 @@
     "moduleDetection": "force",
     "skipLibCheck": true,
   },
-  "exclude": ["src/outdated", "web"]
+  "include": ["src/**/*.ts"],
+  "exclude": ["src/outdated", "web", "scripts"]
 }

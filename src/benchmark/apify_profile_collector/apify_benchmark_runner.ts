@@ -1,4 +1,5 @@
 import { join } from 'node:path';
+import { errorMessage } from '../../helpers/error_message.js';
 
 import { resolveApifyCollectorConfig } from '../../dataCollector/apify_profile_collector/index.js';
 import { collectHarvestProfiles } from '../../dataCollector/apify_profile_collector/harvest_profile_collector/index.js';
@@ -38,16 +39,6 @@ const DEFAULT_DEPENDENCIES: ApifyBenchmarkDependencies = {
   environment: process.env,
   now: currentDate,
 };
-
-/**
- * Converts any thrown value into a stable message for JSON artifacts and logs.
- *
- * @param error - Value caught from collection or artifact persistence.
- * @returns The Error message or a string representation of another value.
- */
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
 
 /**
  * Builds every artifact path from the caller's unique benchmark directory.

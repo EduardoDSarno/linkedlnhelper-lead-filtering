@@ -129,16 +129,16 @@ const result = await extractProfileImage({
 
 ### Extract a normalized profile's photo
 
-`extractProfilePhoto` reads the existing `photo` field from the minimal
-normalized profile:
+Pass the normalized profile's `photo` URL to the standard image extractor:
 
 ```ts
-import { extractProfilePhoto } from './image_extractor/index.js';
+import { extractProfileImage } from './index.js';
 
-const result = await extractProfilePhoto(profile);
+if (!profile.photo) throw new Error('The profile has no photo URL.');
+const result = await extractProfileImage({ kind: 'url', url: profile.photo });
 ```
 
-It throws a clear error when the profile has no photo URL.
+Check for a photo before requesting image analysis.
 
 ### Build a full profile
 
@@ -151,9 +151,10 @@ import {
   attachProfileImageAnalysis,
   type FullProfile,
 } from '../profile/index.js';
-import { extractProfilePhoto } from './index.js';
+import { extractProfileImage } from './index.js';
 
-const imageAnalysis = await extractProfilePhoto(profile);
+if (!profile.photo) throw new Error('The profile has no photo URL.');
+const imageAnalysis = await extractProfileImage({ kind: 'url', url: profile.photo });
 const fullProfile: FullProfile = attachProfileImageAnalysis(
   profile,
   imageAnalysis,

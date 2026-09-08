@@ -1,6 +1,6 @@
 import { getLinkedlnProfileDataFromExternalProvidor } from '../dataCollector/csv/csvdata.js';
 import type { ImportedCsvData } from '../dataCollector/csv/csvdata.js';
-import { asRecord, asString } from '../helpers/index.js';
+import { asRecord, asString, errorMessage } from '../helpers/index.js';
 import { linkedinProfileKey, normalizeLinkedinUrl } from '../linkedin/index.js';
 import type { Logger } from '../logging/index.js';
 import { mapApifyProfile } from '../mapper/index.js';
@@ -34,11 +34,6 @@ export type {
   FullProfilePipelineResult,
   FullProfilePipelineSummary,
 } from './types.js';
-
-/** Converts an unknown failure into a stable message suitable for artifacts. */
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
 
 /** The Linked Helper identity a provider record is correlated back to. */
 interface LinkedHelperIdentity {
