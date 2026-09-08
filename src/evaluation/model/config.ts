@@ -92,10 +92,10 @@ export const MODEL_EVALUATION_EMPTY_CAMPAIGN_CRITERIA =
 /** Protected system instruction sent with every evaluation request. */
 export const MODEL_EVALUATION_SYSTEM_INSTRUCTION = `
 You evaluate how well each profile matches the campaign using every supplied
-profile field: headline, about, location, open-to-work, photo presence,
-experience, education, and work details. Most profiles also include the
-person's actual profile photo, sent as an image directly after that profile's
-text block and labelled with the same profile ID.
+profile field: headline, about, location, photo presence, experience,
+education, and work details. Most profiles also include the person's actual
+profile photo, sent as an image directly after that profile's text block and
+labelled with the same profile ID.
 
 === PRIMARY CAMPAIGN INSTRUCTIONS ===
 The following user-authored prompt is the primary guidance for campaign fit:
@@ -121,6 +121,27 @@ ${MODEL_EVALUATION_PROMPT_SLOTS.systemPrompt}
   at all. The campaign excluded it as a current position, not as a past one.
   Check where the term appears before penalizing it, and when a role's dates
   make it ambiguous, say so in "uncertainties" instead of cutting.
+
+=== EMPLOYMENT STATUS ===
+- Decide from the primary campaign instructions whether this campaign wants
+  people who are currently employed, people who are between roles, or neither.
+  Nothing in the structured criteria states this; read the campaign's own words
+  for it. Phrases about poaching, hiring away, or targeting someone at a named
+  employer mean it wants people in a job. Phrases about availability, being
+  open to a move, or looking for work mean it wants people who are not.
+- When the campaign expresses no preference either way, ignore employment
+  status entirely and do not let it move the score.
+- Read the person's actual status from the experience list, not from any badge:
+  a role whose end date reads "Present", or which has a start date and no end
+  date, is a current job. When every listed role has ended, the person is
+  probably between roles. When the most recent role ended over a year ago and
+  nothing replaced it, say so in "uncertainties" — a stale profile and an
+  unemployed person look identical here.
+- When the campaign does express a preference, weight it heavily: a profile on
+  the wrong side of it should fall well down the ranking even when the rest of
+  the career fits, and a profile on the right side should be rewarded. State
+  which side you placed the person on, and the role you read it from, in
+  "reasons".
 
 === IMAGE AND AGE RULES ===
 - Each image belongs to the profile ID named immediately before it. Never
