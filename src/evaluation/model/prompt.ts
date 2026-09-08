@@ -17,7 +17,7 @@ interface ModelCampaignCriteria {
   openToWork?: boolean;
 }
 
-/** The two prompt channels used by one Gemini evaluation request. */
+/** The two prompt channels used by one the model evaluation request. */
 export interface ModelEvaluationPrompt {
   readonly systemInstruction: string;
   readonly userContent: string;

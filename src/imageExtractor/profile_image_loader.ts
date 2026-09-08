@@ -34,7 +34,7 @@ const MIME_TYPE_BY_EXTENSION: Readonly<Record<string, ProfileImageMimeType>> = {
   '.webp': 'image/webp',
 };
 
-/** Returns whether a provider MIME value is supported by Gemini extraction. */
+/** Returns whether a provider MIME value is supported for image extraction. */
 function isProfileImageMimeType(value: string): value is ProfileImageMimeType {
   return PROFILE_IMAGE_MIME_TYPES.some((mimeType) => mimeType === value);
 }

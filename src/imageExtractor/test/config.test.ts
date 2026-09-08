@@ -3,7 +3,6 @@ import test from 'node:test';
 
 import {
   DEFAULT_OPENROUTER_MODEL,
-  MODEL_PROVIDER_ENVIRONMENT_KEY,
   OPENROUTER_MODEL_ENVIRONMENT_KEY,
 } from '../../models/index.js';
 import {
@@ -15,7 +14,7 @@ import {
 
 test('resolves the documented image defaults when options are absent', () => {
   assert.deepEqual(resolveProfileImageExtractionOptions({}, {}), {
-    model: PROFILE_IMAGE_DEFAULTS.model,
+    model: DEFAULT_OPENROUTER_MODEL,
     resolution: PROFILE_IMAGE_DEFAULTS.resolution,
     requestTimeoutMs: PROFILE_IMAGE_DEFAULTS.requestTimeoutMs,
     imageDownloadTimeoutMs: PROFILE_IMAGE_DEFAULTS.downloadTimeoutMs,
@@ -58,7 +57,7 @@ test('falls back when extraction limits are unusable at runtime', () => {
       {},
     ),
     {
-      model: PROFILE_IMAGE_DEFAULTS.model,
+      model: DEFAULT_OPENROUTER_MODEL,
       resolution: PROFILE_IMAGE_DEFAULTS.resolution,
       requestTimeoutMs: PROFILE_IMAGE_DEFAULTS.requestTimeoutMs,
       imageDownloadTimeoutMs: PROFILE_IMAGE_DEFAULTS.downloadTimeoutMs,
@@ -73,7 +72,6 @@ test('uses the shared OpenRouter model when that provider is selected', () => {
     resolveProfileImageExtractionOptions(
       {},
       {
-        [MODEL_PROVIDER_ENVIRONMENT_KEY]: 'openrouter',
         [OPENROUTER_MODEL_ENVIRONMENT_KEY]: 'openrouter/image-model',
       },
     ).model,
@@ -82,7 +80,7 @@ test('uses the shared OpenRouter model when that provider is selected', () => {
   assert.equal(
     resolveProfileImageExtractionOptions(
       {},
-      { [MODEL_PROVIDER_ENVIRONMENT_KEY]: 'openrouter' },
+      {},
     ).model,
     DEFAULT_OPENROUTER_MODEL,
   );

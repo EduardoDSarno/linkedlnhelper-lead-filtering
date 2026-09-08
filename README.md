@@ -73,7 +73,7 @@ on profiles that were never going to pass anyway.**
 
 - 1.6: The profiles that make it past the broad filter get evaluated by an LLM against the criteria the
 user defined for that campaign. Model calls go through a generic model layer instead of being hardcoded
-to one provider, so it can run against Gemini or OpenRouter without touching the evaluation logic itself.
+to one provider, so the model can be swapped through a single env var without touching the evaluation logic itself.
 
 - 1.7: Everything (profiles, image assessments, evaluation results) gets persisted, and from there the
 web UI is where the actual review happens: upload a campaign, watch it run, and go through the profiles
@@ -98,7 +98,7 @@ _All shown with the app's built-in mock data (`?mock` in the URL) — no real ca
   built-in `node:sqlite` for storage.
 - **Frontend:** React 19 with Vite and TypeScript.
 - **External services:** Apify (running the Harvest API LinkedIn scraper) for profile collection, and
-  either Gemini or OpenRouter for evaluation and image analysis, switchable through a single env var.
+  OpenRouter for evaluation and image analysis (any model it serves, selected through a single env var).
 - **Tests:** Node's built-in test runner (`node --test`), no external test framework.
 
 ## Setup
@@ -116,8 +116,7 @@ _All shown with the app's built-in mock data (`?mock` in the URL) — no real ca
    cp .env.example .env
    ```
 
-   At minimum you need `APIFY_API_KEY` and one model provider key (`GEMINI_API_KEY` or
-   `OPENROUTER_API_KEY`, matching whatever you set `MODEL_PROVIDER` to). Everything else in
+   At minimum you need `APIFY_API_KEY` and `OPENROUTER_API_KEY`. Everything else in
    `.env.example` has a sane default and can be left blank.
 
 3. Run the API server:

@@ -30,7 +30,7 @@ export interface KeywordList {
 }
 
 /**
- * Optional first-pass age cut, reused later by Gemini.
+ * Optional first-pass age cut, reused later by the model.
  *
  * Omit this field when age should not cut the first pass.
  */
@@ -57,7 +57,7 @@ export const DECISION_POLICY_PERCENT = {
   maximum: 100,
 } as const;
 
-/** Supported ways to convert Gemini scores into application decisions. */
+/** Supported ways to convert the model scores into application decisions. */
 export const DECISION_POLICY_MODE = {
   automatic: 'automatic',
   manual: 'manual',
@@ -66,7 +66,7 @@ export const DECISION_POLICY_MODE = {
 /**
  * Keeps every successfully scored profile available for human review.
  *
- * Gemini still supplies the match percentage, evidence, and uncertainties.
+ * the model still supplies the match percentage, evidence, and uncertainties.
  */
 export interface ManualDecisionPolicyCriteria {
   mode: typeof DECISION_POLICY_MODE.manual;
@@ -88,7 +88,7 @@ export type DecisionPolicyCriteria =
  * Campaign settings for the first pass plus prompts and ranges for later AI.
  *
  * The broad filter only applies hard excludes from location, reject-list
- * keywords, age, photo, and open-to-work. Gemini estimates compensation, and
+ * keywords, age, photo, and open-to-work. the model estimates compensation, and
  * application code compares that estimate with the desired campaign range.
  */
 export interface FullEvaluationCriteria {
@@ -98,7 +98,7 @@ export interface FullEvaluationCriteria {
   desiredMonthlyCompensation?: DesiredMonthlyCompensationCriteria;
   netWorth?: NetWorthCriteria;
   /**
-   * Controls deterministic score-to-decision mapping after Gemini responds.
+   * Controls deterministic score-to-decision mapping after the model responds.
    *
    * Omit this field to keep every successfully scored profile in manual review.
    */

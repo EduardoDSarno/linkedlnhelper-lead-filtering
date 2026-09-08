@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { GeminiImageError } from '../gemini_profile_image_client.js';
+import { ProfileImageModelError } from '../profile_image_client.js';
 import {
   extractProfileImages,
   extractProfileImagesWithExecutor,
@@ -129,7 +129,7 @@ test('one failed image does not cancel the others', async () => {
 
 test('reports every job when they all fail', async () => {
   const executor: ProfileImageExecutor = async () => {
-    throw new Error('Gemini is unavailable.');
+    throw new Error('the model is unavailable.');
   };
 
   const results = await extractProfileImagesWithExecutor(jobs(3), executor);
@@ -155,7 +155,7 @@ test('carries billed token usage onto a rejected result', async () => {
   // A blocked image is still charged. Losing the usage here is what would make
   // failed images invisible in a cost total.
   const executor: ProfileImageExecutor = async () => {
-    throw new GeminiImageError('Gemini blocked the image request: SAFETY.', {
+    throw new ProfileImageModelError('the model blocked the image request: SAFETY.', {
       promptTokens: 300,
       totalTokens: 300,
     });
@@ -171,7 +171,7 @@ test('carries billed token usage onto a rejected result', async () => {
   );
 });
 
-test('retains billed usage when Gemini returns invalid structured JSON', async () => {
+test('retains billed usage when the model returns invalid structured JSON', async () => {
   const promptTokens = 240;
   const totalTokens = 260;
   const results = await extractProfileImages(
@@ -200,7 +200,7 @@ test('retains billed usage when Gemini returns invalid structured JSON', async (
     {
       id: 'invalid-structured-output',
       status: 'rejected',
-      error: 'Gemini returned malformed JSON for the image assessment.',
+      error: 'The model returned malformed JSON for the image assessment.',
       usage: { promptTokens, totalTokens },
     },
   ]);

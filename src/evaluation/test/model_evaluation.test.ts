@@ -79,7 +79,7 @@ function compensationEvaluation(
   };
 }
 
-test('requests a score without asking Gemini for a final decision', () => {
+test('requests a score without asking the model for a final decision', () => {
   const properties =
     MODEL_EVALUATION_JSON_SCHEMA.properties.evaluations.items.properties;
 

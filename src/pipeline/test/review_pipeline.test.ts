@@ -153,7 +153,7 @@ function reviewDependencies(
   };
 }
 
-test('connects stable full profiles to broad filtering, Gemini, and SQLite', async () => {
+test('connects stable full profiles to broad filtering, the model, and SQLite', async () => {
   const urls = [
     'https://linkedin.com/in/profile-with-photo',
     'https://linkedin.com/in/profile-without-photo',
@@ -246,7 +246,7 @@ test('connects stable full profiles to broad filtering, Gemini, and SQLite', asy
   assert.equal(broadLogs[1]?.['decision'], 'Failed');
   assert.match(String(broadLogs[1]?.['reason']), /No profile photo/);
 
-  const modelLogs = payloadsFor(logger, 'Gemini profile decision.');
+  const modelLogs = payloadsFor(logger, 'Model profile decision.');
   assert.equal(modelLogs.length, 1);
   assert.equal(modelLogs[0]?.['profileId'], PROFILE_WITH_PHOTO_ID);
   assert.equal(modelLogs[0]?.['linkedinUrl'], urls[0]);
@@ -317,7 +317,7 @@ test('persists isolated model failures as a completed review run', async () => {
 
   const failureLogs = payloadsFor(
     logger,
-    'Gemini profile evaluation failed.',
+    'Model profile evaluation failed.',
   );
   assert.equal(failureLogs.length, 1);
   assert.equal(failureLogs[0]?.['profileId'], PROFILE_WITH_PHOTO_ID);

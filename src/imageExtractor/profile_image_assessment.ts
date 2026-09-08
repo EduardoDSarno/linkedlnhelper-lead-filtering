@@ -57,14 +57,14 @@ function isOneOf<const T extends readonly string[]>(
   return typeof value === 'string' && accepted.includes(value);
 }
 
-/** Validates and reconciles Gemini's apparent-age bracket and confidence. */
+/** Validates and reconciles the model's apparent-age bracket and confidence. */
 function validateApparentAge(value: unknown): ApparentAgeEstimate {
   if (
     !isRecord(value) ||
     !isOneOf(value['bracket'], APPARENT_AGE_BRACKETS) ||
     !isOneOf(value['confidence'], APPARENT_AGE_CONFIDENCE_VALUES)
   ) {
-    throw new Error('Gemini returned an invalid apparent age estimate.');
+    throw new Error('The model returned an invalid apparent age estimate.');
   }
 
   // An "unknown" bracket cannot carry a real confidence, and a confident
@@ -86,7 +86,7 @@ function validateApparentAge(value: unknown): ApparentAgeEstimate {
 /** Validates every required assessment field before it enters the domain. */
 function validateAssessment(value: unknown): ProfileImageAssessment {
   if (!isRecord(value)) {
-    throw new Error('Gemini returned a non-object image assessment.');
+    throw new Error('The model returned a non-object image assessment.');
   }
 
   if (
@@ -111,7 +111,7 @@ function validateAssessment(value: unknown): ProfileImageAssessment {
       (observation) => typeof observation === 'string',
     )
   ) {
-    throw new Error('Gemini returned an invalid image assessment shape.');
+    throw new Error('The model returned an invalid image assessment shape.');
   }
 
   return {
@@ -133,14 +133,14 @@ function validateAssessment(value: unknown): ProfileImageAssessment {
 }
 
 /**
- * Validates one Gemini response into a profile image assessment.
+ * Validates one model response into a profile image assessment.
  *
  * The response is structured output, but structured output is a request rather
  * than a guarantee, so every field is checked before it enters the application
  * model. Only known fields are copied across; anything the provider adds is
  * dropped rather than passed through.
  *
- * @param responseText - Raw JSON text returned by Gemini.
+ * @param responseText - Raw JSON text returned by the model.
  * @returns A fully validated assessment.
  * @throws When the text is not JSON, is not an object, or fails validation.
  */
@@ -151,7 +151,7 @@ export function parseProfileImageAssessment(
     return validateAssessment(JSON.parse(responseText));
   } catch (error: unknown) {
     if (error instanceof SyntaxError) {
-      throw new Error('Gemini returned malformed JSON for the image assessment.');
+      throw new Error('The model returned malformed JSON for the image assessment.');
     }
     throw error;
   }

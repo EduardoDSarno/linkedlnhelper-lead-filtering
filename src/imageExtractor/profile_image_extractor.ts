@@ -10,13 +10,13 @@ import {
   resolveProfileImageExtractionOptions,
 } from './config.js';
 import {
-  GeminiImageError,
-  recognizeProfileImageWithGemini,
-} from './gemini_profile_image_client.js';
+  ProfileImageModelError,
+  recognizeProfileImageWithModel,
+} from './profile_image_client.js';
 import { parseProfileImageAssessment } from './profile_image_assessment.js';
 import { loadProfileImage } from './profile_image_loader.js';
 import type {
-  GeminiTokenUsage,
+  ModelTokenUsage,
   ProfileImageBatchOptions,
   ProfileImageExtractionOptions,
   ProfileImageExtractionResult,
@@ -26,7 +26,7 @@ import type {
 } from './profile_image_types.js';
 
 /**
- * Classifies one profile image using Gemini 3.7 Flash.
+ * Classifies one profile image using the model 3.7 Flash.
  *
  * The result intentionally contains mostly observable composition and quality
  * fields. It must not be used as an automated candidate-fit decision.
@@ -40,7 +40,7 @@ export async function extractProfileImage(
     downloadTimeoutMs: resolved.imageDownloadTimeoutMs,
     maximumBytes: resolved.maxImageBytes,
   });
-  const response = await recognizeProfileImageWithGemini({
+  const response = await recognizeProfileImageWithModel({
     image,
     model: resolved.model,
     resolution: resolved.resolution,
@@ -56,7 +56,7 @@ export async function extractProfileImage(
     assessment = parseProfileImageAssessment(response.text);
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
-    throw new GeminiImageError(message, response.usage);
+    throw new ProfileImageModelError(message, response.usage);
   }
 
   return {
@@ -69,7 +69,7 @@ export async function extractProfileImage(
 
 /**
  * Processes one profile image. Production supplies {@link extractProfileImage};
- * tests supply a stand-in so a batch can be exercised without Gemini.
+ * tests supply a stand-in so a batch can be exercised without the model.
  */
 export type ProfileImageExecutor = (
   source: ProfileImageSource,
@@ -77,12 +77,12 @@ export type ProfileImageExecutor = (
 ) => Promise<ProfileImageExtractionResult>;
 
 /**
- * Reads the tokens Gemini billed before refusing an image, when it reported
- * any. Only {@link GeminiImageError} carries them; a download or network
+ * Reads the tokens the model billed before refusing an image, when it reported
+ * any. Only {@link ProfileImageModelError} carries them; a download or network
  * failure has no response and therefore no usage to report.
  */
-function usageFromFailure(error: unknown): GeminiTokenUsage | undefined {
-  return error instanceof GeminiImageError ? error.usage : undefined;
+function usageFromFailure(error: unknown): ModelTokenUsage | undefined {
+  return error instanceof ProfileImageModelError ? error.usage : undefined;
 }
 
 /**

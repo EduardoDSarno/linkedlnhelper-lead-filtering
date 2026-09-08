@@ -2,11 +2,7 @@ import type { Logger } from '../logging/index.js';
 import type { ModelClient, ModelTokenUsage } from '../models/index.js';
 import { PROFILE_IMAGE_LIMITS } from './config.js';
 
-export type {
-  ModelClient,
-  ModelTokenUsage,
-  GeminiTokenUsage,
-} from '../models/index.js';
+export type { ModelClient, ModelTokenUsage } from '../models/index.js';
 
 export const PROFILE_IMAGE_MIME_TYPES = [
   'image/jpeg',
@@ -178,7 +174,7 @@ export interface ProfileImageBatchOptions
   logger?: Logger;
 }
 
-/** JSON Schema sent to Gemini so the response is machine-readable. */
+/** JSON Schema sent to the model so the response is machine-readable. */
 export const PROFILE_IMAGE_ASSESSMENT_JSON_SCHEMA = {
   type: 'object',
   additionalProperties: false,

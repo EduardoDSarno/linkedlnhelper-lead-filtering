@@ -6,13 +6,13 @@ export {
 export type { ProfileImageExecutor } from './profile_image_extractor.js';
 
 export {
-  GeminiImageError,
-  recognizeProfileImageWithGemini,
-} from './gemini_profile_image_client.js';
+  ProfileImageModelError,
+  recognizeProfileImageWithModel,
+} from './profile_image_client.js';
 export type {
-  GeminiProfileImageRequest,
-  GeminiProfileImageResponse,
-} from './gemini_profile_image_client.js';
+  ProfileImageRequest,
+  ProfileImageResponse,
+} from './profile_image_client.js';
 
 export { loadProfileImage } from './profile_image_loader.js';
 export type {
@@ -21,7 +21,7 @@ export type {
 } from './profile_image_loader.js';
 
 export {
-  GEMINI_IMAGE_RETRY_POLICY,
+  IMAGE_MODEL_RETRY_POLICY,
   PROFILE_IMAGE_DEFAULTS,
   PROFILE_IMAGE_LIMITS,
   resolveProfileImageBatchConcurrency,
@@ -41,7 +41,6 @@ export type {
   ApparentAgeBracket,
   ApparentAgeConfidence,
   ApparentAgeEstimate,
-  GeminiTokenUsage,
   ModelClient,
   ModelTokenUsage,
   ProfileImageAssessment,

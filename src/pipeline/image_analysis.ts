@@ -29,7 +29,7 @@ export type {
  * Adds up the tokens every image job reported, billed or wasted.
  *
  * Both branches of {@link ProfileImageJobResult} can carry usage: a fulfilled
- * job through its result, a rejected one when Gemini answered and then
+ * job through its result, a rejected one when the model answered and then
  * declined. Missing counts are treated as zero rather than skipped, so the
  * total is always a complete set of numbers.
  */
@@ -80,7 +80,7 @@ export function attachSuccessfulImageAnalyses(
   profiles: readonly Profile[],
   imageResults: readonly ProfileImageJobResult[],
 ): FullProfile[] {
-  // Index only successful Gemini results by our application-owned profile ID.
+  // Index only successful the model results by our application-owned profile ID.
   // Rejected jobs remain visible in the pipeline summary instead.
   const successfulResults = new Map(
     imageResults
@@ -147,7 +147,7 @@ export async function analyzeProfileImages(
     };
   }
 
-  // Only profiles that have a photo URL need a Gemini request; profiles
+  // Only profiles that have a photo URL need a the model request; profiles
   // without photos still continue through the run.
   const profilesWithPhoto = profiles.filter(
     (profile): profile is Profile & { photo: string } =>

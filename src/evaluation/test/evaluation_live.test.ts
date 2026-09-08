@@ -53,14 +53,14 @@ const LIVE_EVALUATION_REJECT_KEYWORDS = [
   'estagiário',
 ] as const;
 
-/** Reports why the billed Gemini sample should be skipped, or false to run it. */
+/** Reports why the billed the model sample should be skipped, or false to run it. */
 function liveEvaluationSkipReason(): string | false {
   if (process.env[LIVE_EVALUATION_ENV_FLAG] !== LIVE_EVALUATION_ENABLED_VALUE) {
-    return `Set ${LIVE_EVALUATION_ENV_FLAG}=${LIVE_EVALUATION_ENABLED_VALUE} to run the live Gemini evaluation.`;
+    return `Set ${LIVE_EVALUATION_ENV_FLAG}=${LIVE_EVALUATION_ENABLED_VALUE} to run the live the model evaluation.`;
   }
 
-  if (!process.env['GEMINI_API_KEY']?.trim()) {
-    return 'GEMINI_API_KEY is not configured.';
+  if (!process.env['OPENROUTER_API_KEY']?.trim()) {
+    return 'OPENROUTER_API_KEY is not configured.';
   }
 
   if (!existsSync(LIVE_EVALUATION_PROFILES_PATH)) {
@@ -238,7 +238,7 @@ function logBroadFilter(
   );
 }
 
-/** Logs Gemini decisions, failures, and token use from the run result. */
+/** Logs the model decisions, failures, and token use from the run result. */
 function logModelEvaluation(
   logger: Logger,
   result: EvaluationRunResult['modelEvaluation'],
@@ -263,11 +263,11 @@ function logModelEvaluation(
       failures: result.failures,
       tokenUsage: result.tokenUsage,
     },
-    'Completed Gemini evaluation.',
+    'Completed the model evaluation.',
   );
 }
 
-/** Logs the first-pass and Gemini outcomes from one live evaluation run. */
+/** Logs the first-pass and the model outcomes from one live evaluation run. */
 function logEvaluationRun(
   logger: Logger,
   result: EvaluationRunResult,
@@ -277,7 +277,7 @@ function logEvaluationRun(
 }
 
 test(
-  'evaluates sample full profiles through the live Gemini flow',
+  'evaluates sample full profiles through the live the model flow',
   {
     timeout: LIVE_EVALUATION_TIMEOUT_MS,
     skip: liveEvaluationSkipReason(),
@@ -348,14 +348,14 @@ test(
       );
       assert.ok(
         result.broadFilter.profilesForAi.length > 0,
-        'At least one sample profile should reach Gemini.',
+        'At least one sample profile should reach the model.',
       );
       assert.equal(
         result.modelEvaluation.failedProfiles,
         0,
         result.modelEvaluation.failures
           .map((failure) => failure.error)
-          .join('; ') || 'Gemini evaluation failed.',
+          .join('; ') || 'the model evaluation failed.',
       );
       assert.equal(
         result.modelEvaluation.successfulProfiles,
@@ -377,7 +377,7 @@ test(
           availableProfiles: availableProfiles.length,
           evaluatedProfiles: fullProfiles.length,
           excludedProfiles: excluded.length,
-          geminiProfiles: result.modelEvaluation.successfulProfiles,
+          modelProfiles: result.modelEvaluation.successfulProfiles,
           decisions: modelDecisionCounts(result.modelEvaluation.evaluations),
           tokenUsage: result.modelEvaluation.tokenUsage,
         }),

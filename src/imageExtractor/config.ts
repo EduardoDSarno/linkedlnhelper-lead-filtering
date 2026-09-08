@@ -10,14 +10,12 @@ import { resolveProviderModelId } from '../models/index.js';
 
 /** Environment variables this module reads when caller options are absent. */
 const ENVIRONMENT_KEYS = {
-  model: 'GEMINI_MODEL',
   resolution: 'IMAGE_ANALYSIS_RESOLUTION',
-  requestTimeoutMs: 'GEMINI_REQUEST_TIMEOUT_MS',
+  requestTimeoutMs: 'IMAGE_REQUEST_TIMEOUT_MS',
 } as const;
 
 /** Defaults used when an image-extraction caller omits an option. */
 export const PROFILE_IMAGE_DEFAULTS = {
-  model: 'gemini-3.8-flash',
   resolution: 'medium' as ProfileImageResolution,
   requestTimeoutMs: 30_000,
   downloadTimeoutMs: 15_000,
@@ -33,8 +31,8 @@ export const PROFILE_IMAGE_LIMITS = {
   observationCount: 5,
 } as const;
 
-/** Retry policy passed to the Google Gen AI SDK. */
-export const GEMINI_IMAGE_RETRY_POLICY = {
+/** Retry policy for image model requests. */
+export const IMAGE_MODEL_RETRY_POLICY = {
   initialDelaySeconds: 0.25,
   maximumDelaySeconds: 4,
   httpStatusCodes: [408, 429, 500, 502, 503, 504],
@@ -69,14 +67,7 @@ export function resolveProfileImageExtractionOptions(
   environment: NodeJS.ProcessEnv = process.env,
 ): ResolvedProfileImageExtractionOptions {
   // Precedence for each setting: caller option, provider model, module default.
-  const model = resolveProviderModelId(
-    {
-      callerModel: options.model,
-      geminiEnvironmentModel: environment[ENVIRONMENT_KEYS.model],
-      geminiDefault: PROFILE_IMAGE_DEFAULTS.model,
-    },
-    environment,
-  );
+  const model = resolveProviderModelId(options.model, environment);
   const resolution = resolveProfileImageResolution(
     options.resolution ?? environment[ENVIRONMENT_KEYS.resolution],
   );

@@ -128,7 +128,7 @@ test('processes a mixed run and reconciles every total', async () => {
             : {
                 id: job.id,
                 status: 'rejected' as const,
-                error: 'Gemini blocked the image request: SAFETY.',
+                error: 'the model blocked the image request: SAFETY.',
                 usage: { promptTokens: 40, totalTokens: 40 },
               },
         );
@@ -449,7 +449,7 @@ test('totals token usage across successful and failed images', async () => {
         {
           id: jobs[1]?.id ?? '',
           status: 'rejected',
-          error: 'Gemini blocked the image request: SAFETY.',
+          error: 'the model blocked the image request: SAFETY.',
           usage: { promptTokens: 60, totalTokens: 60 },
         },
       ],
@@ -694,7 +694,7 @@ test('keeps every profile when all image analyses fail', async () => {
         jobs.map((job) => ({
           id: job.id,
           status: 'rejected' as const,
-          error: 'Gemini is unavailable.',
+          error: 'the model is unavailable.',
         })),
       writeJson: writer.writeJson,
     }),

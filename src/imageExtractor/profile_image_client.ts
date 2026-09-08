@@ -33,14 +33,14 @@ age, or any other personal characteristic, in "observations".
  * narrow: a test supplies one function and never constructs a client, so no
  * API key is required and the memoized production client is never created.
  */
-export interface GeminiProfileImageRequest {
+export interface ProfileImageRequest {
   image: LoadedProfileImage;
   model: string;
   resolution: ProfileImageResolution;
   timeoutMs: number;
   /**
    * Caller-facing retry budget. Not forwarded on `ModelRequest` yet; the
-   * Gemini adapter still uses its own single-attempt SDK policy.
+   * provider adapter still uses its own single-attempt SDK policy.
    */
   maxRetries: number;
 
@@ -51,7 +51,7 @@ export interface GeminiProfileImageRequest {
   generateContent?: ModelClient;
 }
 
-export interface GeminiProfileImageResponse {
+export interface ProfileImageResponse {
   text: string;
   usage?: ModelTokenUsage;
 }
@@ -67,13 +67,13 @@ export interface GeminiProfileImageResponse {
  * `usage` is absent when the model call itself failed, because no response
  * reached us and no token count exists to report.
  */
-export class GeminiImageError extends Error {
+export class ProfileImageModelError extends Error {
   readonly usage: ModelTokenUsage | undefined;
 
   /** Creates a failed assessment while retaining any usage the model reported. */
   constructor(message: string, usage?: ModelTokenUsage) {
     super(message);
-    this.name = 'GeminiImageError';
+    this.name = 'ProfileImageModelError';
     this.usage = usage;
   }
 }
@@ -85,13 +85,13 @@ export class GeminiImageError extends Error {
  * @param request - Image, model, resolution, timeout, and an optional model
  * call to use instead of the configured provider adapter.
  * @returns The response text and any token usage the model reported.
- * @throws {GeminiImageError} When a response arrived but was blocked or empty;
+ * @throws {ProfileImageModelError} When a response arrived but was blocked or empty;
  * it carries the tokens that response was billed for. Failures of the model
  * call itself propagate unchanged, because no response and no usage exists.
  */
-export async function recognizeProfileImageWithGemini(
-  request: GeminiProfileImageRequest,
-): Promise<GeminiProfileImageResponse> {
+export async function recognizeProfileImageWithModel(
+  request: ProfileImageRequest,
+): Promise<ProfileImageResponse> {
   const generateContent = request.generateContent ?? resolveModelClient();
   const response = await generateContent({
     model: request.model,
@@ -123,7 +123,7 @@ function getResponseText(
   usage: ModelTokenUsage | undefined,
 ): string {
   if (response.blockReason) {
-    throw new GeminiImageError(
+    throw new ProfileImageModelError(
       `The model blocked the image request: ${response.blockReason}.`,
       usage,
     );
@@ -132,7 +132,7 @@ function getResponseText(
   const text = response.text.trim();
   if (text) return text;
 
-  throw new GeminiImageError(
+  throw new ProfileImageModelError(
     'The model returned no image assessment.',
     usage,
   );

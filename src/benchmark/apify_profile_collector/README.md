@@ -1,7 +1,7 @@
 # Apify profile collector benchmark
 
 This command validates the production Apify collector independently from
-profile mapping, Linked Helper normalization, and Gemini image analysis. The
+profile mapping, Linked Helper normalization, and image analysis. The
 collector receives a list of LinkedIn profile links regardless of how those
 links enter the benchmark. Every experiment is written to an isolated output
 directory.

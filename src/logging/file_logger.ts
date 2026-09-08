@@ -55,7 +55,7 @@ export async function createFileLogger(
           'token',
           '*.token',
           'APIFY_API_KEY',
-          'GEMINI_API_KEY',
+          'OPENROUTER_API_KEY',
         ],
         censor: '[REDACTED]',
       },

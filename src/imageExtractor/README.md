@@ -1,6 +1,6 @@
 # Image Extractor
 
-The `image_extractor` module analyzes profile photos with Gemini 3.7 Flash and
+The `image_extractor` module analyzes profile photos through OpenRouter and
 returns a small, structured description of visible image composition and
 technical quality.
 
@@ -21,7 +21,7 @@ Each successful extraction describes:
 - background and attire categories;
 - whether the result is uncertain or requires manual review;
 - short, neutral observations;
-- Gemini model, media resolution, and token usage;
+- model id, media resolution, and token usage;
 - an apparent-age bracket with a confidence level.
 
 The apparent-age field is a coarse visual estimate, not the person's actual
@@ -38,9 +38,9 @@ image_extractor/
 ├── index.ts                         Public exports
 ├── profile_image_extractor.ts       Single-image and batch orchestration
 ├── profile_image_loader.ts          URL, file, and byte loading
-├── gemini_profile_image_client.ts   Google Gen AI SDK communication
+├── profile_image_client.ts          Model request/response handling
 ├── profile_image_assessment.ts      Runtime response validation
-└── profile_image_types.ts           Types and Gemini JSON Schema
+└── profile_image_types.ts           Types and the assessment JSON Schema
 ```
 
 The processing flow is:
@@ -50,7 +50,7 @@ ProfileImageSource
        ↓
 loadProfileImage
        ↓
-recognizeProfileImageWithGemini
+recognizeProfileImageWithModel
        ↓
 parseProfileImageAssessment
        ↓
@@ -59,11 +59,11 @@ ProfileImageExtractionResult
 
 ## Configuration
 
-The module uses Google's official `@google/genai` SDK. It expects the Gemini
+The module calls OpenRouter through the shared models layer. It expects the
 API key to be available server-side:
 
 ```env
-GEMINI_API_KEY=your-key
+OPENROUTER_API_KEY=your-key
 ```
 
 The application entry point already imports `dotenv/config`. A standalone
@@ -73,7 +73,7 @@ script that imports the extractor directly should load its environment first:
 import 'dotenv/config';
 ```
 
-Do not expose `GEMINI_API_KEY` in browser/client-side code.
+Do not expose `OPENROUTER_API_KEY` in browser/client-side code.
 
 ## Public API
 
@@ -190,7 +190,7 @@ const results = await extractProfileImages(
 ```
 
 One failed job does not cancel the remaining jobs. Every returned item is a
-discriminated union, and both branches can carry token usage: Gemini bills for
+discriminated union, and both branches can carry token usage: providers bill for
 the tokens it read even when it declines to answer, so a rejected job reports
 what that attempt cost.
 
@@ -205,24 +205,24 @@ type ProfileImageJobResult =
       id: string;
       status: 'rejected';
       error: string;
-      usage?: GeminiTokenUsage;
+      usage?: ModelTokenUsage;
     };
 ```
 
-### Testing without Gemini
+### Testing without the model
 
-Three boundaries can be replaced so a test never reaches Gemini or a public
+Three boundaries can be replaced so a test never reaches the model or a public
 image URL. Each defaults to the real implementation when omitted, so production
 callers are unaffected.
 
 | Boundary | How to replace it |
 | --- | --- |
 | One image download | `ProfileImageLoadingOptions.fetchImage` |
-| One Gemini call | `GeminiProfileImageRequest.generateContent` |
+| One the model call | `ProfileImageRequest.generateContent` |
 | One image job in a batch | `extractProfileImagesWithExecutor(jobs, executor, options)` |
 
 Supplying `generateContent` means the shared client is never constructed, so no
-`GEMINI_API_KEY` is required.
+`OPENROUTER_API_KEY` is required.
 
 ## Extraction options
 
@@ -234,18 +234,18 @@ defaults or limits change.
 
 | Option | Default | Purpose |
 | --- | ---: | --- |
-| `model` | `gemini-3.8-flash` | Gemini model identifier |
+| `model` | `OPENROUTER_MODEL` default | model identifier |
 | `resolution` | `medium` | Image tokenization resolution: `low`, `medium`, or `high` |
-| `requestTimeoutMs` | `30000` | Maximum time for one Gemini request |
+| `requestTimeoutMs` | `30000` | Maximum time for one the model request |
 | `imageDownloadTimeoutMs` | `15000` | Maximum time for a remote image download |
 | `maxImageBytes` | `10485760` | Maximum accepted image size, 10 MiB |
-| `maxRetries` | `3` | Retries after the initial Gemini request |
+| `maxRetries` | `3` | Retries after the initial the model request |
 | `concurrency` | `25` | Batch workers; accepted only by `extractProfileImages` |
 
 Batch concurrency is capped at 50 to avoid launching an unbounded number of
-simultaneous image downloads and Gemini calls.
+simultaneous image downloads and the model calls.
 
-Gemini retries use exponential backoff for HTTP `408`, `429`, and common `5xx`
+the model retries use exponential backoff for HTTP `408`, `429`, and common `5xx`
 responses. Retry behavior is delegated to the Google Gen AI SDK.
 
 ## Supported image formats
@@ -258,7 +258,7 @@ responses. Retry behavior is delegated to the Google Gen AI SDK.
 - GIF
 - AVIF
 
-Inline image data is limited to 10 MiB by this module, below Gemini's overall
+Inline image data is limited to 10 MiB by this module, below the model's overall
 request-size limit.
 
 ## Result shape
@@ -313,7 +313,7 @@ interface ProfileImageExtractionResult {
 }
 ```
 
-The JSON Schema sent to Gemini constrains its response, and
+The JSON Schema sent to the model constrains its response, and
 `profile_image_assessment.ts` validates the parsed data again at runtime before
 returning it to the application.
 
@@ -321,13 +321,13 @@ returning it to the application.
 
 Single-image functions throw errors for conditions such as:
 
-- missing `GEMINI_API_KEY`;
+- missing `OPENROUTER_API_KEY`;
 - missing profile photo URL;
 - unsupported URL protocol or MIME type;
 - empty or oversized image;
 - image download failure or timeout;
-- Gemini rejection, timeout, or exhausted retries;
-- malformed or schema-incompatible Gemini output.
+- the model rejection, timeout, or exhausted retries;
+- malformed or schema-incompatible the model output.
 
 The batch function converts these errors into rejected result entries so that
 other jobs can continue.

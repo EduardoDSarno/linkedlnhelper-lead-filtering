@@ -9,7 +9,7 @@ import type {
 import type { StoredEvaluationRun } from '../database/types.js';
 import type { ModelEvaluationOptions } from '../evaluation/index.js';
 import type {
-  GeminiTokenUsage,
+  ModelTokenUsage,
   ProfileImageBatchOptions,
   ProfileImageJob,
   ProfileImageJobResult,
@@ -18,15 +18,15 @@ import type { Logger } from '../logging/index.js';
 import type { FullProfile } from '../profile/index.js';
 
 /** Tokens billed across a whole run, with every count present. */
-export type ImageTokenUsageTotal = Required<GeminiTokenUsage>;
+export type ImageTokenUsageTotal = Required<ModelTokenUsage>;
 
 /** One profile photo the analyzer returned an error for. */
 export interface ImageAnalysisFailure {
   profileId: string;
   error: string;
 
-  /** Tokens Gemini billed before rejecting this image, when it reported any. */
-  usage?: GeminiTokenUsage;
+  /** Tokens the model billed before rejecting this image, when it reported any. */
+  usage?: ModelTokenUsage;
 }
 
 /** Injectable image-analysis boundary used by production and tests. */
@@ -115,7 +115,7 @@ export interface FullProfilePipelineSummary {
   mappingFailures: ProfileMappingFailure[];
   imageAnalysisFailures: ImageAnalysisFailure[];
 
-  /** Includes usage from failed responses because Gemini may still bill them. */
+  /** Includes usage from failed responses because the model may still bill them. */
   imageTokenUsage: ImageTokenUsageTotal;
   outputs: FullProfilePipelineOutputPaths;
 }

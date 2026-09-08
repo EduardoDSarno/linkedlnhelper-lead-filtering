@@ -193,7 +193,7 @@ function ExperienceTimeline({ items }: { items: ProfileExperience[] }) {
   );
 }
 
-/** Reasons, evidence, and uncertainty lists returned by Gemini. */
+/** Reasons, evidence, and uncertainty lists returned by the model. */
 function AnalysisContent({ profile }: { profile: ProfileResult }) {
   if (!profile.modelDecision) {
     return (

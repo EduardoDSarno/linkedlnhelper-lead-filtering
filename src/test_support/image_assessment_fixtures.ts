@@ -1,8 +1,8 @@
 import type { ProfileImageAssessment } from '../imageExtractor/index.js';
 
 /**
- * Assessment payloads shaped like Gemini structured output, for tests that
- * must never call Gemini.
+ * Assessment payloads shaped like the model structured output, for tests that
+ * must never call the model.
  *
  * The parser accepts a JSON string, so most fixtures are built as objects and
  * serialized on the way in. That keeps each invalid case readable as a single
@@ -32,7 +32,7 @@ export function validImageAssessment(): ProfileImageAssessment {
   };
 }
 
-/** Serializes a valid assessment the way Gemini returns it. */
+/** Serializes a valid assessment the way the model returns it. */
 export function validImageAssessmentJson(): string {
   return JSON.stringify(validImageAssessment());
 }

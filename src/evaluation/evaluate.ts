@@ -16,7 +16,7 @@ export interface EvaluationRunResult {
 /**
  * Runs deterministic exclusions before requesting professional-fit evaluations.
  *
- * Profiles already excluded by direct criteria never consume Gemini tokens.
+ * Profiles already excluded by direct criteria never consume the model tokens.
  * The model stage isolates request-group failures and preserves every broad
  * result regardless of downstream availability.
  */

@@ -11,7 +11,6 @@ import type { ModelEvaluationOptions } from './types.js';
 
 /** Environment variables understood by the model-evaluation stage. */
 export const MODEL_EVALUATION_ENVIRONMENT_KEYS = {
-  model: 'EVALUATION_GEMINI_MODEL',
   profilesPerRequest: 'EVALUATION_PROFILES_PER_REQUEST',
   concurrency: 'EVALUATION_CONCURRENCY',
   requestTimeoutMs: 'EVALUATION_REQUEST_TIMEOUT_MS',
@@ -21,7 +20,6 @@ export const MODEL_EVALUATION_ENVIRONMENT_KEYS = {
 
 /** MVP defaults for model-evaluation requests. */
 export const MODEL_EVALUATION_DEFAULTS = {
-  model: 'gemini-3.8-flash',
   profilesPerRequest: 5,
   concurrency: 10,
   requestTimeoutMs: 90_000,
@@ -163,15 +161,7 @@ export function resolveModelEvaluationOptions(
   environment: NodeJS.ProcessEnv = process.env,
 ): ResolvedModelEvaluationOptions {
   return {
-    model: resolveProviderModelId(
-      {
-        callerModel: options.model,
-        geminiEnvironmentModel:
-          environment[MODEL_EVALUATION_ENVIRONMENT_KEYS.model],
-        geminiDefault: MODEL_EVALUATION_DEFAULTS.model,
-      },
-      environment,
-    ),
+    model: resolveProviderModelId(options.model, environment),
     thinkingEffort: options.thinkingEffort ?? resolveThinkingEffort(environment),
     profilesPerRequest: resolveConfigNumber(
       options.profilesPerRequest ??

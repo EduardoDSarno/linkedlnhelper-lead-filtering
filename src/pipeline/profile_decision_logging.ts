@@ -130,7 +130,7 @@ export function logBroadFilterDecisions(
   }
 }
 
-/** Logs successful Gemini decisions without duplicating stored profile details. */
+/** Logs successful the model decisions without duplicating stored profile details. */
 function logSuccessfulModelDecisions(
   logger: Logger,
   profileLookup: ReadonlyMap<string, FullProfile>,
@@ -149,12 +149,12 @@ function logSuccessfulModelDecisions(
         evidence: result.evidence,
         uncertainties: result.uncertainties,
       },
-      'Gemini profile decision.',
+      'Model profile decision.',
     );
   }
 }
 
-/** Logs one compact failure for every profile in an unsuccessful Gemini group. */
+/** Logs one compact failure for every profile in an unsuccessful the model group. */
 function logFailedModelDecisions(
   logger: Logger,
   profileLookup: ReadonlyMap<string, FullProfile>,
@@ -174,13 +174,13 @@ function logFailedModelDecisions(
             ? { responseText: failure.responseText }
             : {}),
         },
-        'Gemini profile evaluation failed.',
+        'Model profile evaluation failed.',
       );
     }
   }
 }
 
-/** Logs every successful or failed Gemini outcome with stable profile references. */
+/** Logs every successful or failed the model outcome with stable profile references. */
 export function logModelDecisions(
   logger: Logger,
   profiles: readonly FullProfile[],

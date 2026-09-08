@@ -124,7 +124,7 @@ test('keeps every profile, analyzed or not', async () => {
           ? {
               id: job.id,
               status: 'rejected' as const,
-              error: 'Gemini is unavailable.',
+              error: 'the model is unavailable.',
             }
           : {
               id: job.id,
@@ -186,7 +186,7 @@ test('carries billed usage onto a reported failure', async () => {
       jobs.map((job) => ({
         id: job.id,
         status: 'rejected' as const,
-        error: 'Gemini blocked the image request: SAFETY.',
+        error: 'the model blocked the image request: SAFETY.',
         usage: { promptTokens: 70, totalTokens: 70 },
       })),
     recordingLogger(),
@@ -359,7 +359,7 @@ test('logs stage totals and returns failures for stable profile logging', async 
           : {
               id: job.id,
               status: 'rejected' as const,
-              error: 'Gemini is unavailable.',
+              error: 'the model is unavailable.',
             },
       ),
     logger,
@@ -381,7 +381,7 @@ test('logs stage totals and returns failures for stable profile logging', async 
       0,
   );
   assert.deepEqual(result.failures, [
-    { profileId: 'b', error: 'Gemini is unavailable.' },
+    { profileId: 'b', error: 'the model is unavailable.' },
   ]);
 });
 

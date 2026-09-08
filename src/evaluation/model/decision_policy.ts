@@ -31,7 +31,7 @@ export function decisionForMatchPercent(
   return MODEL_EVALUATION_DECISION.rejected;
 }
 
-/** Adds the application-owned decision without changing Gemini's assessment. */
+/** Adds the application-owned decision without changing the model's assessment. */
 export function applyDecisionPolicy(
   assessment: ProfileModelAssessment,
   policy: DecisionPolicyCriteria | undefined,

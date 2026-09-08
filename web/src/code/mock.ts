@@ -1,6 +1,6 @@
 /**
  * In-browser mock of the backend, for building and demoing the screens without
- * a real (paid, minutes-long) Apify + Gemini run.
+ * a real (paid, minutes-long) Apify + the model run.
  *
  * It is used only when the page is opened with `?mock` in the URL; otherwise the
  * real client in `api.ts` is used. The mock returns fabricated profiles with a

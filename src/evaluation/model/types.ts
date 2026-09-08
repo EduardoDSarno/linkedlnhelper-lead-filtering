@@ -60,7 +60,7 @@ export interface ProfileHighlight {
   readonly text: string;
 }
 
-/** One validated professional-fit assessment returned directly by Gemini. */
+/** One validated professional-fit assessment returned directly by the model. */
 export interface ProfileModelAssessment {
   readonly profileId: string;
   readonly matchPercent: number;
@@ -94,7 +94,7 @@ export interface ModelEvaluationFailure {
   readonly tokenUsage?: ModelEvaluationTokenUsage;
 }
 
-/** Complete result of evaluating every profile that reached Gemini. */
+/** Complete result of evaluating every profile that reached the model. */
 export interface ModelEvaluationOutcome {
   readonly requestedProfiles: number;
   readonly successfulProfiles: number;
