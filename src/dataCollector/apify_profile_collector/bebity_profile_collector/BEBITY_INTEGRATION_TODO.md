@@ -97,6 +97,18 @@ downstream needs to change.
       per profile (cost + latency), and nothing in the pipeline currently
       reads `languages`/`skills`/`honors`/`projects`/`organizations`, so there's
       no reason to enable them unless a future campaign's criteria need them.
+- [ ] Restore `openToWork` from the Linked Helper CSV instead of the provider.
+      Bebity does not return the field at all (confirmed across 189 live
+      records in `output/benchmarks/bebity/`), so every Bebity-collected
+      profile reaches the model with the `openToWork` criterion but no value
+      to judge it against — the model can only infer availability from the
+      bio or last role. The data is already parsed at import
+      (`imported_csv_profile.ts:109` reads the `badges_job_seeker` column);
+      it just needs threading onto the collected profile, the same way
+      `fullName` was threaded for the collector's name-based URL matching.
+      Worth doing before any campaign leans on open-to-work as a real signal.
+      Note the badge is self-reported and often stale, so it is evidence for
+      the model rather than a candidate for a hard cut.
 - [ ] Update `README.md`'s architecture section once Bebity is live in
       production, not just the benchmark path.
 
