@@ -48,6 +48,7 @@ function profile(): EvaluationProfileData {
         degree: 'Bachelor of Business Administration',
       },
     ],
+    careerTimeline: { firstAcademicYear: 2010, academicEntries: [] },
     about: 'Builds commercial relationships with enterprise customers.',
   };
 }
@@ -114,7 +115,9 @@ test('sends profile evidence while keeping desired compensation out of the promp
     .join('\n');
 
   assert.match(prompt.systemInstruction, /estimatedAge/);
-  assert.match(prompt.systemInstruction, /career timeline/);
+  assert.match(prompt.systemInstruction, /careerTimeline/);
+  assert.match(prompt.systemInstruction, /firstAcademicYear/);
+  assert.match(prompt.systemInstruction, /prefer the anchors/);
   assert.match(
     prompt.systemInstruction,
     /estimatedTotalMonthlyCompensation/,

@@ -5,6 +5,8 @@
 
 import { asRecord, asString } from '../helpers/index.js';
 import type { LoadedProfileImage } from '../imageExtractor/index.js';
+import { buildCareerTimeline } from './career_timeline.js';
+import type { CareerTimeline } from './career_timeline.js';
 import type {
   FullProfile,
   ProfileEducation,
@@ -47,6 +49,11 @@ export interface EvaluationProfileData {
   readonly location?: ReadonlyEvaluationValue<ProfileLocation>;
   readonly openToWork?: boolean;
   readonly hasPhoto: boolean;
+  /**
+   * Dated age anchors extracted from experience and education, so the model
+   * judges a timeline instead of reconstructing one from a messy array.
+   */
+  readonly careerTimeline: CareerTimeline;
   /** Source URL for the photo, used to load the bytes sent to the model. */
   readonly photoUrl?: string;
   readonly experience: ReadonlyEvaluationValue<ProfileExperience[]>;
@@ -128,6 +135,10 @@ export function mapEvaluationProfileData(
       ? { linkedHelperPublicId: fullProfile.linkedHelperPublicId }
       : {}),
     hasPhoto: hasProfilePhoto(fullProfile.photo),
+    careerTimeline: buildCareerTimeline(
+      fullProfile.experience,
+      fullProfile.education,
+    ),
     ...(hasProfilePhoto(fullProfile.photo)
       ? { photoUrl: fullProfile.photo as string }
       : {}),

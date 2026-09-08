@@ -57,6 +57,7 @@ function profile(profileId: string): EvaluationProfileData {
     hasPhoto: true,
     experience: [],
     education: [],
+    careerTimeline: { academicEntries: [] },
   };
 }
 

@@ -259,6 +259,24 @@ select {
   color: #475569;
   font-weight: 600;
 }
+.profile-details-education-list {
+  margin: 3px 0 0;
+  padding-left: 0;
+  list-style: none;
+}
+.profile-details-education-list li {
+  padding: 1px 0;
+}
+.profile-details-education-anchor {
+  display: inline-block;
+  margin-right: 5px;
+  padding: 0 4px;
+  color: #1d4ed8;
+  background: #dbeafe;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 700;
+}
 .profile-details-pill {
   display: inline-flex;
   align-items: center;

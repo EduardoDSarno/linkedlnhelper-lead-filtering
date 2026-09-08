@@ -117,21 +117,63 @@ function ProfilePhoto({ profile, row }: { profile: ProfileResult; row: Presented
   );
 }
 
-/** Compresses the first education record into one line under the identity. */
+/** Secondary and technical study, which says nothing about graduate age. */
+const NON_HIGHER_EDUCATION =
+  /ensino m[eé]dio|ensino fundamental|t[eé]cnic|col[eé]gio|high school|secondary school/i;
+
+/** Reads the year a course started, falling back to the year it ended. */
+function educationYear(education: ProfileEducation): number | undefined {
+  return education.startDate?.year ?? education.endDate?.year;
+}
+
+/**
+ * Lists every course, oldest first, so the original degree is visible.
+ *
+ * The provider returns education newest-first, so showing only the first entry
+ * usually showed a later MBA and hid the degree that actually indicates age —
+ * which meant opening LinkedIn to check. Higher education is listed before
+ * secondary and technical study, and the oldest higher-education year is
+ * marked, because that is the year a reviewer is looking for.
+ */
 function CompactEducation({ items }: { items: ProfileEducation[] | undefined }) {
-  const education = items?.[0];
-  if (!education) {
+  if (!items || items.length === 0) {
     return <span className="profile-details-education">Formação não informada</span>;
   }
 
-  const course = [education.degree, education.fieldOfStudy].filter(Boolean).join(' em ');
-  const period = formatPeriod(education.startDate, education.endDate);
+  const higher = items.filter(
+    (item) =>
+      !NON_HIGHER_EDUCATION.test(
+        [item.degree, item.fieldOfStudy, item.schoolName].filter(Boolean).join(' '),
+      ),
+  );
+  const others = items.filter((item) => !higher.includes(item));
+  const byYear = [...higher].sort(
+    (a, b) => (educationYear(a) ?? 0) - (educationYear(b) ?? 0),
+  );
+  const firstAcademic = byYear.find((item) => educationYear(item) !== undefined);
 
   return (
-    <span className="profile-details-education">
-      <b>Formação:</b> {[course, education.schoolName, period].filter(Boolean).join(' · ')}
-      {items && items.length > 1 ? ` · +${items.length - 1}` : ''}
-    </span>
+    <div className="profile-details-education">
+      <b>Formação:</b>
+      <ul className="profile-details-education-list">
+        {[...byYear, ...others].map((education, index) => {
+          const course = [education.degree, education.fieldOfStudy]
+            .filter(Boolean)
+            .join(' em ');
+          const period = formatPeriod(education.startDate, education.endDate);
+          return (
+            <li key={`${education.schoolName}-${String(index)}`}>
+              {education === firstAcademic && (
+                <span className="profile-details-education-anchor" title="Formação superior mais antiga">
+                  1ª
+                </span>
+              )}
+              {[course, education.schoolName, period].filter(Boolean).join(' · ')}
+            </li>
+          );
+        })}
+      </ul>
+    </div>
   );
 }
 

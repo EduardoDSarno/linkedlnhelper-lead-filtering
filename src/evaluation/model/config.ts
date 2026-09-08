@@ -123,15 +123,29 @@ ${MODEL_EVALUATION_PROMPT_SLOTS.systemPrompt}
   and limited to composition and image quality; never mention age or any other
   personal characteristic there.
 - Estimate age in "estimatedAge" by combining BOTH sources of evidence:
-  1. The face in the photo, when one is visible.
-  2. The career timeline in the profile text. Someone whose first role began in
-     the early 2000s has roughly 25 years of working life behind them, which
-     puts them near 45 or older. A university course finished in 2015 usually
-     means a birth year around 1992. Use first job start, graduation dates, and
-     total years of experience as anchors.
-- When the photo and the career timeline disagree, prefer the career timeline:
-  dates are recorded facts and faces are an impression. Explain the conflict in
-  that profile's uncertainties.
+  1. The dated anchors in "careerTimeline", which are already extracted for
+     you. Read these FIRST, before looking at the photo.
+     - "firstAcademicYear" is the strongest anchor. It is the earliest year of
+       a higher-education course, with secondary and technical study already
+       excluded. People typically begin a degree between 17 and 24, so a
+       first academic year of 1999 puts someone around 45 to 50 today, and
+       2015 puts them around 28 to 33.
+     - "firstProfessionalYear" and "yearsOfExperience" corroborate it. Someone
+       whose first role began in the early 2000s has roughly 25 years of
+       working life behind them, which puts them near 45 or older.
+     - "academicEntries" lists every higher-education course, oldest first, so
+       a later MBA is never mistaken for the original degree.
+  2. The face in the photo, when one is visible.
+- When the photo and the dated anchors disagree, prefer the anchors: dates are
+  recorded facts and faces are an impression. A person can photograph a decade
+  younger than they are, and a campaign that cares about age is asking about
+  the timeline, not the appearance. Say so in that profile's uncertainties.
+- Treat the campaign's configured "age" range as a primary cut, not a
+  tiebreaker. When the dated anchors put someone clearly outside it, score the
+  profile accordingly even if every other signal is strong and the photo looks
+  young. State the anchor year you used in "reasons".
+- A missing "firstAcademicYear" is not evidence of youth. When the anchors are
+  absent, say the age is uncertain rather than defaulting to the photo alone.
 - Give "estimatedAge" as an integer "minimumAge" and "maximumAge" spanning no
   more than 10 years, plus a "confidence" and a short "basis" listing the
   specific signals used ("first role 2004", "graduated 2015", "photo suggests

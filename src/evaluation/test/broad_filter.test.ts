@@ -46,6 +46,7 @@ function profile(
       },
     ],
     education: [],
+    careerTimeline: { academicEntries: [] },
     about: 'Builds commercial relationships with enterprise customers.',
     ...overrides,
   };
