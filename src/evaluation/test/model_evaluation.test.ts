@@ -126,8 +126,10 @@ test('sends profile evidence while keeping desired compensation out of the promp
   assert.doesNotMatch(prompt.systemInstruction, /Do not use or infer age/);
   assert.match(userContent, /"state":"Goiás"/);
   assert.match(userContent, /"minimumAge":30/);
-  assert.match(prompt.systemInstruction, /close to\n  disqualifying/);
+  assert.match(prompt.systemInstruction, /cut the matchPercent heavily/);
   assert.match(prompt.systemInstruction, /must NOT reduce the score/);
+  // The engine must not editorialize about what a campaign chose to exclude.
+  assert.doesNotMatch(prompt.systemInstruction, /wrong seniority/);
   assert.match(userContent, /"list":\["intern"\]/);
   assert.doesNotMatch(userContent, /minimumMonthlyCompensation/);
   assert.match(prompt.systemInstruction, /Do not estimate or use net worth/);

@@ -1,6 +1,5 @@
 import type { KeyboardEvent } from 'react';
 
-import { Combobox } from './Combobox';
 import {
   OPEN_TO_WORK,
   THINKING_MODE,
@@ -546,8 +545,8 @@ export function CriteriaModal({ form, update, onClose, onConfirm }: CriteriaModa
               />
             </div>
             <Note>
-              Aplica-se apenas ao cargo atual — estágios e trainees no histórico
-              não excluem o perfil.
+              Aplica-se apenas ao cargo atual — o mesmo termo no histórico do
+              perfil não exclui o lead.
             </Note>
           </div>
 

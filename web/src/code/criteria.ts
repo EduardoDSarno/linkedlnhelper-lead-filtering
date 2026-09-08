@@ -1,3 +1,177 @@
+/**
+ * The evaluation-criteria form and its translation to the backend contract.
+ *
+ * `CriteriaForm` is what the modal edits; `toEvaluationCriteria` converts it into
+ * the `FullEvaluationCriteria` the `/run_filter` endpoint validates. Fields the
+ * user leaves empty are omitted rather than sent blank, because the backend
+ * reads an omitted criterion as "do not filter on this" and rejects an empty one.
+ */
+
+/** How the open-to-work badge filters the first pass. */
+export const OPEN_TO_WORK = {
+  /** The badge is ignored. */
+  ignore: 'ignore',
+
+  /** Keep only profiles marked open to work. */
+  only: 'only',
+
+  /** Keep only profiles not marked open to work. */
+  exclude: 'exclude',
+} as const;
+
+/** A single open-to-work choice. */
+export type OpenToWork = (typeof OPEN_TO_WORK)[keyof typeof OPEN_TO_WORK];
+
+/** How deeply the model should reason while scoring. */
+export const THINKING_MODE = {
+  default: 'default',
+  max: 'max',
+} as const;
+
+/** A single thinking-mode value. */
+export type ThinkingMode = (typeof THINKING_MODE)[keyof typeof THINKING_MODE];
+
+/**
+ * Profiles sent in one evaluation request. Kept in lockstep with the backend
+ * evaluation defaults so the time estimate uses the same grouping.
+ */
+export const EVALUATION_PROFILES_PER_REQUEST = 5;
+
+/**
+ * Evaluation requests allowed in flight. Kept in lockstep with the backend's
+ * EVALUATION_CONCURRENCY env value so the time estimate uses the same wave
+ * size. Update this constant by hand if that value changes — there is no live
+ * link between them.
+ */
+export const EVALUATION_CONCURRENCY = 50;
+
+/**
+ * Photo-analysis requests allowed in flight. Kept in lockstep with the
+ * backend's IMAGE_ANALYSIS_CONCURRENCY env value, same caveat as above.
+ */
+export const IMAGE_ANALYSIS_CONCURRENCY = 50;
+
+/** Measured wall time of one parallel evaluation wave at default thinking. */
+export const DEFAULT_THINKING_WAVE_SECONDS = 25;
+
+/** Measured wall time of one parallel evaluation wave at max thinking. */
+export const MAX_THINKING_WAVE_SECONDS = 80;
+
+/**
+ * Estimated wall time of one parallel photo-analysis wave.
+ *
+ * Not a measured figure like the evaluation waves above — image calls have no
+ * per-wave timing captured yet. Refine this once real durationMs logs from the
+ * image stage are available.
+ */
+export const IMAGE_ANALYSIS_WAVE_SECONDS = 12;
+
+/**
+ * Profiles per second Apify collects, from the collector's own production
+ * benchmark (750 profiles in ~80s at the configured concurrency).
+ * See src/dataCollector/apify_profile_collector/APIFY_COLLECTOR_CONFIG.md.
+ */
+export const APIFY_PROFILES_PER_SECOND = 750 / 80;
+
+/**
+ * How many times slower a max-thinking wave is than a default wave.
+ *
+ * Derived from the measured wave durations so hover copy stays in lockstep.
+ */
+export const MAX_THINKING_TIME_RATIO = Math.round(
+  MAX_THINKING_WAVE_SECONDS / DEFAULT_THINKING_WAVE_SECONDS,
+);
+
+/**
+ * Measured thinking-token multiplier of max versus default, from the GLM
+ * bake-off. Used in the hover copy so the UI names the same finding.
+ */
+export const MAX_THINKING_TOKEN_RATIO = 18;
+
+/** Hover card shown on each reasoning-toggle option. */
+export const THINKING_MODE_HINTS: Record<
+  ThinkingMode,
+  { title: string; body: string }
+> = {
+  [THINKING_MODE.default]: {
+    title: 'Padrão',
+    body: `Mais rápido e econômico. A pontuação leva cerca de ${MAX_THINKING_TIME_RATIO}× menos tempo e usa bem menos tokens de raciocínio.`,
+  },
+  [THINKING_MODE.max]: {
+    title: 'Máximo',
+    body: `Pensa mais em cada perfil. Demora cerca de ${MAX_THINKING_TIME_RATIO}× mais e usa cerca de ${MAX_THINKING_TOKEN_RATIO}× mais tokens de raciocínio, o custo extra é pequeno.`,
+  },
+};
+
+/** Seconds in one minute, used to format the estimate. */
+const SECONDS_PER_MINUTE = 60;
+
+/** Rounds short estimates so the copy stays in even increments. */
+const SHORT_ESTIMATE_ROUNDING_SECONDS = 5;
+
+/** Editable state of the criteria form. */
+export interface CriteriaForm {
+  /** The ideal profile; becomes the model's system prompt. */
+  ideal: string;
+
+  /** Optional extra guidance sent as the user prompt. */
+  extra: string;
+
+  /** Words that exclude a profile when present in its current role. */
+  exclusions: string[];
+
+  ageMin: number;
+  ageMax: number;
+  compMin: number;
+  compMax: number;
+
+  /** When true, profiles without a photo are excluded before the model. */
+  requirePhoto: boolean;
+
+  /**
+   * When true, no photo is sent with the evaluation request. Age is then
+   * estimated from the career timeline alone and no image assessment is
+   * returned. Photos no longer cost a separate model call, so the saving is
+   * only the image tokens inside a request that runs either way.
+   */
+  skipImageAnalysis: boolean;
+
+  openToWork: OpenToWork;
+
+  /** Automatic applies the thresholds; manual sends every scored profile to review. */
+  automatic: boolean;
+  approveMin: number;
+  manualMin: number;
+
+  /** How deeply the model should think while scoring. Defaults to Padrão. */
+  thinkingMode: ThinkingMode;
+}
+
+/** The criteria the campaign starts from, matching the designed defaults. */
+export const DEFAULT_CRITERIA: CriteriaForm = {
+  ideal:
+    'Gestores comerciais e de Customer Success em SaaS B2B ou serviços financeiros, com carreira consultiva e progressão de analista a gestão.',
+  extra: '',
+  exclusions: [],
+  ageMin: 25,
+  ageMax: 40,
+  compMin: 10000,
+  compMax: 30000,
+  requirePhoto: false,
+  skipImageAnalysis: false,
+  openToWork: OPEN_TO_WORK.ignore,
+  automatic: true,
+  approveMin: 75,
+  manualMin: 50,
+  thinkingMode: THINKING_MODE.default,
+};
+
+/** Formats one amount as Brazilian currency. */
+export function brl(value: number): string {
+  return `R$ ${value.toLocaleString('pt-BR')}`;
+}
+
+
 /** Builds the one-line summary shown on the upload screen and modal footer. */
 export function criteriaSummary(form: CriteriaForm): string {
   return [
@@ -126,7 +300,6 @@ export function toEvaluationCriteria(form: CriteriaForm): Record<string, unknown
   return {
     systemPrompt: form.ideal.trim(),
     ...(extra ? { userPrompt: extra } : {}),
-
 
     ...(form.exclusions.length
       ? { keywordLists: [{ list: form.exclusions, match: 'any' }] }
