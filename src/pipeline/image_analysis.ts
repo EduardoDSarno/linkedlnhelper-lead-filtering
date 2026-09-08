@@ -147,7 +147,7 @@ export async function analyzeProfileImages(
     };
   }
 
-  // Only profiles that have a photo URL need a the model request; profiles
+  // Only profiles that have a photo URL need a model request; profiles
   // without photos still continue through the run.
   const profilesWithPhoto = profiles.filter(
     (profile): profile is Profile & { photo: string } =>

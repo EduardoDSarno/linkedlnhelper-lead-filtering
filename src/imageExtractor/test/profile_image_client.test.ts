@@ -277,7 +277,7 @@ test('carries no usage when the model call itself failed', async () => {
   );
 });
 
-test('a the model image error is still an ordinary Error for existing callers', async () => {
+test('a model image error is still an ordinary Error for existing callers', async () => {
   await assert.rejects(
     () =>
       recognizeProfileImageWithModel(

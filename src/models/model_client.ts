@@ -3,7 +3,7 @@ export type ThinkingEffort = 'low' | 'medium' | 'high' | 'max';
 /** Image token/detail scale shared by every provider adapter. */
 export type ImageResolution = 'low' | 'medium' | 'high';
 
-/** Used when a the model caller omits thinking. */
+/** Used when a caller omits thinking. */
 
 /**
  * Used when OpenRouter thinking is omitted or OPENROUTER_MODEL_THINKING_EFFORT
