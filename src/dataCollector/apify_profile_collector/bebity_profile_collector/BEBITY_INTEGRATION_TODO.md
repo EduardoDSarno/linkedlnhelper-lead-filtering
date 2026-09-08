@@ -64,20 +64,22 @@ reimplementing state-name matching. This produces the exact object shape
 `mapLocation` in `apify_profile_mapper.ts` already expects, so nothing
 downstream needs to change.
 
-- [ ] Export `resolveBrazilRegion` (or equivalent) from `brazil_location.ts`.
-- [ ] Write `parseBebityLocation(raw: string)` in the Bebity adapter, producing
-      Harvest-shaped `location`.
-- [ ] Test against real samples already in
+- [x] Export `resolveBrazilRegion`. It now lives in `src/mapper/brazil_location.ts`,
+      next to the adapter, since the deterministic location filter that used to
+      own it has been retired.
+- [x] Write the location parser (shipped as `adaptBebityLocation` inside
+      `bebity_raw_profile_adapter.ts`), producing Harvest-shaped `location`.
+- [x] Test against real samples already in
       `output/benchmarks/bebity/*/profiles.json` and `test_data/*.csv`
       (`location_name` column has the same flat format — useful as extra
       parser test fixtures even though it isn't the data source in production).
 
 ## Remaining TODOs
 
-- [ ] Write `adaptBebityRawProfile(raw)` implementing the field map above
+- [x] Write `adaptBebityRawProfile(raw)` implementing the field map above
       (rename + date parsing + location parsing), returning a Harvest-shaped
       `RawApifyProfile`.
-- [ ] Wire a real (non-benchmark) Bebity collector that: partitions input via
+- [x] Wire a real (non-benchmark) Bebity collector that: partitions input via
       `partitionProfileLinksForBebity`, calls Bebity for the compatible slice,
       calls the existing Harvest collector for the rest, adapts Bebity raw
       records, and merges both result sets before they reach `mapApifyProfile`.
