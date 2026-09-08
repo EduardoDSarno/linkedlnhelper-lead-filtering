@@ -77,6 +77,7 @@ async function attachProfilePhotos(
     options.concurrency ?? DEFAULT_PHOTO_LOAD_CONCURRENCY,
   );
   let nextIndex = 0;
+  let completed = 0;
 
   /** Claims and downloads photos until the shared queue is empty. */
   async function worker(): Promise<void> {
@@ -101,6 +102,15 @@ async function attachProfilePhotos(
           error: errorMessage(error),
         });
       }
+
+      // Reported as it goes rather than only at the end: a few hundred
+      // downloads is long enough that a caller watching progress would
+      // otherwise see this stage sit still and then finish all at once.
+      completed += 1;
+      options.logger?.info(
+        { completed, total: withPhotoUrl },
+        PIPELINE_PROGRESS_MESSAGE.photoLoadProgress,
+      );
     }
   }
 

@@ -71,8 +71,12 @@ export type ProcessingStatus = 'queued' | 'running' | 'completed' | 'failed' | '
 export interface RunProgress
 {
     stage: 'collecting' | 'loading_photos' | 'evaluating';
+    /** Items finished within the current stage. */
     completed: number;
+    /** Items the current stage will process in total. */
     total: number;
+    /** Position on the single overall bar, 0-1 across every stage. */
+    overall: number;
 }
 
 export interface RunStatus
