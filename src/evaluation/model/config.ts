@@ -18,10 +18,17 @@ export const MODEL_EVALUATION_ENVIRONMENT_KEYS = {
   retryBaseDelayMs: 'EVALUATION_RETRY_BASE_DELAY_MS',
 } as const;
 
-/** MVP defaults for model-evaluation requests. */
+/**
+ * MVP defaults for model-evaluation requests.
+ *
+ * Requests now carry profile photos, so a group stays small: the model has to
+ * bind each image to the profile it was sent with, and that binding degrades
+ * as the number of images in one request grows. Throughput comes from
+ * concurrency instead, which OpenRouter does not meaningfully cap.
+ */
 export const MODEL_EVALUATION_DEFAULTS = {
-  profilesPerRequest: 5,
-  concurrency: 10,
+  profilesPerRequest: 3,
+  concurrency: 100,
   requestTimeoutMs: 90_000,
   maximumAttempts: 3,
   retryBaseDelayMs: 250,
@@ -43,6 +50,11 @@ export const MODEL_EVALUATION_LIMITS = {
   highlightsPerProfile: 3,
   highlightTextMaxLength: 80,
   failedResponseLogMaxLength: 8_000,
+  imageObservationItems: 5,
+  ageBasisItems: 4,
+  ageMinimum: 0,
+  ageMaximum: 120,
+  ageRangeMaximumSpanYears: 10,
 } as const;
 
 /** Errors that may succeed when the same model request is attempted again. */
@@ -65,7 +77,8 @@ export const MODEL_EVALUATION_PROMPT_SLOTS = {
   systemPrompt: '{{systemPrompt}}',
   additionalGuidance: '{{additionalGuidance}}',
   campaignCriteria: '{{campaignCriteria}}',
-  profilesJson: '{{profilesJson}}',
+  profileId: '{{profileId}}',
+  profileJson: '{{profileJson}}',
 } as const;
 
 /** Fallback text when the campaign did not supply extra user guidance. */
@@ -80,7 +93,9 @@ export const MODEL_EVALUATION_EMPTY_CAMPAIGN_CRITERIA =
 export const MODEL_EVALUATION_SYSTEM_INSTRUCTION = `
 You evaluate how well each profile matches the campaign using every supplied
 profile field: headline, about, location, open-to-work, photo presence,
-experience, education, work details, and image analysis including apparent age.
+experience, education, and work details. Most profiles also include the
+person's actual profile photo, sent as an image directly after that profile's
+text block and labelled with the same profile ID.
 
 === PRIMARY CAMPAIGN INSTRUCTIONS ===
 The following user-authored prompt is the primary guidance for campaign fit:
@@ -96,7 +111,33 @@ ${MODEL_EVALUATION_PROMPT_SLOTS.systemPrompt}
   review decisions; application code maps the validated score deterministically.
 - Treat keywordLists as current-role exclusions only. A keyword found solely
   in historical experience must not reduce the campaign-fit score.
-- Use apparent age when it is present. Treat it as an estimate, not a fact.
+
+=== IMAGE AND AGE RULES ===
+- Each image belongs to the profile ID named immediately before it. Never
+  describe or score one profile using another profile's photo. If you cannot
+  tell which image belongs to a profile, say so in that profile's
+  uncertainties rather than guessing.
+- Return an "imageAssessment" object for every profile that was sent an image,
+  and omit it entirely for profiles sent without one. Judge composition and
+  technical usability from the image only. Keep "observations" brief, factual,
+  and limited to composition and image quality; never mention age or any other
+  personal characteristic there.
+- Estimate age in "estimatedAge" by combining BOTH sources of evidence:
+  1. The face in the photo, when one is visible.
+  2. The career timeline in the profile text. Someone whose first role began in
+     the early 2000s has roughly 25 years of working life behind them, which
+     puts them near 45 or older. A university course finished in 2015 usually
+     means a birth year around 1992. Use first job start, graduation dates, and
+     total years of experience as anchors.
+- When the photo and the career timeline disagree, prefer the career timeline:
+  dates are recorded facts and faces are an impression. Explain the conflict in
+  that profile's uncertainties.
+- Give "estimatedAge" as an integer "minimumAge" and "maximumAge" spanning no
+  more than 10 years, plus a "confidence" and a short "basis" listing the
+  specific signals used ("first role 2004", "graduated 2015", "photo suggests
+  40s"). Use "unknown" confidence with the widest range only when neither a
+  usable face nor any dated career evidence exists.
+- Age is an estimate, never a fact. Do not state an exact age or a birth year.
 - Estimate total monthly professional compensation in Brazilian reais (BRL)
   only when the supplied career evidence supports a defensible range. This can
   include base pay and typical recurring variable compensation, but not wealth,
@@ -124,8 +165,14 @@ ${MODEL_EVALUATION_PROMPT_SLOTS.systemPrompt}
 - Return exactly one structured result for every supplied profile ID.
 `.trim();
 
-/** Per-request user content wrapping guidance, criteria, and compact profiles. */
-export const MODEL_EVALUATION_USER_CONTENT = `
+/**
+ * Opening text part of a request, before any profile.
+ *
+ * A request is assembled as: this header, then one
+ * {@link MODEL_EVALUATION_PROFILE_BLOCK} (optionally followed by that
+ * profile's image) per profile, then {@link MODEL_EVALUATION_CLOSING}.
+ */
+export const MODEL_EVALUATION_REQUEST_HEADER = `
 === ADDITIONAL USER GUIDANCE ===
 ${MODEL_EVALUATION_PROMPT_SLOTS.additionalGuidance}
 
@@ -133,10 +180,23 @@ ${MODEL_EVALUATION_PROMPT_SLOTS.additionalGuidance}
 ${MODEL_EVALUATION_PROMPT_SLOTS.campaignCriteria}
 
 === PROFILES TO EVALUATE ===
-${MODEL_EVALUATION_PROMPT_SLOTS.profilesJson}
-
-Return only the required structured JSON response.
 `.trim();
+
+/** One profile's text block; its photo, when present, is sent right after. */
+export const MODEL_EVALUATION_PROFILE_BLOCK = `
+--- PROFILE ${MODEL_EVALUATION_PROMPT_SLOTS.profileId} ---
+${MODEL_EVALUATION_PROMPT_SLOTS.profileJson}
+`.trim();
+
+/** Announces the image that follows, binding it to one profile ID. */
+export const MODEL_EVALUATION_PROFILE_IMAGE_LABEL = `Profile photo for ${MODEL_EVALUATION_PROMPT_SLOTS.profileId}:`;
+
+/** Stands in for the photo when a profile has none or its download failed. */
+export const MODEL_EVALUATION_PROFILE_IMAGE_MISSING = `No profile photo is available for ${MODEL_EVALUATION_PROMPT_SLOTS.profileId}. Omit imageAssessment for this profile and estimate age from the career timeline alone.`;
+
+/** Final text part of a request, after every profile. */
+export const MODEL_EVALUATION_CLOSING =
+  'Return only the required structured JSON response.';
 
 /** Validated settings used by the model-evaluation worker pool. */
 export interface ResolvedModelEvaluationOptions {

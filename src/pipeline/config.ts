@@ -11,7 +11,6 @@ import {
   resolveConfigNumber,
   writeJsonAtomically,
 } from '../helpers/index.js';
-import { extractProfileImages } from '../imageExtractor/index.js';
 
 /** Environment variables understood by the full-profile pipeline. */
 export const PIPELINE_ENVIRONMENT_KEYS = {
@@ -50,8 +49,6 @@ export const DEFAULT_PIPELINE_OUTPUT_PATHS = {
   summary: 'output/pipeline-summary.json',
 } as const;
 
-/** Production image analyzer used when the pipeline caller injects nothing. */
-export const DEFAULT_PROFILE_IMAGE_ANALYZER = extractProfileImages;
 
 /** Returns the current wall-clock time through the production clock boundary. */
 function currentPipelineTime(): Date {
@@ -72,7 +69,6 @@ function createReviewRunId(): string {
  */
 export const DEFAULT_PIPELINE_DEPENDENCIES = {
   collectProfiles: resolveProfileCollector(),
-  extractImages: DEFAULT_PROFILE_IMAGE_ANALYZER,
   writeJson: writeJsonAtomically,
   openDatabase,
   insertProfile: dbInsertProfile,

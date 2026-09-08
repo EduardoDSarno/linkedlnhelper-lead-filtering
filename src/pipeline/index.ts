@@ -26,7 +26,6 @@ export type {
   ImageAnalysisFailure,
   ImageTokenUsageTotal,
   ProfileImageAnalysisOutcome,
-  ProfileImageAnalyzer,
   ProfileMappingFailure,
   ProfileNormalizationOutcome,
   ReviewPipelineDependencies,
@@ -43,8 +42,4 @@ export {
   maxPipelineProfilesFromEnvironment,
 } from './config.js';
 
-export {
-  DEFAULT_PROFILE_IMAGE_ANALYZER,
-  analyzeProfileImages,
-  imageResolutionFromEnvironment,
-} from './image_analysis.js';
+export { analyzeProfileImages } from './image_analysis.js';

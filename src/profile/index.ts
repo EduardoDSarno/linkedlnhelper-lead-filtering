@@ -20,6 +20,5 @@ export type {
 
 export {
   attachLinkedHelperPublicId,
-  attachProfileImageAnalysis,
 } from './full_profile.js';
 export type { FullProfile } from './full_profile.js';

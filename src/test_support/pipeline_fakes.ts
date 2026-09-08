@@ -4,13 +4,9 @@ import type {
 } from '../dataCollector/apify_profile_collector/index.js';
 import type { ImportedCsvData } from '../dataCollector/csv/csvdata.js';
 import type {
-  ProfileImageExtractionResult,
-  ProfileImageJob,
-  ProfileImageJobResult,
 } from '../imageExtractor/index.js';
 import type { Logger } from '../logging/index.js';
 import type { ImportedCsvProfile } from '../profile/index.js';
-import { validImageAssessment } from './image_assessment_fixtures.js';
 
 /**
  * Fake boundaries for full-pipeline tests.
@@ -106,18 +102,6 @@ export function apifyCollectionResult(
   };
 }
 
-/** Builds a successful image extraction result. */
-export function imageExtractionResult(
-  overrides: Partial<ProfileImageExtractionResult> = {},
-): ProfileImageExtractionResult {
-  return {
-    assessment: validImageAssessment(),
-    model: 'test-model',
-    resolution: 'medium',
-    ...overrides,
-  };
-}
-
 /** Records every artifact a run writes, in the order it wrote them. */
 export interface RecordingWriter {
   writeJson: (path: string, value: unknown) => Promise<void>;
@@ -158,22 +142,3 @@ export function steppingClock(
   };
 }
 
-/**
- * Builds an image extractor that resolves each job from a lookup by profile ID.
- *
- * Jobs whose ID is absent from the map are rejected, which is how a test
- * distinguishes an intended failure from an unexpected one.
- */
-export function fakeImageExtractor(
-  resultsById: Record<string, ProfileImageJobResult>,
-): (jobs: readonly ProfileImageJob[]) => Promise<ProfileImageJobResult[]> {
-  return async (jobs) =>
-    jobs.map(
-      (job) =>
-        resultsById[job.id] ?? {
-          id: job.id,
-          status: 'rejected' as const,
-          error: `No fake result was configured for ${job.id}.`,
-        },
-    );
-}

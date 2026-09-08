@@ -11,7 +11,6 @@ import type { FullEvaluationCriteria } from '../../evaluation/index.js';
 import type { FullProfile } from '../../profile/index.js';
 import {
   apifyCollectionResult,
-  imageExtractionResult,
   importedCsvDataFor,
   recordingLogger,
   recordingWriter,
@@ -89,12 +88,6 @@ function profilePipelineDependencies(
           photo: '',
         },
       ]),
-    extractImages: async (jobs) =>
-      jobs.map((job) => ({
-        id: job.id,
-        status: 'fulfilled' as const,
-        result: imageExtractionResult(),
-      })),
     writeJson: recordingWriter().writeJson,
     openDatabase: () => openDatabase(':memory:'),
     insertProfile: (profile) => insertStableProfile(profile),
@@ -229,7 +222,7 @@ test('connects stable full profiles to broad filtering, the model, and SQLite', 
       {
         profileId: PROFILE_WITH_PHOTO_ID,
         linkedinUrl: urls[0],
-        status: 'succeeded',
+        status: 'skipped_by_criteria',
       },
       {
         profileId: PROFILE_WITHOUT_PHOTO_ID,
@@ -259,7 +252,7 @@ test('skips photo analysis by default when the criterion is omitted', async () =
   const logger = recordingLogger();
   let extractCalls = 0;
 
-  const result = await runReviewPipelineWithDependencies(
+  await runReviewPipelineWithDependencies(
     importedCsvDataFor(urls),
     {
       systemPrompt: 'Grade experienced commercial profiles for this campaign.',
@@ -268,23 +261,13 @@ test('skips photo analysis by default when the criterion is omitted', async () =
     },
     logger,
     reviewDependencies(
-      profilePipelineDependencies({
-        extractImages: async () => {
-          extractCalls += 1;
-          throw new Error('extractImages must not be called by default.');
-        },
-      }),
+      profilePipelineDependencies({}),
       () => undefined,
     ),
     { modelEvaluation: { generateContent: async () => successfulModelResponse() } },
   );
 
   assert.equal(extractCalls, 0);
-  assert.ok(
-    result.profilePipeline.profiles.every(
-      (profile) => profile.imageAnalysis === undefined,
-    ),
-  );
 
   const imageLogs = payloadsFor(logger, 'Profile image analysis outcome.');
   assert.equal(imageLogs[0]?.['status'], 'skipped_by_criteria');

@@ -10,7 +10,6 @@ import {
   parseModelEvaluationResponse,
   ModelEvaluationResponseError,
 } from '../model/index.js';
-import { validImageAssessment } from '../../test_support/image_assessment_fixtures.js';
 
 const TEST_MINIMUM_MANUAL_REVIEW_PERCENT = 50;
 const TEST_MINIMUM_APPROVAL_PERCENT = 75;
@@ -49,10 +48,6 @@ function profile(): EvaluationProfileData {
         degree: 'Bachelor of Business Administration',
       },
     ],
-    imageAnalysis: {
-      ...validImageAssessment(),
-      apparentAge: { bracket: '35_44', confidence: 'medium' },
-    },
     about: 'Builds commercial relationships with enterprise customers.',
   };
 }
@@ -114,24 +109,27 @@ test('sends profile evidence while keeping desired compensation out of the promp
   };
 
   const prompt = buildModelEvaluationPrompt(criteria, [profile()]);
+  const userContent = prompt.parts
+    .map((part) => ('text' in part ? part.text : ''))
+    .join('\n');
 
-  assert.match(prompt.systemInstruction, /apparent age/);
+  assert.match(prompt.systemInstruction, /estimatedAge/);
+  assert.match(prompt.systemInstruction, /career timeline/);
   assert.match(
     prompt.systemInstruction,
     /estimatedTotalMonthlyCompensation/,
   );
   assert.match(prompt.systemInstruction, /insufficient_evidence/);
   assert.doesNotMatch(prompt.systemInstruction, /Do not use or infer age/);
-  assert.match(prompt.userContent, /"bracket":"35_44"/);
-  assert.match(prompt.userContent, /"state":"Goiás"/);
-  assert.match(prompt.userContent, /"minimumAge":30/);
+  assert.match(userContent, /"state":"Goiás"/);
+  assert.match(userContent, /"minimumAge":30/);
   assert.match(prompt.systemInstruction, /current-role exclusions only/);
-  assert.match(prompt.userContent, /"list":\["intern"\]/);
-  assert.doesNotMatch(prompt.userContent, /minimumMonthlyCompensation/);
+  assert.match(userContent, /"list":\["intern"\]/);
+  assert.doesNotMatch(userContent, /minimumMonthlyCompensation/);
   assert.match(prompt.systemInstruction, /Do not estimate or use net worth/);
   assert.match(prompt.systemInstruction, /Do not make approve, reject/);
-  assert.doesNotMatch(prompt.userContent, /minimumNetWorth/);
-  assert.doesNotMatch(prompt.userContent, /minimumApprovalPercent/);
+  assert.doesNotMatch(userContent, /minimumNetWorth/);
+  assert.doesNotMatch(userContent, /minimumApprovalPercent/);
 });
 
 test('accepts BRL-equivalent currency spellings on an estimated range', () => {

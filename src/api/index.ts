@@ -316,9 +316,10 @@ function registerResultsRoute(server: FastifyInstance)
                     ...(currentRole?.companyName ? { company: currentRole.companyName } : {}),
                     ...(profile?.location?.text ? { location: profile.location.text } : {}),
                     ...(profile?.photo ? { photo: profile.photo } : {}),
-                    ...(profile?.imageAnalysis?.assessment?.apparentAge
-                        ? { apparentAge: profile.imageAnalysis.assessment.apparentAge }
-                        : {}),
+                    // Age now comes from the evaluation model, which reads the
+                    // photo and the career timeline together, rather than from
+                    // a separate vision pass stored on the profile.
+                    ...(model?.estimatedAge ? { estimatedAge: model.estimatedAge } : {}),
 
                     // Extra fields the review list shows only when a row is expanded.
                     details: {

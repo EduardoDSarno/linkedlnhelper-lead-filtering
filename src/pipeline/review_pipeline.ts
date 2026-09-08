@@ -70,10 +70,13 @@ export async function runReviewPipelineWithDependencies(
     profilePipeline.profiles,
     criteria,
   );
-  const evaluation = await evaluateProfiles(context, {
-    ...options.modelEvaluation,
-    logger,
-  });
+  const evaluation = await evaluateProfiles(
+    context,
+    { ...options.modelEvaluation, logger },
+    // The campaign's skipImageAnalysis choice now decides whether photos are
+    // attached to the evaluation request, since there is no separate image stage.
+    { ...(criteria.skipImageAnalysis ? { skipPhotos: true } : {}) },
+  );
   const evaluationRun = {
     id: dependencies.createRunId(),
     createdAt: dependencies.now().toISOString(),
@@ -156,9 +159,6 @@ async function acquireProfilesForReview(
   logger.info(
     {
       cachedProfiles: profiles.length,
-      successfulImageAnalyses: profiles.filter(
-        (profile) => profile.imageAnalysis !== undefined,
-      ).length,
     },
     'Loaded cached full profiles for review.',
   );

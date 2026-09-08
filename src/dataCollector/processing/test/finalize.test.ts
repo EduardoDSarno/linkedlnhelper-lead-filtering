@@ -40,6 +40,7 @@ function runWith(evaluations: ProfileModelEvaluation[]): StoredEvaluationRun {
     createdAt: '2026-01-01T00:00:00.000Z',
     criteria: { systemPrompt: 'test' },
     evaluation: {
+      photoLoadFailures: [],
       broadFilter: {
         profilesForAi: [],
         evaluations: evaluations.map((evaluation) => ({

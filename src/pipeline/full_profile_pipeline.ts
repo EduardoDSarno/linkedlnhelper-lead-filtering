@@ -295,16 +295,11 @@ export async function runFullProfilePipelineWithDependencies(
       'Normalized Apify profiles.',
     );
 
-    // Steps 6 to 8: analyze the photos that exist and join the successful
-    // assessments back onto their profiles. Profiles without a photo, and
-    // profiles whose analysis failed, both survive into the output.
-    const imageAnalysis = await analyzeProfileImages(
-      normalized.profiles,
-      dependencies.extractImages,
-      logger,
-      options.imageConcurrency,
-      options.skipImageAnalysis,
-    );
+    // Steps 6 to 8: count photo coverage and pass every profile through.
+    // Photos are no longer assessed here: the evaluation request sends the
+    // image itself to the model, so a separate vision call would bill twice
+    // for the same picture. Only the counts this stage reported are kept.
+    const imageAnalysis = await analyzeProfileImages(normalized.profiles, logger);
 
     // Step 9: persist completed profiles before writing them. An existing
     // LinkedIn identity restores its stable database ID in every later artifact.

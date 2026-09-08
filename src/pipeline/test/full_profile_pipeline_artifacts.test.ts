@@ -14,7 +14,6 @@ import {
 } from '../../test_support/apify_profile_fixtures.js';
 import {
   apifyCollectionResult,
-  imageExtractionResult,
   importedCsvDataFor,
   recordingLogger,
   steppingClock,
@@ -86,14 +85,6 @@ test('writes real artifacts that survive a JSON round trip', async () => {
         ...inMemoryDatabaseDependencies,
         collectProfiles: async () =>
           apifyCollectionResult([raw], [providerFailure] as never),
-        extractImages: async (jobs) =>
-          jobs.map((job) => ({
-            id: job.id,
-            status: 'fulfilled' as const,
-            result: imageExtractionResult({
-              usage: { promptTokens: 90, totalTokens: 120 },
-            }),
-          })),
         writeJson: writeJsonAtomically,
         now: steppingClock('2026-04-01T09:00:00.000Z', 2_000),
       },
@@ -127,12 +118,6 @@ test('persists the raw provider payload through serialization', async () => {
       {
         ...inMemoryDatabaseDependencies,
         collectProfiles: async () => apifyCollectionResult([raw]),
-        extractImages: async (jobs) =>
-          jobs.map((job) => ({
-            id: job.id,
-            status: 'fulfilled' as const,
-            result: imageExtractionResult(),
-          })),
         writeJson: writeJsonAtomically,
         now: steppingClock(),
       },
@@ -141,7 +126,6 @@ test('persists the raw provider payload through serialization', async () => {
 
     const profiles = (await readJson(outputPaths.fullProfiles)) as {
       raw: Record<string, unknown>;
-      imageAnalysis?: unknown;
     }[];
 
     // Identity cannot survive a file, so this checks the weaker but still
@@ -151,7 +135,6 @@ test('persists the raw provider payload through serialization', async () => {
       'provider-only value the mapper must not touch',
     );
     assert.deepEqual(profiles[0]?.raw, raw);
-    assert.ok(profiles[0]?.imageAnalysis);
   });
 });
 
@@ -178,7 +161,6 @@ test('writes provider failures and raw profiles to separate files', async () => 
             [{ linkedinUrl: urls[0], firstName: 'Avery' }],
             [providerFailure] as never,
           ),
-        extractImages: async () => [],
         writeJson: writeJsonAtomically,
         now: steppingClock(),
       },
@@ -207,7 +189,6 @@ test('leaves no summary on disk when an earlier artifact fails', async () => {
             ...inMemoryDatabaseDependencies,
             collectProfiles: async () =>
               apifyCollectionResult([{ linkedinUrl: url }]),
-            extractImages: async () => [],
             writeJson: async (path, value) => {
               if (path === outputPaths.fullProfiles) {
                 throw new Error('The disk is full.');

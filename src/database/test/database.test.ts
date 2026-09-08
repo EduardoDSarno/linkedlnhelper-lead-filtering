@@ -47,6 +47,7 @@ function evaluationRun(
     createdAt,
     criteria: { systemPrompt },
     evaluation: {
+      photoLoadFailures: [],
       broadFilter: {
         profilesForAi: [],
         evaluations: [],

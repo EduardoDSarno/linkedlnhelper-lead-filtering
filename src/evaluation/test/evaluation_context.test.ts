@@ -54,32 +54,9 @@ test('builds a compact AI evaluation payload without exposing the raw profile', 
         },
       ],
     },
-    imageAnalysis: {
-      assessment: {
-        hasFace: true,
-        faceCount: 1,
-        faceVisibility: 'clear',
-        imageQuality: 'good',
-        isBlurry: false,
-        isPoorlyLit: false,
-        photoType: 'professional_portrait',
-        framing: 'headshot',
-        background: 'plain',
-        attire: 'business_casual',
-        apparentAge: { bracket: '25_34', confidence: 'medium' },
-        certainty: 'certain',
-        reviewRequired: false,
-        observations: [],
-      },
-      model: 'test-model',
-      resolution: 'medium',
-    },
   };
 
   const context = createEvaluationContext(fullProfile, criteria);
-  const imageAnalysis = fullProfile.imageAnalysis;
-
-  assert.ok(imageAnalysis);
 
   assert.equal(context.criteria, criteria);
   assert.deepEqual(context.profile, {
@@ -91,7 +68,6 @@ test('builds a compact AI evaluation payload without exposing the raw profile', 
     hasPhoto: false,
     experience: fullProfile.experience,
     education: fullProfile.education,
-    imageAnalysis: imageAnalysis.assessment,
     about: 'Builds long-term customer relationships.',
     workDetails: [
       {

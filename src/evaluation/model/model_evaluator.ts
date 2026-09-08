@@ -206,7 +206,7 @@ async function evaluateProfileGroup(
       const response = await generateContent({
         model: options.model,
         system: prompt.systemInstruction,
-        parts: [{ text: prompt.userContent }],
+        parts: [...prompt.parts],
         jsonSchema: MODEL_EVALUATION_JSON_SCHEMA,
         thinking: options.thinkingEffort,
         timeoutMs: options.requestTimeoutMs,

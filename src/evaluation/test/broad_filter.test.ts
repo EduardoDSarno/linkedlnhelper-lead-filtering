@@ -13,8 +13,6 @@ import type {
   EvaluationBatchContext,
   EvaluationProfileData,
 } from '../context.js';
-import type { ApparentAgeBracket } from '../../imageExtractor/index.js';
-import { validImageAssessment } from '../../test_support/image_assessment_fixtures.js';
 
 /** Creates the required prompts for a small criteria fixture. */
 function prompts(): Pick<FullEvaluationCriteria, 'systemPrompt' | 'userPrompt'> {
@@ -51,18 +49,6 @@ function profile(
     about: 'Builds commercial relationships with enterprise customers.',
     ...overrides,
   };
-}
-
-/** Builds a compact profile whose image analysis reports one apparent-age bracket. */
-function profileWithApparentAge(
-  bracket: ApparentAgeBracket,
-): EvaluationProfileData {
-  return profile('profile-1', {
-    imageAnalysis: {
-      ...validImageAssessment(),
-      apparentAge: { bracket, confidence: 'medium' },
-    },
-  });
 }
 
 test('removes profiles without photos when that exclusion is configured', () => {
@@ -126,10 +112,7 @@ test('no longer excludes on location, age, keyword, or open-to-work', () => {
     ...prompts(),
   };
 
-  const evaluation = evaluateBroadCriteria(
-    profileWithApparentAge('65_plus'),
-    criteria,
-  );
+  const evaluation = evaluateBroadCriteria(profile('profile-1'), criteria);
 
   assert.equal(evaluation.decision, BROAD_DECISION.NextPhase);
   assert.equal(evaluation.results.length, 0);

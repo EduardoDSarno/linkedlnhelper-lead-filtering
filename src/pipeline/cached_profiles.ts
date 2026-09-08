@@ -129,9 +129,6 @@ export function buildCachedProfilePipelineResult(
   const profilesWithoutPhoto = profiles.filter(
     (profile) => !asString(profile.photo),
   ).length;
-  const successfulImageAnalyses = profiles.filter(
-    (profile) => profile.imageAnalysis !== undefined,
-  ).length;
 
   const summary: FullProfilePipelineSummary = {
     startedAt: completedAt,
@@ -143,7 +140,7 @@ export function buildCachedProfilePipelineResult(
     providerFailures: [],
     normalizedProfiles: profiles.length,
     profilesWithoutPhoto,
-    successfulImageAnalyses,
+    successfulImageAnalyses: 0,
     failedImageAnalyses: 0,
     fullProfilesWritten: profiles.length,
     mappingFailures: [],

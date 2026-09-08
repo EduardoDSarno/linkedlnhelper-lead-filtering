@@ -4,7 +4,7 @@
  */
 
 import { asRecord, asString } from '../helpers/index.js';
-import type { ProfileImageAssessment } from '../imageExtractor/index.js';
+import type { LoadedProfileImage } from '../imageExtractor/index.js';
 import type {
   FullProfile,
   ProfileEducation,
@@ -47,9 +47,16 @@ export interface EvaluationProfileData {
   readonly location?: ReadonlyEvaluationValue<ProfileLocation>;
   readonly openToWork?: boolean;
   readonly hasPhoto: boolean;
+  /** Source URL for the photo, used to load the bytes sent to the model. */
+  readonly photoUrl?: string;
   readonly experience: ReadonlyEvaluationValue<ProfileExperience[]>;
   readonly education: ReadonlyEvaluationValue<ProfileEducation[]>;
-  readonly imageAnalysis?: ReadonlyEvaluationValue<ProfileImageAssessment>;
+  /**
+   * The downloaded profile photo, attached by the pipeline's image-loading
+   * stage. The evaluation request sends these bytes to the model directly, so
+   * the model reads the real photo instead of a separate stage's summary of it.
+   */
+  readonly photo?: LoadedProfileImage;
   readonly about?: string;
   readonly workDetails?: ReadonlyEvaluationValue<EvaluationWorkDetails[]>;
 }
@@ -121,15 +128,15 @@ export function mapEvaluationProfileData(
       ? { linkedHelperPublicId: fullProfile.linkedHelperPublicId }
       : {}),
     hasPhoto: hasProfilePhoto(fullProfile.photo),
+    ...(hasProfilePhoto(fullProfile.photo)
+      ? { photoUrl: fullProfile.photo as string }
+      : {}),
     experience: fullProfile.experience,
     education: fullProfile.education,
     ...(fullProfile.headline ? { headline: fullProfile.headline } : {}),
     ...(fullProfile.location ? { location: fullProfile.location } : {}),
     ...(typeof fullProfile.openToWork === 'boolean'
       ? { openToWork: fullProfile.openToWork }
-      : {}),
-    ...(fullProfile.imageAnalysis
-      ? { imageAnalysis: fullProfile.imageAnalysis.assessment }
       : {}),
     ...(about ? { about } : {}),
     ...(workDetails.length > 0 ? { workDetails } : {}),

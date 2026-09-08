@@ -10,9 +10,6 @@ import type { StoredEvaluationRun } from '../database/types.js';
 import type { ModelEvaluationOptions } from '../evaluation/index.js';
 import type {
   ModelTokenUsage,
-  ProfileImageBatchOptions,
-  ProfileImageJob,
-  ProfileImageJobResult,
 } from '../imageExtractor/index.js';
 import type { Logger } from '../logging/index.js';
 import type { FullProfile } from '../profile/index.js';
@@ -29,11 +26,6 @@ export interface ImageAnalysisFailure {
   usage?: ModelTokenUsage;
 }
 
-/** Injectable image-analysis boundary used by production and tests. */
-export type ProfileImageAnalyzer = (
-  jobs: readonly ProfileImageJob[],
-  options: ProfileImageBatchOptions,
-) => Promise<ProfileImageJobResult[]>;
 
 /** Everything one image-analysis stage produces for the run summary. */
 export interface ProfileImageAnalysisOutcome {
@@ -79,7 +71,6 @@ export interface FullProfilePipelineDependencies {
     expectedNames?: ReadonlyMap<string, string>,
   ) => Promise<ApifyCollectionResult>;
 
-  extractImages: ProfileImageAnalyzer;
   writeJson: (path: string, value: unknown) => Promise<void>;
 
   /** Opens the run's database, which the pipeline always closes before return. */

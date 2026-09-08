@@ -17,8 +17,6 @@ import {
 } from '../../test_support/apify_profile_fixtures.js';
 import {
   apifyCollectionResult,
-  fakeImageExtractor,
-  imageExtractionResult,
   importedCsvDataFor,
   recordingLogger,
   recordingWriter,
@@ -58,9 +56,6 @@ function dependencies(
     collectProfiles: async () => {
       throw new Error('The pipeline called the provider unexpectedly.');
     },
-    extractImages: async () => {
-      throw new Error('The pipeline called the image analyzer unexpectedly.');
-    },
     writeJson: async () => {
       throw new Error('The pipeline wrote an artifact unexpectedly.');
     },
@@ -85,9 +80,8 @@ test('processes a mixed run and reconciles every total', async () => {
     'https://www.linkedin.com/in/person-e',
   ];
 
-  // person-a succeeds with a good image, person-b succeeds but its image is
-  // rejected, person-c has no photo, person-d is malformed and fails mapping,
-  // person-e never came back from the provider at all.
+  // person-a and person-b have photos, person-c has none, person-d is
+  // malformed and fails mapping, person-e never came back from the provider.
   const collection = apifyCollectionResult(
     [
       { ...completeApifyProfile(), linkedinUrl: urls[0] },
@@ -113,29 +107,9 @@ test('processes a mixed run and reconciles every total', async () => {
     logger,
     dependencies({
       collectProfiles: async () => collection,
-      extractImages: async (jobs) => {
-        // Only profiles that actually have a photo may reach the analyzer.
-        assert.equal(jobs.length, 2);
-        return jobs.map((job, index) =>
-          index === 0
-            ? {
-                id: job.id,
-                status: 'fulfilled' as const,
-                result: imageExtractionResult({
-                  usage: { promptTokens: 100, totalTokens: 150 },
-                }),
-              }
-            : {
-                id: job.id,
-                status: 'rejected' as const,
-                error: 'the model blocked the image request: SAFETY.',
-                usage: { promptTokens: 40, totalTokens: 40 },
-              },
-        );
-      },
       writeJson: writer.writeJson,
     }),
-    { outputPaths: OUTPUT_PATHS, imageConcurrency: 2 },
+    { outputPaths: OUTPUT_PATHS },
   );
 
   assert.equal(summary.requestedProfiles, 5);
@@ -145,8 +119,10 @@ test('processes a mixed run and reconciles every total', async () => {
   assert.equal(summary.mappingFailures[0]?.providerRecordIndex, 3);
   assert.match(summary.mappingFailures[0]?.error ?? '', /without linkedinUrl/);
   assert.equal(summary.profilesWithoutPhoto, 1);
-  assert.equal(summary.successfulImageAnalyses, 1);
-  assert.equal(summary.failedImageAnalyses, 1);
+  // Photos are no longer assessed in this stage; they reach the model at
+  // evaluation time instead, so these counts stay at zero.
+  assert.equal(summary.successfulImageAnalyses, 0);
+  assert.equal(summary.failedImageAnalyses, 0);
   assert.equal(summary.fullProfilesWritten, 3);
   assert.equal(summary.providerFailures.length, 1);
 
@@ -162,23 +138,6 @@ test('processes a mixed run and reconciles every total', async () => {
     ],
   );
 
-  const imageLogs = logger.entries.filter(
-    (entry) => entry.message === 'Profile image analysis outcome.',
-  );
-  assert.equal(imageLogs.length, 3);
-  const failedImageLog = imageLogs.find(
-    (entry) =>
-      (entry.payload as Record<string, unknown>)['status'] === 'failed',
-  );
-  assert.ok(failedImageLog);
-  assert.equal(
-    (failedImageLog.payload as Record<string, unknown>)['linkedinUrl'],
-    urls[1],
-  );
-  assert.match(
-    String((failedImageLog.payload as Record<string, unknown>)['reason']),
-    /SAFETY/,
-  );
 
   // Every profile that mapped survives to the output, including the one whose
   // image failed and the one that never had a photo.
@@ -187,79 +146,6 @@ test('processes a mixed run and reconciles every total', async () => {
     summary.fullProfilesWritten,
     'a normalized profile disappeared before the final output',
   );
-});
-
-test('attaches an assessment only to the profile it belongs to', async () => {
-  const urls = [
-    'https://www.linkedin.com/in/person-a',
-    'https://www.linkedin.com/in/person-b',
-  ];
-  const writer = recordingWriter();
-
-  await runFullProfilePipelineWithDependencies(
-    importedCsvDataFor(urls),
-    recordingLogger(),
-    dependencies({
-      collectProfiles: async () =>
-        apifyCollectionResult([
-          providerProfile(urls[0] ?? ''),
-          providerProfile(urls[1] ?? ''),
-        ]),
-      extractImages: async (jobs) => [
-        {
-          id: jobs[0]?.id ?? '',
-          status: 'fulfilled',
-          result: imageExtractionResult({ model: 'for-person-a' }),
-        },
-        {
-          id: jobs[1]?.id ?? '',
-          status: 'rejected',
-          error: 'The profile image is empty.',
-        },
-      ],
-      writeJson: writer.writeJson,
-    }),
-    { outputPaths: OUTPUT_PATHS },
-  );
-
-  const profiles = fullProfilesFrom(writer);
-  assert.equal(profiles.length, 2);
-  assert.equal(profiles[0]?.imageAnalysis?.model, 'for-person-a');
-  assert.equal('imageAnalysis' in (profiles[1] ?? {}), false);
-});
-
-test('joins image results by profile ID, not by position', async () => {
-  const urls = [
-    'https://www.linkedin.com/in/person-a',
-    'https://www.linkedin.com/in/person-b',
-    'https://www.linkedin.com/in/person-c',
-  ];
-  const writer = recordingWriter();
-
-  await runFullProfilePipelineWithDependencies(
-    importedCsvDataFor(urls),
-    recordingLogger(),
-    dependencies({
-      collectProfiles: async () =>
-        apifyCollectionResult(urls.map((url) => providerProfile(url))),
-      extractImages: async (jobs) => {
-        // Return results in reverse order. A pipeline that joined by index
-        // would attach each assessment to the wrong profile.
-        const identified = jobs.map((job) => ({
-          id: job.id,
-          status: 'fulfilled' as const,
-          result: imageExtractionResult({ model: `model-for-${job.id}` }),
-        }));
-        return identified.reverse();
-      },
-      writeJson: writer.writeJson,
-    }),
-    { outputPaths: OUTPUT_PATHS },
-  );
-
-  for (const profile of fullProfilesFrom(writer)) {
-    assert.equal(profile.imageAnalysis?.model, `model-for-${profile.id}`);
-  }
 });
 
 test('correlates exact CSV public IDs by LinkedIn identity, not provider order', async () => {
@@ -278,7 +164,6 @@ test('correlates exact CSV public IDs by LinkedIn identity, not provider order',
           providerProfile(urls[1] ?? ''),
           providerProfile(urls[0] ?? ''),
         ]),
-      extractImages: fakeImageExtractor({}),
       writeJson: writer.writeJson,
     }),
     { outputPaths: OUTPUT_PATHS },
@@ -311,7 +196,6 @@ test('correlates by the queried URL when the provider returns a different alias'
         apifyCollectionResult([
           providerProfile(returnedAlias, { originalQuery: { query: importedUrl } }),
         ]),
-      extractImages: fakeImageExtractor({}),
       writeJson: writer.writeJson,
     }),
     { outputPaths: OUTPUT_PATHS },
@@ -335,7 +219,6 @@ test('keeps the raw provider payload reachable through the final profile', async
     recordingLogger(),
     dependencies({
       collectProfiles: async () => apifyCollectionResult([raw]),
-      extractImages: fakeImageExtractor({}),
       writeJson: writer.writeJson,
     }),
     { outputPaths: OUTPUT_PATHS },
@@ -373,7 +256,6 @@ test('returns and writes profiles with their database-stable IDs', async () => {
     dependencies({
       collectProfiles: async () =>
         apifyCollectionResult([providerProfile(url)]),
-      extractImages: fakeImageExtractor({}),
       writeJson: writer.writeJson,
       openDatabase: () => db,
       insertProfile: (profile, database) => {
@@ -404,7 +286,6 @@ test('stops and closes the database when a profile upsert fails', async () => {
         dependencies({
           collectProfiles: async () =>
             apifyCollectionResult([providerProfile(url)]),
-          extractImages: fakeImageExtractor({}),
           writeJson: writer.writeJson,
           openDatabase: () => db,
           insertProfile: () => {
@@ -421,56 +302,6 @@ test('stops and closes the database when a profile upsert fails', async () => {
   assert.equal(db.isOpen, false);
 });
 
-test('totals token usage across successful and failed images', async () => {
-  const urls = [
-    'https://www.linkedin.com/in/person-a',
-    'https://www.linkedin.com/in/person-b',
-  ];
-
-  const { summary } = await runFullProfilePipelineWithDependencies(
-    importedCsvDataFor(urls),
-    recordingLogger(),
-    dependencies({
-      collectProfiles: async () =>
-        apifyCollectionResult(urls.map((url) => providerProfile(url))),
-      extractImages: async (jobs) => [
-        {
-          id: jobs[0]?.id ?? '',
-          status: 'fulfilled',
-          result: imageExtractionResult({
-            usage: {
-              promptTokens: 100,
-              outputTokens: 20,
-              thinkingTokens: 30,
-              totalTokens: 150,
-            },
-          }),
-        },
-        {
-          id: jobs[1]?.id ?? '',
-          status: 'rejected',
-          error: 'the model blocked the image request: SAFETY.',
-          usage: { promptTokens: 60, totalTokens: 60 },
-        },
-      ],
-      writeJson: recordingWriter().writeJson,
-    }),
-    { outputPaths: OUTPUT_PATHS },
-  );
-
-  // The blocked image was billed, so its tokens belong in the total.
-  assert.deepEqual(summary.imageTokenUsage, {
-    promptTokens: 160,
-    outputTokens: 20,
-    thinkingTokens: 30,
-    totalTokens: 210,
-  });
-  assert.deepEqual(summary.imageAnalysisFailures[0]?.usage, {
-    promptTokens: 60,
-    totalTokens: 60,
-  });
-});
-
 test('reports zero token usage when nothing reported any', async () => {
   const url = 'https://www.linkedin.com/in/person-a';
 
@@ -480,13 +311,6 @@ test('reports zero token usage when nothing reported any', async () => {
     dependencies({
       collectProfiles: async () =>
         apifyCollectionResult([providerProfile(url)]),
-      extractImages: async (jobs) => [
-        {
-          id: jobs[0]?.id ?? '',
-          status: 'fulfilled',
-          result: imageExtractionResult(),
-        },
-      ],
       writeJson: recordingWriter().writeJson,
     }),
     { outputPaths: OUTPUT_PATHS },
@@ -510,7 +334,6 @@ test('writes the summary after every other artifact', async () => {
     dependencies({
       collectProfiles: async () =>
         apifyCollectionResult([providerProfile(url)]),
-      extractImages: fakeImageExtractor({}),
       writeJson: writer.writeJson,
     }),
     { outputPaths: OUTPUT_PATHS },
@@ -545,7 +368,6 @@ test('writes raw profiles and provider failures as separate artifacts', async ()
           [providerProfile(urls[0] ?? '')],
           failures as never,
         ),
-      extractImages: fakeImageExtractor({}),
       writeJson: writer.writeJson,
     }),
     { outputPaths: OUTPUT_PATHS },
@@ -567,7 +389,6 @@ test('uses the injected clock for both timestamps and the duration', async () =>
     dependencies({
       collectProfiles: async () =>
         apifyCollectionResult([providerProfile(url)]),
-      extractImages: fakeImageExtractor({}),
       writeJson: recordingWriter().writeJson,
       now: steppingClock('2026-03-01T12:00:00.000Z', 5_000),
     }),
@@ -588,7 +409,6 @@ test('reports the configured output paths in the summary', async () => {
     dependencies({
       collectProfiles: async () =>
         apifyCollectionResult([providerProfile(url)]),
-      extractImages: fakeImageExtractor({}),
       writeJson: recordingWriter().writeJson,
     }),
     { outputPaths: OUTPUT_PATHS },
@@ -645,102 +465,6 @@ test('rejects an oversized import before calling the provider', async () => {
   assert.equal(providerCalls, 0);
 });
 
-test('analyzes no images when no profile has a photo', async () => {
-  const urls = [
-    'https://www.linkedin.com/in/person-a',
-    'https://www.linkedin.com/in/person-b',
-  ];
-  const writer = recordingWriter();
-  let analyzerCalls = 0;
-
-  const { summary } = await runFullProfilePipelineWithDependencies(
-    importedCsvDataFor(urls),
-    recordingLogger(),
-    dependencies({
-      collectProfiles: async () =>
-        apifyCollectionResult(
-          urls.map((url) => providerProfile(url, { photo: '' })),
-        ),
-      extractImages: async (jobs) => {
-        analyzerCalls += 1;
-        assert.deepEqual(jobs, []);
-        return [];
-      },
-      writeJson: writer.writeJson,
-    }),
-    { outputPaths: OUTPUT_PATHS },
-  );
-
-  assert.equal(analyzerCalls, 1);
-  assert.equal(summary.profilesWithoutPhoto, 2);
-  assert.equal(summary.successfulImageAnalyses, 0);
-  assert.equal(summary.fullProfilesWritten, 2);
-});
-
-test('keeps every profile when all image analyses fail', async () => {
-  const urls = [
-    'https://www.linkedin.com/in/person-a',
-    'https://www.linkedin.com/in/person-b',
-  ];
-  const writer = recordingWriter();
-
-  const { summary } = await runFullProfilePipelineWithDependencies(
-    importedCsvDataFor(urls),
-    recordingLogger(),
-    dependencies({
-      collectProfiles: async () =>
-        apifyCollectionResult(urls.map((url) => providerProfile(url))),
-      extractImages: async (jobs) =>
-        jobs.map((job) => ({
-          id: job.id,
-          status: 'rejected' as const,
-          error: 'the model is unavailable.',
-        })),
-      writeJson: writer.writeJson,
-    }),
-    { outputPaths: OUTPUT_PATHS },
-  );
-
-  assert.equal(summary.failedImageAnalyses, 2);
-  assert.equal(summary.fullProfilesWritten, 2);
-  assert.ok(
-    fullProfilesFrom(writer).every(
-      (profile) => !('imageAnalysis' in profile),
-    ),
-  );
-});
-
-test('passes the configured image concurrency to the analyzer', async () => {
-  const url = 'https://www.linkedin.com/in/person-a';
-  const seen: unknown[] = [];
-  const logger = recordingLogger();
-
-  await runFullProfilePipelineWithDependencies(
-    importedCsvDataFor([url]),
-    logger,
-    dependencies({
-      collectProfiles: async () =>
-        apifyCollectionResult([providerProfile(url)]),
-      extractImages: async (jobs, options) => {
-        seen.push(options);
-        return jobs.map((job) => ({
-          id: job.id,
-          status: 'fulfilled' as const,
-          result: imageExtractionResult(),
-        }));
-      },
-      writeJson: recordingWriter().writeJson,
-    }),
-    { outputPaths: OUTPUT_PATHS, imageConcurrency: 7 },
-  );
-
-  assert.equal(seen.length, 1);
-  const options = seen[0] as Record<string, unknown>;
-  assert.equal(options['concurrency'], 7);
-  assert.equal(options['resolution'], 'medium');
-  assert.equal(options['logger'], logger);
-});
-
 test('surfaces an artifact write failure', async () => {
   const url = 'https://www.linkedin.com/in/person-a';
   const writer = recordingWriter({
@@ -756,7 +480,6 @@ test('surfaces an artifact write failure', async () => {
         dependencies({
           collectProfiles: async () =>
             apifyCollectionResult([providerProfile(url)]),
-          extractImages: fakeImageExtractor({}),
           writeJson: writer.writeJson,
         }),
         { outputPaths: OUTPUT_PATHS },
@@ -782,12 +505,6 @@ test('warns when the provider returns a different number of profiles', async () 
     dependencies({
       collectProfiles: async () =>
         apifyCollectionResult([providerProfile(urls[0] ?? '')]),
-      extractImages: async (jobs) =>
-        jobs.map((job) => ({
-          id: job.id,
-          status: 'fulfilled' as const,
-          result: imageExtractionResult(),
-        })),
       writeJson: recordingWriter().writeJson,
     }),
     { outputPaths: OUTPUT_PATHS },

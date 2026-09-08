@@ -1,214 +1,59 @@
 import {
-  resolveProfileImageBatchConcurrency,
-  resolveProfileImageResolution,
-} from '../imageExtractor/index.js';
-import type { ProfileImageJobResult } from '../imageExtractor/index.js';
-import {
   PIPELINE_PROGRESS_MESSAGE,
-  elapsedMs,
   type Logger,
 } from '../logging/index.js';
-import { attachProfileImageAnalysis } from '../profile/index.js';
-import type { FullProfile, Profile } from '../profile/index.js';
-import { PIPELINE_ENVIRONMENT_KEYS } from './config.js';
-import type {
-  ImageTokenUsageTotal,
-  ProfileImageAnalysisOutcome,
-  ProfileImageAnalyzer,
-} from './types.js';
+import type { Profile } from '../profile/index.js';
+import type { ProfileImageAnalysisOutcome } from './types.js';
 
-export { DEFAULT_PROFILE_IMAGE_ANALYZER } from './config.js';
 export type {
   ImageAnalysisFailure,
   ImageTokenUsageTotal,
   ProfileImageAnalysisOutcome,
-  ProfileImageAnalyzer,
 } from './types.js';
 
-/**
- * Adds up the tokens every image job reported, billed or wasted.
- *
- * Both branches of {@link ProfileImageJobResult} can carry usage: a fulfilled
- * job through its result, a rejected one when the model answered and then
- * declined. Missing counts are treated as zero rather than skipped, so the
- * total is always a complete set of numbers.
- */
-export function totalImageTokenUsage(
-  results: readonly ProfileImageJobResult[],
-): ImageTokenUsageTotal {
-  const total: ImageTokenUsageTotal = {
-    promptTokens: 0,
-    outputTokens: 0,
-    thinkingTokens: 0,
-    totalTokens: 0,
-  };
-
-  for (const result of results) {
-    const usage =
-      result.status === 'fulfilled' ? result.result.usage : result.usage;
-    if (!usage) continue;
-
-    total.promptTokens += usage.promptTokens ?? 0;
-    total.outputTokens += usage.outputTokens ?? 0;
-    total.thinkingTokens += usage.thinkingTokens ?? 0;
-    total.totalTokens += usage.totalTokens ?? 0;
-  }
-
-  return total;
-}
-
-/** Resolves the environment's image resolution, defaulting when unusable. */
-export function imageResolutionFromEnvironment(
-  environment: NodeJS.ProcessEnv = process.env,
-) {
-  return resolveProfileImageResolution(
-    environment[PIPELINE_ENVIRONMENT_KEYS.imageResolution],
-  );
-}
-
-/** Resolves an injectable environment override through shared numeric rules. */
-export function imageConcurrencyFromEnvironment(
-  environment: NodeJS.ProcessEnv = process.env,
-): number {
-  return resolveProfileImageBatchConcurrency(
-    environment[PIPELINE_ENVIRONMENT_KEYS.imageConcurrency],
-  );
-}
-
-/** Joins successful image assessments to profiles by application-owned ID. */
-export function attachSuccessfulImageAnalyses(
-  profiles: readonly Profile[],
-  imageResults: readonly ProfileImageJobResult[],
-): FullProfile[] {
-  // Index only successful the model results by our application-owned profile ID.
-  // Rejected jobs remain visible in the pipeline summary instead.
-  const successfulResults = new Map(
-    imageResults
-      .filter((result) => result.status === 'fulfilled')
-      .map((result) => [result.id, result.result] as const),
-  );
-
-  // Preserve every normalized profile. Profiles without a usable image result
-  // simply omit the optional `imageAnalysis` property.
-  return profiles.map((profile) => {
-    const imageAnalysis = successfulResults.get(profile.id);
-    return imageAnalysis
-      ? attachProfileImageAnalysis(profile, imageAnalysis)
-      : profile;
-  });
-}
+/** Zeroed usage, kept so the run summary always reports a complete set. */
+const NO_IMAGE_TOKEN_USAGE = {
+  promptTokens: 0,
+  outputTokens: 0,
+  thinkingTokens: 0,
+  totalTokens: 0,
+} as const;
 
 /**
- * Analyzes the photos of every profile that has one, then joins the successful
- * assessments back onto the profiles.
+ * Reports photo coverage and passes every profile through unchanged.
  *
- * Only profiles carrying a photo URL create a job, so a missing photo costs
- * nothing. A rejected job never removes its profile from the output: the
- * profile continues without an assessment and the failure is reported instead.
+ * Profile photos used to be assessed here by a separate vision call, whose
+ * structured output was then handed to the evaluation model as text. The
+ * evaluation request now carries the image itself, so assessing it here would
+ * bill twice for the same picture and give the model a lossy summary instead
+ * of the photo. What survives is the coverage count the run summary reports;
+ * the bytes are loaded later, once the broad filter has decided which profiles
+ * are worth evaluating at all.
  *
  * @param profiles - Normalized profiles, with or without photos.
- * @param analyze - Injected batch analyzer.
- * @param logger - Structured logger for stage progress and failures.
- * @param concurrencyOverride - Explicit limit; the environment is read when
- * this is omitted.
- * @param skipAnalysis - When true, every profile passes through unanalyzed
- * and no model call is made. Set from the campaign's `skipImageAnalysis`
- * criterion so a reviewer can trade the apparent-age/photo-quality signal for
- * a faster, cheaper run.
- * @returns Full profiles plus the totals the run summary reports.
+ * @param logger - Structured logger for stage progress.
+ * @returns Every profile plus the photo-coverage totals for the summary.
  */
 export async function analyzeProfileImages(
   profiles: readonly Profile[],
-  analyze: ProfileImageAnalyzer,
   logger: Logger,
-  concurrencyOverride?: number,
-  skipAnalysis?: boolean,
 ): Promise<ProfileImageAnalysisOutcome> {
-  if (skipAnalysis) {
-    logger.info(
-      { profiles: profiles.length },
-      PIPELINE_PROGRESS_MESSAGE.imageSkipped,
-    );
-    return {
-      fullProfiles: profiles.map((profile) => ({ ...profile })),
-      profilesWithoutPhoto: profiles.filter(
-        (profile) => !profile.photo,
-      ).length,
-      successfulImageAnalyses: 0,
-      failedImageAnalyses: 0,
-      failures: [],
-      tokenUsage: {
-        promptTokens: 0,
-        outputTokens: 0,
-        thinkingTokens: 0,
-        totalTokens: 0,
-      },
-      analysisSkipped: true,
-    };
-  }
-
-  // Only profiles that have a photo URL need a model request; profiles
-  // without photos still continue through the run.
-  const profilesWithPhoto = profiles.filter(
-    (profile): profile is Profile & { photo: string } =>
-      typeof profile.photo === 'string' && profile.photo.length > 0,
-  );
-  const profilesWithoutPhoto = profiles.length - profilesWithPhoto.length;
-  const concurrency = resolveProfileImageBatchConcurrency(
-    concurrencyOverride ?? imageConcurrencyFromEnvironment(),
-  );
+  const profilesWithoutPhoto = profiles.filter(
+    (profile) => !profile.photo,
+  ).length;
 
   logger.info(
-    {
-      profilesWithPhoto: profilesWithPhoto.length,
-      profilesWithoutPhoto,
-      concurrency,
-    },
-    PIPELINE_PROGRESS_MESSAGE.imageStarted,
-  );
-
-  const startedAt = Date.now();
-  // The batch analyzer returns one fulfilled or rejected result per photo.
-  const imageResults = await analyze(
-    profilesWithPhoto.map((profile) => ({
-      id: profile.id,
-      source: { kind: 'url', url: profile.photo },
-    })),
-    {
-      concurrency,
-      resolution: imageResolutionFromEnvironment(),
-      logger,
-    },
-  );
-
-  // Convert rejected image jobs into a compact, serializable failure list for
-  // the final summary and the pipeline's stable per-profile log entries.
-  const failures = imageResults
-    .filter((result) => result.status === 'rejected')
-    .map((result) => ({
-      profileId: result.id,
-      error: result.error,
-      ...(result.usage ? { usage: result.usage } : {}),
-    }));
-
-  const successfulImageAnalyses = imageResults.length - failures.length;
-  logger.info(
-    {
-      requestedImageAnalyses: imageResults.length,
-      successfulImageAnalyses,
-      failedImageAnalyses: failures.length,
-      durationMs: elapsedMs(startedAt),
-    },
-    PIPELINE_PROGRESS_MESSAGE.imageCompleted,
+    { profiles: profiles.length, profilesWithoutPhoto },
+    PIPELINE_PROGRESS_MESSAGE.imageSkipped,
   );
 
   return {
-    fullProfiles: attachSuccessfulImageAnalyses(profiles, imageResults),
+    fullProfiles: profiles.map((profile) => ({ ...profile })),
     profilesWithoutPhoto,
-    successfulImageAnalyses,
-    failedImageAnalyses: failures.length,
-    failures,
-    tokenUsage: totalImageTokenUsage(imageResults),
-    analysisSkipped: false,
+    successfulImageAnalyses: 0,
+    failedImageAnalyses: 0,
+    failures: [],
+    tokenUsage: { ...NO_IMAGE_TOKEN_USAGE },
+    analysisSkipped: true,
   };
 }

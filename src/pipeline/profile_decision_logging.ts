@@ -12,8 +12,6 @@ export const PROFILE_IMAGE_LOG_STATUS = {
 } as const;
 
 const MISSING_PHOTO_REASON = 'No profile photo is available.';
-const MISSING_IMAGE_RESULT_REASON =
-  'Image analysis did not return a successful result.';
 const SKIPPED_BY_CRITERIA_REASON =
   "The campaign's criteria skipped photo analysis for this run.";
 
@@ -59,12 +57,6 @@ function imageLogResult(
   }
   if (failureReason) {
     return { status: PROFILE_IMAGE_LOG_STATUS.failed, reason: failureReason };
-  }
-  if (!profile.imageAnalysis) {
-    return {
-      status: PROFILE_IMAGE_LOG_STATUS.failed,
-      reason: MISSING_IMAGE_RESULT_REASON,
-    };
   }
   return { status: PROFILE_IMAGE_LOG_STATUS.succeeded };
 }

@@ -2,7 +2,6 @@ import assert from 'node:assert/strict';
 import { setImmediate } from 'node:timers/promises';
 import test from 'node:test';
 
-import { asRecord, asString } from '../../helpers/index.js';
 import {
   EVALUATION_PASS,
   PIPELINE_PROGRESS_MESSAGE,
@@ -32,8 +31,7 @@ const TEST_TOKEN_USAGE = {
   thinkingTokens: 20,
   totalTokens: 160,
 } as const;
-const PROFILE_JSON_MARKER = '=== PROFILES TO EVALUATE ===\n';
-const PROFILE_JSON_END_MARKER = '\n\nReturn only';
+const PROFILE_BLOCK_PATTERN = /^--- PROFILE (\S+) ---$/m;
 
 /** Builds criteria that deterministically approve strong model scores. */
 function criteria(): FullEvaluationCriteria {
@@ -103,29 +101,13 @@ function modelResponse(
 
 /** Extracts the requested profile IDs from the generated evaluation user content. */
 function requestedProfileIds(request: ModelRequest): string[] {
-  const text = request.parts[0] && 'text' in request.parts[0]
-    ? request.parts[0].text
-    : undefined;
-  assert.ok(text, 'The model request must include text content.');
-
-  const jsonStart = text.indexOf(PROFILE_JSON_MARKER);
-  const jsonEnd = text.indexOf(
-    PROFILE_JSON_END_MARKER,
-    jsonStart + PROFILE_JSON_MARKER.length,
-  );
-  assert.notEqual(jsonStart, -1, 'The profile JSON marker must be present.');
-  assert.notEqual(jsonEnd, -1, 'The profile JSON end marker must be present.');
-
-  const parsed: unknown = JSON.parse(
-    text.slice(jsonStart + PROFILE_JSON_MARKER.length, jsonEnd),
-  );
-  assert.ok(Array.isArray(parsed));
-
-  return parsed.map((value) => {
-    const profileId = asString(asRecord(value)?.['profileId']);
-    assert.ok(profileId, 'Each requested profile must carry its ID.');
-    return profileId;
+  const profileIds = request.parts.flatMap((part) => {
+    if (!('text' in part)) return [];
+    const matched = PROFILE_BLOCK_PATTERN.exec(part.text);
+    return matched?.[1] ? [matched[1]] : [];
   });
+  assert.ok(profileIds.length > 0, 'The request must name at least one profile.');
+  return profileIds;
 }
 
 /** Builds an error carrying the HTTP status used by retry classification. */
