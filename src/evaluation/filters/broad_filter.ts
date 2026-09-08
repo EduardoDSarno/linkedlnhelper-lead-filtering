@@ -55,19 +55,8 @@ function broadDecision(results: BroadCriterionResult[]): {
 }
 
 /**
- * Evaluates the only first-pass hard exclude that remains: a missing photo.
- *
- * Location, age, keyword, and open-to-work cuts used to run here too. They
- * were dropped because Linked Helper already filters location and photo
- * upstream, and because the remaining signals are judgement calls rather than
- * hard facts — an unreliable open-to-work badge is often contradicted by a
- * profile's own bio or last role. Every one of those criteria still reaches
- * the model through `campaignCriteriaForModel` (model/prompt.ts), so they now
- * shape the score instead of silently removing a profile before scoring.
- *
- * Photo stays a hard cut because the upstream Linked Helper filter is known
- * to leak profiles with no picture, and the model would only score those
- * lower rather than reliably rejecting them.
+ * Evaluates the only hard exclude that remains: a missing photo. Every other
+ * campaign criterion now reaches the model instead (model/prompt.ts).
  */
 export function evaluateBroadCriteria(
   profile: EvaluationProfileData,
