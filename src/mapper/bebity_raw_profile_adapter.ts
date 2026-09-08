@@ -1,4 +1,4 @@
-import { resolveBrazilRegion } from '../evaluation/filters/brazil_location.js';
+import { resolveBrazilRegion } from './brazil_location.js';
 import { asRecord, asString } from '../helpers/index.js';
 import type { RawApifyProfile } from '../dataCollector/apify_profile_collector/index.js';
 
@@ -16,8 +16,7 @@ function adaptBebityDate(value: unknown): { text: string } | undefined {
 /**
  * Parses Bebity's flat "City, State, Country" location text into the
  * structured shape `mapLocation` (in apify_profile_mapper.ts) already
- * expects, using the same Brazilian state/UF table the deterministic
- * location filter trusts (brazil_location.ts).
+ * expects, using the Brazilian state/UF table in brazil_location.ts.
  *
  * Deliberately does not assume the trailing segment is the country: live
  * Bebity data shows the country word localized to whatever locale scraped

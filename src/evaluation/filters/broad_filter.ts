@@ -3,14 +3,10 @@ import type {
   EvaluationBatchContext,
   EvaluationProfileData,
 } from '../context.js';
-import { evaluateAge } from './age.js';
 import {
   BROAD_DECISION,
   type BroadEvaluationDecision,
 } from './constants.js';
-import { evaluateKeywordList } from './keyword.js';
-import { evaluateLocation } from './location.js';
-import { evaluateOpenToWork } from './open_to_work.js';
 import { evaluatePhoto } from './photo.js';
 import type {
   BroadCriterionResult,
@@ -20,7 +16,6 @@ import type {
 
 export {
   BROAD_DECISION,
-  BROAD_FILTER_AGE_MARGIN_YEARS,
   BROAD_OUTCOME,
   CRITERIA_MATCH,
 } from './constants.js';
@@ -59,24 +54,28 @@ function broadDecision(results: BroadCriterionResult[]): {
   };
 }
 
-/** Evaluates every first-pass hard-exclude check configured for one compact profile. */
+/**
+ * Evaluates the only first-pass hard exclude that remains: a missing photo.
+ *
+ * Location, age, keyword, and open-to-work cuts used to run here too. They
+ * were dropped because Linked Helper already filters location and photo
+ * upstream, and because the remaining signals are judgement calls rather than
+ * hard facts — an unreliable open-to-work badge is often contradicted by a
+ * profile's own bio or last role. Every one of those criteria still reaches
+ * the model through `campaignCriteriaForModel` (model/prompt.ts), so they now
+ * shape the score instead of silently removing a profile before scoring.
+ *
+ * Photo stays a hard cut because the upstream Linked Helper filter is known
+ * to leak profiles with no picture, and the model would only score those
+ * lower rather than reliably rejecting them.
+ */
 export function evaluateBroadCriteria(
   profile: EvaluationProfileData,
   criteria: FullEvaluationCriteria,
 ): ProfileBroadEvaluation {
   const results: BroadCriterionResult[] = [];
 
-  if (criteria.location) results.push(evaluateLocation(profile, criteria.location));
-
-  for (const [index, keywordList] of (criteria.keywordLists ?? []).entries()) {
-    results.push(evaluateKeywordList(profile, keywordList, index));
-  }
-
-  if (criteria.age) results.push(evaluateAge(profile, criteria.age));
   if (criteria.requirePhoto) results.push(evaluatePhoto(profile));
-  if (criteria.openToWork !== undefined) {
-    results.push(evaluateOpenToWork(profile, criteria.openToWork));
-  }
 
   const broadFilterDecision = broadDecision(results);
 
