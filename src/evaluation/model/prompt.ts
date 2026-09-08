@@ -19,7 +19,6 @@ interface ModelCampaignCriteria {
   keywordLists?: FullEvaluationCriteria['keywordLists'];
   age?: FullEvaluationCriteria['age'];
   requirePhoto?: boolean;
-  openToWork?: boolean;
 }
 
 /** The two prompt channels used by one evaluation request. */
@@ -60,10 +59,6 @@ function campaignCriteriaForModel(
   if (criteria.requirePhoto !== undefined) {
     campaign.requirePhoto = criteria.requirePhoto;
   }
-  if (criteria.openToWork !== undefined) {
-    campaign.openToWork = criteria.openToWork;
-  }
-
   return Object.keys(campaign).length > 0 ? campaign : undefined;
 }
 

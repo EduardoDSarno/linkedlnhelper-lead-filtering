@@ -7,21 +7,6 @@
  * reads an omitted criterion as "do not filter on this" and rejects an empty one.
  */
 
-/** How the open-to-work badge filters the first pass. */
-export const OPEN_TO_WORK = {
-  /** The badge is ignored. */
-  ignore: 'ignore',
-
-  /** Keep only profiles marked open to work. */
-  only: 'only',
-
-  /** Keep only profiles not marked open to work. */
-  exclude: 'exclude',
-} as const;
-
-/** A single open-to-work choice. */
-export type OpenToWork = (typeof OPEN_TO_WORK)[keyof typeof OPEN_TO_WORK];
-
 /** How deeply the model should reason while scoring. */
 export const THINKING_MODE = {
   default: 'default',
@@ -136,7 +121,6 @@ export interface CriteriaForm {
    */
   skipImageAnalysis: boolean;
 
-  openToWork: OpenToWork;
 
   /** Automatic applies the thresholds; manual sends every scored profile to review. */
   automatic: boolean;
@@ -159,7 +143,6 @@ export const DEFAULT_CRITERIA: CriteriaForm = {
   compMax: 30000,
   requirePhoto: false,
   skipImageAnalysis: false,
-  openToWork: OPEN_TO_WORK.ignore,
   automatic: true,
   approveMin: 75,
   manualMin: 50,
@@ -317,12 +300,6 @@ export function toEvaluationCriteria(form: CriteriaForm): Record<string, unknown
     // Always explicit: the backend defaults an omitted criterion to skipped,
     // so "Analisar" (false) must be sent, not left out.
     skipImageAnalysis: form.skipImageAnalysis,
-
-    ...(form.openToWork === OPEN_TO_WORK.only
-      ? { openToWork: true }
-      : form.openToWork === OPEN_TO_WORK.exclude
-        ? { openToWork: false }
-        : {}),
 
     decisionPolicy: form.automatic
       ? {

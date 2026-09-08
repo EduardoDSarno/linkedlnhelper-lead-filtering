@@ -1,7 +1,6 @@
 import type { KeyboardEvent } from 'react';
 
 import {
-  OPEN_TO_WORK,
   THINKING_MODE,
   THINKING_MODE_HINTS,
   criteriaSummary,
@@ -234,11 +233,11 @@ function PhotoAnalysisToggle({
 }) {
   return (
     <div className="effort-toggle" role="group" aria-label="Análise de foto">
-      <PhotoAnalysisSegment mode="skip" selected={skip} onSelect={() => onChange(true)}>
-        Pular
-      </PhotoAnalysisSegment>
       <PhotoAnalysisSegment mode="analyze" selected={!skip} onSelect={() => onChange(false)}>
         Analisar
+      </PhotoAnalysisSegment>
+      <PhotoAnalysisSegment mode="skip" selected={skip} onSelect={() => onChange(true)}>
+        Pular
       </PhotoAnalysisSegment>
     </div>
   );
@@ -574,18 +573,6 @@ export function CriteriaModal({ form, update, onClose, onConfirm }: CriteriaModa
               faces, tipo de foto, enquadramento, nitidez e iluminação.
             </Note>
 
-            <div style={{ marginTop: 16 }}>
-              <SectionTitle>Disponibilidade (open to work)</SectionTitle>
-              <select
-                value={form.openToWork}
-                onChange={(e) => update({ openToWork: e.target.value as CriteriaForm['openToWork'] })}
-                style={{ ...inputStyle, cursor: 'pointer' }}
-              >
-                <option value={OPEN_TO_WORK.ignore}>Ignorar</option>
-                <option value={OPEN_TO_WORK.only}>Somente perfis open to work</option>
-                <option value={OPEN_TO_WORK.exclude}>Excluir perfis open to work</option>
-              </select>
-            </div>
           </div>
 
           {/* Decision policy */}
