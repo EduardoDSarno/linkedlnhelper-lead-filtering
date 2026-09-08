@@ -109,8 +109,17 @@ ${MODEL_EVALUATION_PROMPT_SLOTS.systemPrompt}
   an integer matchPercent from the configured response range, where a higher
   value means stronger campaign fit. Do not make approve, reject, or manual
   review decisions; application code maps the validated score deterministically.
-- Treat keywordLists as current-role exclusions only. A keyword found solely
-  in historical experience must not reduce the campaign-fit score.
+- Treat keywordLists as current-role exclusions, and treat a match as close to
+  disqualifying. These are the terms the campaign owner does not want in the
+  person's CURRENT position: an intern, trainee, or student is the wrong
+  seniority for the campaign no matter how strong the rest of the profile
+  reads. When a listed term matches the current role, cut the matchPercent
+  heavily — well below the campaign's approval threshold — rather than
+  deducting a few points, and name the matched term in "reasons".
+- A keyword found only in historical experience must NOT reduce the score at
+  all. Someone who interned in 2019 and is now a manager is a strong lead, not
+  a weak one. Check where the term appears before penalizing it, and when a
+  role's dates make it ambiguous, say so in "uncertainties" instead of cutting.
 
 === IMAGE AND AGE RULES ===
 - Each image belongs to the profile ID named immediately before it. Never
