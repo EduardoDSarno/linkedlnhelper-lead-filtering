@@ -109,6 +109,66 @@ test('keeps the full text without inventing city/state for an unrecognized locat
   assert.equal(parsed['state'], undefined);
 });
 
+/** Adapts one Bebity education entry and returns it as a plain record. */
+function adaptedEducationEntry(
+  education: Record<string, unknown>,
+): Record<string, unknown> {
+  const raw = {
+    linkedinUrl: 'https://www.linkedin.com/in/example',
+    education: [{ schoolName: 'Example University', ...education }],
+  };
+  const adapted = adaptBebityRawProfile(raw) as {
+    education: Record<string, unknown>[];
+  };
+  return adapted.education[0] ?? {};
+}
+
+test('splits a glued degree into degree and field of study on the first comma', () => {
+  const entry = adaptedEducationEntry({ degreeName: 'Bacharelado, Economics' });
+
+  assert.deepEqual(entry, {
+    schoolName: 'Example University',
+    degree: 'Bacharelado',
+    fieldOfStudy: 'Economics',
+  });
+});
+
+test('keeps a taxonomy label with its own internal comma whole in field of study', () => {
+  // LinkedIn's own field-of-study entries can contain a comma
+  // ("Business Administration and Management, General"), so only the first
+  // comma in degreeName is the real split point — not every comma in it.
+  const entry = adaptedEducationEntry({
+    degreeName: 'Adm de Empresas, Business Administration and Management, General',
+  });
+
+  assert.equal(entry['degree'], 'Adm de Empresas');
+  assert.equal(
+    entry['fieldOfStudy'],
+    'Business Administration and Management, General',
+  );
+});
+
+test('does not split degreeName when Bebity already supplied a field of study', () => {
+  // A comma here is a compound degree title, not this concatenation — Bebity
+  // proved it can report the two fields apart, so trust it when it does.
+  const entry = adaptedEducationEntry({
+    degreeName: 'Mestrado em Comunicação, Mídia e Cidadania',
+    fieldOfStudy: 'Communication and Media Studies',
+  });
+
+  assert.equal(entry['degree'], 'Mestrado em Comunicação, Mídia e Cidadania');
+  assert.equal(entry['fieldOfStudy'], 'Communication and Media Studies');
+});
+
+test('leaves a degree with no comma untouched', () => {
+  const entry = adaptedEducationEntry({ degreeName: 'Bacharelado' });
+
+  assert.deepEqual(entry, {
+    schoolName: 'Example University',
+    degree: 'Bacharelado',
+  });
+});
+
 test('passes through fields with no Harvest equivalent instead of dropping them', () => {
   const adapted = adaptBebityRawProfile(BEBITY_RAW_PROFILE);
 

@@ -82,6 +82,41 @@ function adaptBebityExperienceEntry(
   };
 }
 
+/**
+ * Splits a Bebity `degreeName` into a degree and a field of study when Bebity
+ * glued them into one comma-joined string instead of returning `fieldOfStudy`
+ * separately.
+ *
+ * LinkedIn's field-of-study taxonomy label is often English regardless of the
+ * profile's own language — "Bacharelado, Economics" — while other times
+ * Bebity does return the two fields apart, proving the schema supports it.
+ * When it does not, the degree name is always the first segment and
+ * everything after the first comma is the field of study, even when that
+ * remainder has commas of its own: LinkedIn's own taxonomy entries include
+ * commas ("Business Administration and Management, General"), while a real
+ * multi-part degree title before the first comma does not lose information
+ * either way — it only moves from one field to the adjacent one.
+ *
+ * Left untouched when Bebity already supplied `fieldOfStudy` (roughly 3% of
+ * entries), since a comma inside `degreeName` there is just a compound degree
+ * name, not this concatenation.
+ */
+function splitBebityDegree(
+  degreeName: string,
+  existingFieldOfStudy: unknown,
+): { degree: string; fieldOfStudy?: string } {
+  if (asString(existingFieldOfStudy)) return { degree: degreeName };
+
+  const commaIndex = degreeName.indexOf(',');
+  if (commaIndex === -1) return { degree: degreeName };
+
+  const degree = degreeName.slice(0, commaIndex).trim();
+  const splitFieldOfStudy = degreeName.slice(commaIndex + 1).trim();
+  return degree && splitFieldOfStudy
+    ? { degree, fieldOfStudy: splitFieldOfStudy }
+    : { degree: degreeName };
+}
+
 /** Renames one Bebity education entry's fields to Harvest's. */
 function adaptBebityEducationEntry(
   value: unknown,
@@ -89,13 +124,18 @@ function adaptBebityEducationEntry(
   const entry = asRecord(value);
   if (!entry) return undefined;
 
-  const { degreeName, startDate, endDate, ...rest } = entry;
+  const { degreeName, fieldOfStudy, startDate, endDate, ...rest } = entry;
   const adaptedStartDate = adaptBebityDate(startDate);
   const adaptedEndDate = adaptBebityDate(endDate);
+  const adaptedDegree =
+    typeof degreeName === 'string'
+      ? splitBebityDegree(degreeName, fieldOfStudy)
+      : undefined;
 
   return {
     ...rest,
-    ...(typeof degreeName === 'string' ? { degree: degreeName } : {}),
+    ...(typeof fieldOfStudy === 'string' ? { fieldOfStudy } : {}),
+    ...adaptedDegree,
     ...(adaptedStartDate ? { startDate: adaptedStartDate } : {}),
     ...(adaptedEndDate ? { endDate: adaptedEndDate } : {}),
   };
