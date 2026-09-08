@@ -66,3 +66,18 @@ export interface ProcessingRun {
   /** Latest human decisions submitted for this run; replaced on re-submission. */
   readonly manualOverrides?: readonly ManualOverride[];
 }
+
+/**
+ * One reusable set of campaign criteria, saved by name.
+ *
+ * `form` is the criteria form exactly as the modal edits it, not the backend
+ * contract it converts to, so loading a preset restores every field the user
+ * typed rather than only what the pipeline consumes.
+ */
+export interface CriteriaPreset {
+  id: string;
+  name: string;
+  form: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+}

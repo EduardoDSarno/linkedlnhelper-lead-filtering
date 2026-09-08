@@ -6,6 +6,7 @@ import { linkedinProfileKey } from '../linkedin/index.js';
 import type { FullProfile } from '../profile/index.js';
 import { PROCESSING_STATUS } from './types.js';
 import type {
+  CriteriaPreset,
   ManualOverride,
   ProcessingRun,
   StoredEvaluationRun,
@@ -39,6 +40,7 @@ export function defaultDatabasePath(
 const PROFILE_TABLE_NAME = 'profiles';
 const EVALUATION_RUN_TABLE_NAME = 'evaluation_runs';
 const PROCESSING_RUN_TABLE_NAME = 'processing_runs';
+const CRITERIA_PRESET_TABLE_NAME = 'criteria_presets';
 
 /** Creates the tables required by the current MVP. */
 export function initializeDatabase(db: DatabaseSync): void {
@@ -74,6 +76,14 @@ export function initializeDatabase(db: DatabaseSync): void {
       manual_overrides_json TEXT CHECK (
         manual_overrides_json IS NULL OR json_valid(manual_overrides_json)
       )
+    );
+
+    CREATE TABLE IF NOT EXISTS ${CRITERIA_PRESET_TABLE_NAME} (
+      id TEXT PRIMARY KEY NOT NULL,
+      name TEXT NOT NULL UNIQUE,
+      form_json TEXT NOT NULL CHECK (json_valid(form_json)),
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
   `);
 
@@ -562,4 +572,81 @@ export function dbListEvaluationRuns(db: DatabaseSync): StoredEvaluationRun[] {
   }>;
 
   return rows.map(evaluationRunFromRow);
+}
+
+/** Converts one database row into the application criteria-preset shape. */
+function criteriaPresetFromRow(row: {
+  id: string;
+  name: string;
+  form_json: string;
+  created_at: string;
+  updated_at: string;
+}): CriteriaPreset {
+  return {
+    id: row.id,
+    name: row.name,
+    form: JSON.parse(row.form_json) as Record<string, unknown>,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+/**
+ * Saves a preset, replacing any existing one with the same name.
+ *
+ * Names are the handle a user picks a preset by, so saving under a name they
+ * already used updates that preset instead of leaving two rows they cannot
+ * tell apart in the dropdown.
+ */
+export function dbSaveCriteriaPreset(
+  preset: { id: string; name: string; form: Record<string, unknown> },
+  db: DatabaseSync,
+  now: () => Date = () => new Date(),
+): CriteriaPreset {
+  const timestamp = now().toISOString();
+
+  db.prepare(`
+    INSERT INTO ${CRITERIA_PRESET_TABLE_NAME} (id, name, form_json, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT(name) DO UPDATE SET
+      form_json = excluded.form_json,
+      updated_at = excluded.updated_at
+  `).run(
+    preset.id,
+    preset.name,
+    JSON.stringify(preset.form),
+    timestamp,
+    timestamp,
+  );
+
+  const row = db
+    .prepare(`
+      SELECT id, name, form_json, created_at, updated_at
+      FROM ${CRITERIA_PRESET_TABLE_NAME} WHERE name = ?
+    `)
+    .get(preset.name) as Parameters<typeof criteriaPresetFromRow>[0];
+
+  return criteriaPresetFromRow(row);
+}
+
+/** Lists every saved preset, most recently updated first. */
+export function dbListCriteriaPresets(db: DatabaseSync): CriteriaPreset[] {
+  const rows = db
+    .prepare(`
+      SELECT id, name, form_json, created_at, updated_at
+      FROM ${CRITERIA_PRESET_TABLE_NAME}
+      ORDER BY updated_at DESC, rowid DESC
+    `)
+    .all() as Array<Parameters<typeof criteriaPresetFromRow>[0]>;
+
+  return rows.map(criteriaPresetFromRow);
+}
+
+/** Deletes one preset by id, reporting whether a row was removed. */
+export function dbDeleteCriteriaPreset(id: string, db: DatabaseSync): boolean {
+  const result = db
+    .prepare(`DELETE FROM ${CRITERIA_PRESET_TABLE_NAME} WHERE id = ?`)
+    .run(id);
+
+  return result.changes > 0;
 }

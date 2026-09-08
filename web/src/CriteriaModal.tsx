@@ -1,4 +1,12 @@
+import { useEffect, useState } from 'react';
 import type { KeyboardEvent } from 'react';
+
+import {
+  deleteCriteriaPreset,
+  listCriteriaPresets,
+  saveCriteriaPreset,
+  type CriteriaPreset,
+} from './code/api';
 
 import {
   THINKING_MODE,
@@ -277,6 +285,141 @@ function PhotoAnalysisSegment({
   );
 }
 
+
+/**
+ * Saving and reloading whole criteria sets.
+ *
+ * These prompts run to hundreds of words, so retyping one to repeat a campaign
+ * is the slowest part of setting up a run. Presets store the form exactly as
+ * edited, which is why loading one restores every field rather than only what
+ * the pipeline reads back from a finished run.
+ */
+function PresetBar({
+  form,
+  update,
+}: {
+  form: CriteriaForm;
+  update: (patch: Partial<CriteriaForm>) => void;
+}) {
+  const [presets, setPresets] = useState<CriteriaPreset[]>([]);
+  const [selectedId, setSelectedId] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    listCriteriaPresets()
+      .then(setPresets)
+      .catch(() => setError('Não foi possível carregar os presets.'));
+  }, []);
+
+  /** Replaces the whole form with a saved preset. */
+  function loadPreset(presetId: string) {
+    setSelectedId(presetId);
+    setError('');
+    const preset = presets.find((item) => item.id === presetId);
+    if (preset) update(preset.form as Partial<CriteriaForm>);
+  }
+
+  /** Saves the current form, overwriting a preset that already uses the name. */
+  async function save() {
+    const suggested = presets.find((item) => item.id === selectedId)?.name ?? '';
+    const name = window.prompt('Nome do preset', suggested)?.trim();
+    if (!name) return;
+
+    setBusy(true);
+    setError('');
+    try {
+      const saved = await saveCriteriaPreset(name, form as unknown as Record<string, unknown>);
+      // Replace by id so overwriting an existing name does not duplicate the row.
+      setPresets((current) => [saved, ...current.filter((item) => item.id !== saved.id && item.name !== saved.name)]);
+      setSelectedId(saved.id);
+    } catch {
+      setError('Não foi possível salvar o preset.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /** Deletes the selected preset after confirming. */
+  async function remove() {
+    const preset = presets.find((item) => item.id === selectedId);
+    if (!preset) return;
+    if (!window.confirm(`Excluir o preset "${preset.name}"?`)) return;
+
+    setBusy(true);
+    setError('');
+    try {
+      await deleteCriteriaPreset(preset.id);
+      setPresets((current) => current.filter((item) => item.id !== preset.id));
+      setSelectedId('');
+    } catch {
+      setError('Não foi possível excluir o preset.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const buttonStyle: React.CSSProperties = {
+    all: 'unset',
+    cursor: busy ? 'progress' : 'pointer',
+    fontSize: 12,
+    fontWeight: 600,
+    padding: '6px 12px',
+    borderRadius: 8,
+    border: '1px solid #e2e8f0',
+    background: '#fff',
+    color: '#334155',
+  };
+
+  return (
+    <div
+      style={{
+        flex: 'none',
+        padding: '10px 22px',
+        borderBottom: '1px solid #eef1f5',
+        background: '#f8fafc',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        flexWrap: 'wrap',
+      }}
+    >
+      <span style={{ fontSize: 12, fontWeight: 600, color: '#475569' }}>Preset</span>
+      <select
+        value={selectedId}
+        onChange={(event) => loadPreset(event.target.value)}
+        disabled={busy}
+        style={{ ...inputStyle, padding: '6px 8px', fontSize: 12, cursor: 'pointer', minWidth: 190 }}
+      >
+        <option value="">
+          {presets.length ? 'Selecione um preset salvo…' : 'Nenhum preset salvo'}
+        </option>
+        {presets.map((preset) => (
+          <option key={preset.id} value={preset.id}>
+            {preset.name}
+          </option>
+        ))}
+      </select>
+
+      <button type="button" onClick={() => void save()} disabled={busy} style={buttonStyle}>
+        Salvar atual
+      </button>
+      {selectedId && (
+        <button
+          type="button"
+          onClick={() => void remove()}
+          disabled={busy}
+          style={{ ...buttonStyle, color: '#9f1239', borderColor: '#fecdd3' }}
+        >
+          Excluir
+        </button>
+      )}
+
+      {error && <span style={{ fontSize: 12, color: '#9f1239' }}>{error}</span>}
+    </div>
+  );
+}
+
 /**
  * The evaluation-criteria modal.
  *
@@ -371,6 +514,8 @@ export function CriteriaModal({ form, update, onClose, onConfirm }: CriteriaModa
             ✕
           </button>
         </div>
+
+        <PresetBar form={form} update={update} />
 
         <div
           className="sc"

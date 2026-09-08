@@ -10,6 +10,9 @@ import {
     dbListProcessingRuns,
     dbListProfiles,
     dbUpdateProcessingRun,
+    dbDeleteCriteriaPreset,
+    dbListCriteriaPresets,
+    dbSaveCriteriaPreset,
     openDatabase,
 } from '../database/index.js';
 import { rm } from 'node:fs/promises';
@@ -49,6 +52,7 @@ export async function buildServer()
     registerRunsListRoute(server);
     registerRenameRunRoute(server);
     registerDeleteRunRoute(server);
+    registerCriteriaPresetRoutes(server);
     return server;
 }
 
@@ -723,4 +727,69 @@ function parseThinkingEffortFromBody(value: unknown): ThinkingEffort {
         throw new Error('Invalid thinkingEffort');
     }
     return resolveThinkingEffortChoice(value);
+}
+
+/**
+ * Saving, listing and deleting reusable criteria presets.
+ *
+ * The stored value is the criteria form as the modal edits it, not the
+ * backend contract it converts to, so loading a preset restores every field
+ * the user typed rather than only the ones the pipeline reads.
+ */
+function registerCriteriaPresetRoutes(server: FastifyInstance)
+{
+    server.get(API_ROUTES.criteriaPresets, async (_request, reply) =>
+    {
+        const db = openDatabase();
+        try
+        {
+            return reply.status(HTTP_STATUS.ok).send({ presets: dbListCriteriaPresets(db) });
+        }
+        finally
+        {
+            db.close();
+        }
+    });
+
+    server.post(API_ROUTES.criteriaPresets, async (request, reply) =>
+    {
+        const body = asRecord(request.body);
+        if (!body) return reply.status(HTTP_STATUS.badRequest).send({ error: 'Invalid body' });
+
+        const name = asString(body[API_FIELD.name])?.trim();
+        if (!name) return reply.status(HTTP_STATUS.badRequest).send({ error: 'Missing name' });
+
+        const form = asRecord(body['form']);
+        if (!form) return reply.status(HTTP_STATUS.badRequest).send({ error: 'Missing form' });
+
+        const db = openDatabase();
+        try
+        {
+            const preset = dbSaveCriteriaPreset({ id: crypto.randomUUID(), name, form }, db);
+            return reply.status(HTTP_STATUS.ok).send({ preset });
+        }
+        finally
+        {
+            db.close();
+        }
+    });
+
+    server.delete(API_ROUTES.criteriaPreset, async (request, reply) =>
+    {
+        const params = asRecord(request.params);
+        const presetId = params ? asString(params['presetId']) : undefined;
+        if (!presetId) return reply.status(HTTP_STATUS.badRequest).send({ error: 'Missing presetId' });
+
+        const db = openDatabase();
+        try
+        {
+            const removed = dbDeleteCriteriaPreset(presetId, db);
+            if (!removed) return reply.status(HTTP_STATUS.notFound).send({ error: 'Preset not found' });
+            return reply.status(HTTP_STATUS.ok).send({ presetId });
+        }
+        finally
+        {
+            db.close();
+        }
+    });
 }

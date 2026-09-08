@@ -19,6 +19,8 @@ export const API_ROUTES = {
   download: '/download/:processingId/:artifact',
   runs: '/runs',
   run: '/runs/:processingId',
+  criteriaPresets: '/criteria_presets',
+  criteriaPreset: '/criteria_presets/:presetId',
 } as const;
 
 /** Field names shared by the API request and response bodies. */

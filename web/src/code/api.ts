@@ -322,3 +322,47 @@ export async function deleteRun(processingId: string): Promise<void> {
 }
 
 
+
+/** One saved set of criteria, stored as the form the modal edits. */
+export interface CriteriaPreset {
+    id: string;
+    name: string;
+    form: Record<string, unknown>;
+    createdAt: string;
+    updatedAt: string;
+}
+
+/** Lists saved criteria presets, most recently updated first. */
+export async function listCriteriaPresets(): Promise<CriteriaPreset[]> {
+    const response = await fetch('/criteria_presets');
+    if (!response.ok) {
+        throw new Error(`Request failed: ${response.status}`);
+    }
+    const body = (await response.json()) as { presets: CriteriaPreset[] };
+    return body.presets;
+}
+
+/** Saves a preset, replacing any existing one with the same name. */
+export async function saveCriteriaPreset(
+    name: string,
+    form: Record<string, unknown>,
+): Promise<CriteriaPreset> {
+    const response = await fetch('/criteria_presets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, form }),
+    });
+    if (!response.ok) {
+        throw new Error(`Request failed: ${response.status}`);
+    }
+    const body = (await response.json()) as { preset: CriteriaPreset };
+    return body.preset;
+}
+
+/** Deletes one saved preset. */
+export async function deleteCriteriaPreset(presetId: string): Promise<void> {
+    const response = await fetch(`/criteria_presets/${presetId}`, { method: 'DELETE' });
+    if (!response.ok) {
+        throw new Error(`Request failed: ${response.status}`);
+    }
+}
