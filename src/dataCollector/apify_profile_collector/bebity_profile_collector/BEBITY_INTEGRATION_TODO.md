@@ -81,9 +81,12 @@ downstream needs to change.
       `partitionProfileLinksForBebity`, calls Bebity for the compatible slice,
       calls the existing Harvest collector for the rest, adapts Bebity raw
       records, and merges both result sets before they reach `mapApifyProfile`.
-- [ ] Add `config.ts` for Bebity (mirroring `apify_profile_collector/config.ts`):
-      batch size, concurrency, retry/backoff, sourced from env with safety
-      ceilings — see the `.env.example` concurrency note below.
+- [x] Add Bebity's own concurrency default (`resolveBebityConcurrency` in
+      `bebity_profile_collector.ts`), sourced from `BEBITY_BATCH_CONCURRENCY`
+      with a safety ceiling — see the `.env.example` concurrency note below.
+      Batch size, retry, and backoff still fall through to the shared
+      `apify_profile_collector/config.ts` (untested separately from Harvest;
+      no evidence yet that Bebity needs its own values for those).
 - [ ] Re-run the 200+ profile paid benchmark against the *adapted* records
       (not raw) and confirm the evaluation/broad-filter output matches what
       Harvest would have produced for the same profiles, per
@@ -99,17 +102,22 @@ downstream needs to change.
 
 ## Concurrency
 
-`APIFY_BATCH_CONCURRENCY` (in `apify_profile_collector/config.ts`) was tuned
-specifically for HarvestAPI's own queue behavior (429s above 15 concurrent
-Actor runs on a 6-run baseline) — that number is provider-specific, not an
-Apify platform ceiling, and should not be reused for Bebity as-is.
+Resolved. `APIFY_BATCH_CONCURRENCY` (shared, in `apify_profile_collector/
+config.ts`) was tuned specifically for HarvestAPI's own queue behavior (429s
+above 15 concurrent Actor runs on a 6-run baseline) — that number is
+provider-specific and stays at 6 for Harvest.
 
-Apify itself also caps how many Actor runs can be in flight at once,
-account-wide, based on the subscription plan. On the current plan ("Started"),
-up to 35 concurrent Actor runs are allowed — this is an Apify account limit,
-separate from whatever concurrency Bebity's own actor can tolerate before
-erroring or degrading. That has not been benchmarked yet (see the paid
-Harvest benchmark table in `APIFY_COLLECTOR_CONFIG.md` for the kind of test
-this needs before picking a production default). `BEBITY_BATCH_CONCURRENCY`
-is documented in `.env.example` as a placeholder; it is not consumed by any
-code yet — that lands with the `config.ts` TODO above.
+A separate paid benchmark against `collectBebityProfiles` directly (bypassing
+Harvest) swept concurrency 6/10/15 at batch sizes 10 and 50, on the full
+Bebity-eligible test pool (189 profiles — the practical ceiling of available
+test data). Zero failures, retries, or unexpected records at every level
+tested (see `output/benchmarks/bebity/`, runs `fa44d159`, `ba4abe9e`,
+`c4366d8e`, `8acf7fbd`). No ceiling was found within that data budget, so 15
+was picked as Bebity's own default (`resolveBebityConcurrency`,
+`BEBITY_BATCH_CONCURRENCY`) rather than the true safe maximum — a bigger
+eligible-profile pool would be needed to push the sweep further, and the
+batch-size-50 run only ever achieved ~4-way real concurrency (189 profiles /
+50 per batch), not genuine 15-way — that combination (concurrency 15 at
+batch size 50, the actual production shape once volumes exceed ~750
+profiles) is still unverified. Apify's account-wide Actor concurrency cap
+(35 on the current "Started" plan) is a separate, unrelated ceiling.

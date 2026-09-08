@@ -1,6 +1,6 @@
 import { ApifyClient } from 'apify-client';
 import { collectApifyProfilesWithExecutor } from '../index.js';
-import { requireApifyApiKey } from '../config.js';
+import { APIFY_COLLECTOR_LIMITS, requireApifyApiKey } from '../config.js';
 import type {
   ApifyBatchExecutor,
   ApifyCollectionResult,
@@ -8,10 +8,30 @@ import type {
   RawApifyProfile,
 } from '../index.js';
 import type { Logger } from '../../../logging/index.js';
-import { BEBITY_LINKEDIN_PREMIUM_ACTOR, BEBITY_PROFILE_FIELDS_ENVIRONMENT_KEY, BEBITY_PROFILE_FIELD_VALUES, DEFAULT_BEBITY_PROFILE_FIELDS } from './constants.js';
+import { CONFIG_NUMBER_MINIMUMS, resolveConfigNumber } from '../../../helpers/index.js';
+import { BEBITY_BATCH_CONCURRENCY_ENVIRONMENT_KEY, BEBITY_LINKEDIN_PREMIUM_ACTOR, BEBITY_PROFILE_FIELDS_ENVIRONMENT_KEY, BEBITY_PROFILE_FIELD_VALUES, DEFAULT_BEBITY_CONCURRENCY, DEFAULT_BEBITY_PROFILE_FIELDS } from './constants.js';
 import type { BebityProfileField } from './constants.js';
 
-export function resolveBebityProfileFields(environment: NodeJS.ProcessEnv = process.env): BebityProfileField[] | undefined 
+/**
+ * Bebity's own concurrency default, independent of Harvest's. The two
+ * providers previously shared `APIFY_BATCH_CONCURRENCY`, tuned down to 6 for
+ * HarvestAPI's queue limit (see `APIFY_COLLECTOR_CONFIG.md`). A dedicated
+ * paid benchmark (`output/benchmarks/bebity/`, sweep across concurrency
+ * 6/10/15 at production batch size) found no Bebity failures or unexpected
+ * records up to 15, so Bebity gets its own higher default here instead of
+ * inheriting Harvest's more conservative one.
+ */
+export function resolveBebityConcurrency(environment: NodeJS.ProcessEnv = process.env): number {
+  return resolveConfigNumber(environment[BEBITY_BATCH_CONCURRENCY_ENVIRONMENT_KEY], {
+    fallback: DEFAULT_BEBITY_CONCURRENCY,
+    minimum: CONFIG_NUMBER_MINIMUMS.positive,
+    maximum: APIFY_COLLECTOR_LIMITS.actorRunConcurrency,
+    integer: true,
+    clampMaximum: true,
+  });
+}
+
+export function resolveBebityProfileFields(environment: NodeJS.ProcessEnv = process.env): BebityProfileField[] | undefined
 {
   const raw = environment[BEBITY_PROFILE_FIELDS_ENVIRONMENT_KEY]?.trim();
 
@@ -86,7 +106,7 @@ export async function collectBebityProfiles(
     profileLinks,
     executeBatch,
     logger,
-    options,
+    { concurrency: resolveBebityConcurrency(), ...options },
     expectedNames,
   );
 }

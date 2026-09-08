@@ -147,6 +147,7 @@ export type ApifyBenchmarkCollector = (
   profileLinks: readonly string[],
   logger?: Logger,
   options?: ApifyCollectorOptions,
+  expectedNames?: ReadonlyMap<string, string>,
 ) => Promise<ApifyCollectionResult>;
 
 /** Replaceable time and collector dependencies for deterministic execution. */

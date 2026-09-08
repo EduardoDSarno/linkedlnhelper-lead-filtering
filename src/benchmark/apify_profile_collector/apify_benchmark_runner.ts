@@ -197,6 +197,26 @@ function identityName(identity: {
 }
 
 /**
+ * Builds the URL -> display name map the collector uses as a secondary,
+ * name-based identity check when a provider returns a profile under a
+ * changed vanity URL. Mirrors `expectedNamesByUrl` in `full_profile_pipeline.ts`.
+ *
+ * @param expectedIdentities - Selected name evidence supplied by an input adapter.
+ * @returns A map keyed by normalized LinkedIn URL, skipping identities with no name.
+ */
+function expectedNamesByUrl(
+  expectedIdentities: readonly ApifyBenchmarkExpectedIdentity[],
+): ReadonlyMap<string, string> {
+  const names = new Map<string, string>();
+  for (const identity of expectedIdentities) {
+    const name = identityName(identity);
+    if (!name) continue;
+    names.set(normalizeLinkedinUrl(identity.linkedinUrl), name);
+  }
+  return names;
+}
+
+/**
  * Compares optional source names with successful Apify records as an advisory
  * identity check. Differences are reported but never affect benchmark validity.
  *
@@ -415,6 +435,7 @@ export async function runApifyBenchmark(
       prepared.selectedProfileLinks,
       logger,
       request.collectorOptions,
+      expectedNamesByUrl(prepared.selectedExpectedIdentities),
     );
     const validation = validateApifyBenchmarkCollection(
       prepared.selectedProfileLinks,
