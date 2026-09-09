@@ -53,6 +53,7 @@ select {
   --lead-status-column-width: 170px;
   --lead-actions-column-width: 76px;
 
+  position: relative;
   border-bottom: 1px solid #eceff3;
   border-left: 3px solid transparent;
   background: #fff;
@@ -118,6 +119,82 @@ select {
 }
 .lead-act:hover {
   filter: brightness(0.97);
+}
+
+/* Highlight chips stay compact in the row and expand on hover so the full
+   sentence is readable immediately, without the delayed native tooltip. */
+.lead-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+.lead-chip {
+  --lead-chip-collapsed-max-width: 260px;
+  --lead-chip-expanded-max-width: min(22rem, 70vw);
+
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: var(--lead-chip-collapsed-max-width);
+  padding: 2px 8px;
+  border: 1px solid;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 500;
+}
+.lead-chip-icon {
+  flex: none;
+}
+.lead-chip-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lead-chip-expand {
+  position: absolute;
+  top: -1px;
+  left: -1px;
+  z-index: 6;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  width: max-content;
+  min-width: calc(100% + 2px);
+  max-width: var(--lead-chip-expanded-max-width);
+  padding: 2px 8px;
+  border: 1px solid;
+  border-color: inherit;
+  border-radius: 6px;
+  color: inherit;
+  background: inherit;
+  line-height: 1.4;
+  box-shadow:
+    0 10px 24px rgba(15, 23, 42, 0.14),
+    0 0 0 1px rgba(15, 23, 42, 0.04);
+  opacity: 0;
+  visibility: hidden;
+  white-space: normal;
+  transform: translateY(2px);
+  transition:
+    opacity 0.12s ease,
+    transform 0.12s ease,
+    visibility 0.12s ease;
+}
+.lead-chip-expand .lead-chip-text {
+  overflow: visible;
+  white-space: normal;
+}
+.lead-chip:hover .lead-chip-expand,
+.lead-chip:focus-visible .lead-chip-expand {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+.lead-row:has(.lead-chip:hover),
+.lead-row:has(.lead-chip:focus-visible) {
+  z-index: 3;
 }
 
 .profile-details {

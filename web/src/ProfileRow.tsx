@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-import type { PresentedRow } from './code/listView';
+import type { PresentedRow, PresentedWarning } from './code/listView';
 
 /** LinkedIn mark used as the outbound profile link. */
 function LinkedInIcon() {
@@ -143,30 +143,9 @@ export function ProfileRow({
           {row.line2}
         </span>
         {row.warnings.length > 0 && (
-          <span style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
+          <span className="lead-chips">
             {row.warnings.map((warning) => (
-              <span
-                key={warning.key}
-                title={warning.text}
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 5,
-                  maxWidth: 260,
-                  fontSize: 11,
-                  fontWeight: 500,
-                  color: warning.fg,
-                  background: warning.bg,
-                  border: `1px solid ${warning.bd}`,
-                  padding: '2px 8px',
-                  borderRadius: 6,
-                }}
-              >
-                {warning.icon && <span aria-hidden="true" style={{ flex: 'none' }}>{warning.icon}</span>}
-                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {warning.text}
-                </span>
-              </span>
+              <RowChip key={warning.key} warning={warning} />
             ))}
           </span>
         )}
@@ -259,5 +238,37 @@ export function ProfileRow({
         </button>
       </span>
     </div>
+  );
+}
+
+/** Compact highlight chip that reveals the full sentence on hover. */
+function RowChip({ warning }: { warning: PresentedWarning }) {
+  const chipStyle = {
+    color: warning.fg,
+    background: warning.bg,
+    borderColor: warning.bd,
+  };
+
+  return (
+    <span className="lead-chip" style={chipStyle}>
+      <RowChipLabel warning={warning} />
+      <span className="lead-chip-expand" aria-hidden="true">
+        <RowChipLabel warning={warning} />
+      </span>
+    </span>
+  );
+}
+
+/** Icon plus sentence shared by the compact chip and its hover expansion. */
+function RowChipLabel({ warning }: { warning: PresentedWarning }) {
+  return (
+    <>
+      {warning.icon && (
+        <span aria-hidden="true" className="lead-chip-icon">
+          {warning.icon}
+        </span>
+      )}
+      <span className="lead-chip-text">{warning.text}</span>
+    </>
   );
 }
