@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 
 import {
@@ -34,6 +34,19 @@ const inputStyle: React.CSSProperties = {
   background: '#fff',
   color: '#0f172a',
 };
+
+const PROMPT_FONT_SIZE_PX = 13.5;
+const PROMPT_LINE_HEIGHT = 1.55;
+const PROMPT_VERTICAL_CHROME_PX = 22;
+const IDEAL_PROMPT_MIN_ROWS = 6;
+const IDEAL_PROMPT_MAX_ROWS = 80;
+const EXTRA_PROMPT_MIN_ROWS = 4;
+const EXTRA_PROMPT_MAX_ROWS = 80;
+
+/** Pixel height of a prompt box for a given number of text rows. */
+function promptHeightForRows(rows: number): number {
+  return Math.round(rows * PROMPT_FONT_SIZE_PX * PROMPT_LINE_HEIGHT + PROMPT_VERTICAL_CHROME_PX);
+}
 
 /** A small badge flagging that a section is driven by the AI. */
 function AiPill() {
@@ -421,6 +434,61 @@ function PresetBar({
 }
 
 /**
+ * Prompt field that grows with its text so long criteria stay readable
+ * in the modal instead of a short inner scrollbar.
+ */
+function GrowingPrompt({
+  value,
+  minRows,
+  maxRows,
+  placeholder,
+  onChange,
+}: {
+  value: string;
+  minRows: number;
+  maxRows: number;
+  placeholder: string;
+  onChange: (value: string) => void;
+}) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+  const minHeight = promptHeightForRows(minRows);
+  const maxHeight = promptHeightForRows(maxRows);
+
+  useLayoutEffect(() => {
+    const field = ref.current;
+    if (!field) return;
+
+    field.style.height = `${minHeight}px`;
+    const nextHeight = Math.min(maxHeight, Math.max(minHeight, field.scrollHeight));
+    field.style.height = `${nextHeight}px`;
+    field.style.overflowY = field.scrollHeight > maxHeight ? 'auto' : 'hidden';
+  }, [value, minHeight, maxHeight]);
+
+  return (
+    <textarea
+      ref={ref}
+      rows={minRows}
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+      placeholder={placeholder}
+      style={{
+        width: '100%',
+        fontSize: PROMPT_FONT_SIZE_PX,
+        lineHeight: PROMPT_LINE_HEIGHT,
+        padding: '10px 12px',
+        border: '1px solid #e2e8f0',
+        borderRadius: 10,
+        resize: 'none',
+        color: '#0f172a',
+        background: '#fff',
+        minHeight,
+        maxHeight,
+      }}
+    />
+  );
+}
+
+/**
  * The evaluation-criteria modal.
  *
  * It edits every field the backend accepts: the ideal-profile prompt, allowed
@@ -535,10 +603,11 @@ export function CriteriaModal({ form, update, onClose, onConfirm }: CriteriaModa
               <span style={{ fontSize: 13, fontWeight: 600 }}>Perfil ideal</span>
               <AiPill />
             </div>
-            <textarea
-              rows={4}
+            <GrowingPrompt
               value={form.ideal}
-              onChange={(e) => update({ ideal: e.target.value })}
+              minRows={IDEAL_PROMPT_MIN_ROWS}
+              maxRows={IDEAL_PROMPT_MAX_ROWS}
+              onChange={(ideal) => update({ ideal })}
               placeholder={
                 'Ex.: Gestores comerciais e de Customer Success em SaaS B2B.\n' +
                 '• Cargo e área: liderança de vendas/CS\n' +
@@ -547,17 +616,6 @@ export function CriteriaModal({ form, update, onClose, onConfirm }: CriteriaModa
                 '• Valorizar: carreira consultiva, ticket alto\n' +
                 '• Evitar: perfis puramente operacionais'
               }
-              style={{
-                width: '100%',
-                fontSize: 13.5,
-                lineHeight: 1.55,
-                padding: '10px 12px',
-                border: '1px solid #e2e8f0',
-                borderRadius: 10,
-                resize: 'vertical',
-                color: '#0f172a',
-                background: '#fff',
-              }}
             />
             <Note>
               Descreva o candidato-alvo. Para melhor avaliação, mencione:{' '}
@@ -569,22 +627,12 @@ export function CriteriaModal({ form, update, onClose, onConfirm }: CriteriaModa
           {/* Extra guidance */}
           <div style={{ borderTop: '1px solid #eef1f5', paddingTop: 18 }}>
             <SectionTitle>Prioridades e sinais de alerta (opcional)</SectionTitle>
-            <textarea
-              rows={2}
+            <GrowingPrompt
               value={form.extra}
-              onChange={(e) => update({ extra: e.target.value })}
+              minRows={EXTRA_PROMPT_MIN_ROWS}
+              maxRows={EXTRA_PROMPT_MAX_ROWS}
+              onChange={(extra) => update({ extra })}
               placeholder="Ex.: priorize experiência em fintech; desempate por tempo de casa; sinal de alerta: mais de 3 trocas de emprego em 2 anos."
-              style={{
-                width: '100%',
-                fontSize: 13.5,
-                lineHeight: 1.55,
-                padding: '10px 12px',
-                border: '1px solid #e2e8f0',
-                borderRadius: 10,
-                resize: 'vertical',
-                color: '#0f172a',
-                background: '#fff',
-              }}
             />
             <Note>
               Como a IA deve pesar os perfis: <b>prioridades</b>,{' '}
