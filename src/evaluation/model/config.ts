@@ -44,11 +44,10 @@ export const MODEL_EVALUATION_LIMITS = {
   monthlyCompensationMinimum: 0,
   compensationBasisItems: 6,
   compensationReasonItems: 5,
-  reasonsPerProfile: 5,
-  evidencePerProfile: 6,
-  uncertaintiesPerProfile: 5,
-  highlightsPerProfile: 3,
-  highlightTextMaxLength: 80,
+  positivesPerProfile: 5,
+  negativesPerProfile: 5,
+  pointTextMaxLength: 100,
+  summaryMaxLength: 400,
   failedResponseLogMaxLength: 8_000,
   imageObservationItems: 5,
   ageBasisItems: 4,
@@ -115,12 +114,12 @@ ${MODEL_EVALUATION_PROMPT_SLOTS.systemPrompt}
   quality from the terms themselves; a campaign may exclude anything, and the
   same term another campaign requires. When a listed term matches the current
   role, cut the matchPercent heavily — well below the campaign's approval
-  threshold — rather than deducting a few points, and name the matched term in
-  "reasons".
+  threshold — rather than deducting a few points, and name the matched term as
+  a "negatives" point.
 - A listed term found only in historical experience must NOT reduce the score
   at all. The campaign excluded it as a current position, not as a past one.
   Check where the term appears before penalizing it, and when a role's dates
-  make it ambiguous, say so in "uncertainties" instead of cutting.
+  make it ambiguous, say so as a "negatives" point instead of cutting.
 
 === EMPLOYMENT STATUS ===
 - Decide from the primary campaign instructions whether this campaign wants
@@ -135,19 +134,19 @@ ${MODEL_EVALUATION_PROMPT_SLOTS.systemPrompt}
   a role whose end date reads "Present", or which has a start date and no end
   date, is a current job. When every listed role has ended, the person is
   probably between roles. When the most recent role ended over a year ago and
-  nothing replaced it, say so in "uncertainties" — a stale profile and an
+  nothing replaced it, say so as a "negatives" point — a stale profile and an
   unemployed person look identical here.
 - When the campaign does express a preference, weight it heavily: a profile on
   the wrong side of it should fall well down the ranking even when the rest of
   the career fits, and a profile on the right side should be rewarded. State
-  which side you placed the person on, and the role you read it from, in
-  "reasons".
+  which side you placed the person on and the role you read it from in the
+  "summary", and add a matching "positives" or "negatives" point.
 
 === IMAGE AND AGE RULES ===
 - Each image belongs to the profile ID named immediately before it. Never
   describe or score one profile using another profile's photo. If you cannot
-  tell which image belongs to a profile, say so in that profile's
-  uncertainties rather than guessing.
+  tell which image belongs to a profile, say so as a "negatives" point on that
+  profile rather than guessing.
 - Return an "imageAssessment" object for every profile that was sent an image,
   and omit it entirely for profiles sent without one. Judge composition and
   technical usability from the image only. Keep "observations" brief, factual,
@@ -170,13 +169,14 @@ ${MODEL_EVALUATION_PROMPT_SLOTS.systemPrompt}
 - When the photo and the dated anchors disagree, prefer the anchors: dates are
   recorded facts and faces are an impression. A person can photograph a decade
   younger than they are, and a campaign that cares about age is asking about
-  the timeline, not the appearance. Say so in that profile's uncertainties.
+  the timeline, not the appearance. Say so as a "negatives" point.
 - Treat the campaign's configured "age" range as a primary cut, not a
   tiebreaker. When the dated anchors put someone clearly outside it, score the
   profile accordingly even if every other signal is strong and the photo looks
-  young. State the anchor year you used in "reasons".
+  young. State the anchor year you used in the "summary".
 - A missing "firstAcademicYear" is not evidence of youth. When the anchors are
-  absent, say the age is uncertain rather than defaulting to the photo alone.
+  absent, say the age is uncertain as a "negatives" point rather than
+  defaulting to the photo alone.
 - Give "estimatedAge" as an integer "minimumAge" and "maximumAge" spanning no
   more than 10 years, plus a "confidence" and a short "basis" listing the
   specific signals used ("first role 2004", "graduated 2015", "photo suggests
@@ -199,14 +199,20 @@ ${MODEL_EVALUATION_PROMPT_SLOTS.systemPrompt}
   performs that comparison deterministically after validating the response.
 - Do not estimate or use net worth.
 - Do not invent missing career facts. Put missing or ambiguous information in
-  uncertainties.
+  "negatives" as a caution rather than inventing it.
 - Explain each result using evidence from that profile.
-- Provide 1 to 3 short "highlights": the most decision-relevant one-liners for a
-  reviewer scanning a list. Each has a "kind" of "strength" (a strong positive
-  fit signal), "warning" (a genuine concern or risk), or "info" (neutral but
-  notable context), and short "text" under 80 characters. Order by importance,
-  and match the mix to the profile: a strong fit should lead with strengths, a
-  weak one with warnings. Do not force all three kinds.
+- Provide "positives" (0 to 5) and "negatives" (0 to 5): short one-liners under
+  100 characters each, citing the specific evidence behind them — a dated
+  anchor, a keyword match, a career-fit signal — so a reviewer scanning a list
+  can read the whole case in seconds. "positives" are reasons the profile fits
+  the campaign; "negatives" are concerns, risks, exclusions, or genuine
+  uncertainties working against it. Leave a list short or empty rather than
+  padding it with filler, and match the mix to the profile: a strong fit
+  should show more positives, a weak one more negatives.
+- Provide a "summary": one or two plain-language sentences stating why you
+  landed on this matchPercent, naming the strongest signal(s) behind the score
+  (for example, the anchor year used for age, or which side of the
+  employment-status preference the person is on).
 - Return exactly one structured result for every supplied profile ID.
 `.trim();
 

@@ -81,9 +81,9 @@ function evaluation(profileId: string, matchPercent = TEST_MATCH_PERCENT) {
       confidence: 'medium',
       basis: ['The supplied fixture contains professional evidence.'],
     },
-    reasons: ['The profile matches the campaign fixture.'],
-    evidence: ['The supplied fixture contains professional evidence.'],
-    uncertainties: [],
+    positives: ['The profile matches the campaign fixture.'],
+    negatives: [],
+    summary: 'The profile matches the campaign fixture.',
   };
 }
 
@@ -333,7 +333,7 @@ test('keeps sibling scores when one object in a group is malformed, then retries
       // The person requested first in every call comes back malformed, so a
       // lone-profile retry request still fails the same way.
       const evaluations = ids.map((id, index) =>
-        index === 0 ? { ...evaluation(id), reasons: [] } : evaluation(id),
+        index === 0 ? { ...evaluation(id), matchPercent: 'invalid' } : evaluation(id),
       );
       return { text: JSON.stringify({ evaluations }), usage: { ...TEST_TOKEN_USAGE } };
     },

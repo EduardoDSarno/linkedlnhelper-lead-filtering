@@ -30,9 +30,9 @@ const REPORT_COLUMNS = [
   'broad_decision',
   'model_decision',
   'match_percent',
-  'reasons',
-  'evidence',
-  'uncertainties',
+  'summary',
+  'positives',
+  'negatives',
   'status',
   'final_decision',
   'manual_reason',
@@ -151,20 +151,20 @@ export function buildEvaluationReportCsv(
     const override = overrideByPublicId.get(publicId);
 
     let status: string;
-    let reasons: string;
+    let summary: string;
 
     if (broad.decision === 'Failed') {
       status = REPORT_STATUS.filteredOut;
-      reasons = broad.decisionMessage;
+      summary = broad.decisionMessage;
     } else if (model) {
       status = REPORT_STATUS.evaluated;
-      reasons = model.reasons.join(LIST_SEPARATOR);
+      summary = model.summary;
     } else if (failureError) {
       status = REPORT_STATUS.modelError;
-      reasons = failureError;
+      summary = failureError;
     } else {
       status = REPORT_STATUS.modelIncomplete;
-      reasons = '';
+      summary = '';
     }
 
     lines.push(
@@ -175,9 +175,9 @@ export function buildEvaluationReportCsv(
         broad.decision,
         model?.decision ?? '',
         model ? String(model.matchPercent) : '',
-        reasons,
-        model?.evidence.join(LIST_SEPARATOR) ?? '',
-        model?.uncertainties.join(LIST_SEPARATOR) ?? '',
+        summary,
+        model?.positives.join(LIST_SEPARATOR) ?? '',
+        model?.negatives.join(LIST_SEPARATOR) ?? '',
         status,
         finalDecisionFor(broad.decision, model, override),
         override?.reason ?? '',

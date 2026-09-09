@@ -171,17 +171,12 @@ export interface ProfileDetails {
     photoSummary?: string;
 }
 
-/** Apparent-age shape returned by the real image-analysis pipeline. */
-export interface ApparentAgeEstimate {
-    bracket: string;
-    confidence: 'high' | 'medium' | 'low' | 'unassessable';
-}
-
-/** A short, categorized signal shown as a colored chip in the review row. */
-export type ProfileHighlightKind = 'strength' | 'warning' | 'info';
-export interface ProfileHighlight {
-    kind: ProfileHighlightKind;
-    text: string;
+/** Age-range shape returned by the evaluation model. */
+export interface EstimatedAge {
+    minimumAge: number;
+    maximumAge: number;
+    confidence: 'high' | 'medium' | 'low' | 'unknown';
+    basis: string[];
 }
 
 /** Everything the review list knows about one evaluated profile. */
@@ -199,16 +194,18 @@ export interface ProfileResult {
     company?: string;
     location?: string;
     photo?: string;
-    apparentAge?: string | ApparentAgeEstimate;
+    estimatedAge?: string | EstimatedAge;
     details?: ProfileDetails;
 
     /** Absent when the profile never reached the model or its request failed. */
     modelDecision?: ModelDecision;
     matchPercent?: number;
-    reasons?: string[];
-    evidence?: string[];
-    uncertainties?: string[];
-    highlights?: ProfileHighlight[];
+    /** Short, decision-relevant points supporting the campaign fit. */
+    positives?: string[];
+    /** Short, decision-relevant concerns, risks, or uncertainties against it. */
+    negatives?: string[];
+    /** One or two sentences explaining why the model landed on this score. */
+    summary?: string;
     compensation?: Compensation;
     compensationMatch?: CompensationMatch;
 

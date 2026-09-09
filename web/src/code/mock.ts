@@ -15,7 +15,6 @@ import type {
   ImportResult,
   ManualOverride,
   ProfileDetails,
-  ProfileHighlight,
   ProfileResult,
   RunResults,
   RunStatus,
@@ -167,7 +166,7 @@ function mockProfile(row: (typeof SAMPLE)[number], index: number): ProfileResult
     position,
     company,
     location,
-    apparentAge: `${ageLo}–${ageLo + 5}`,
+    estimatedAge: `${ageLo}–${ageLo + 5}`,
     ...(hasPhoto ? { photo: mockPhoto(name, index) } : {}),
     ...(failed
       ? {}
@@ -191,10 +190,9 @@ function mockProfile(row: (typeof SAMPLE)[number], index: number): ProfileResult
     ...base,
     modelDecision: decision,
     matchPercent: score,
-    highlights: mockHighlights(index, decision),
-    reasons: [MOCK_REASONS[index % MOCK_REASONS.length]!],
-    evidence: [`Cargo atual: ${position} na ${company}.`],
-    uncertainties: mockUncertainties(index),
+    positives: mockPositives(index, decision),
+    negatives: mockNegatives(index, decision),
+    summary: MOCK_REASONS[index % MOCK_REASONS.length]!,
     compensation: insufficient
       ? { status: 'insufficient_evidence', reasons: ['Histórico salarial ausente.'] }
       : {
@@ -279,38 +277,46 @@ function mockPhoto(_name: string, index: number): string {
   return `https://i.pravatar.cc/150?img=${(index % 70) + 1}`;
 }
 
-/** Fabricated strength/warning/info one-liners cycled into the row chips. */
-const MOCK_STRENGTHS = [
+/** Fabricated positive/negative one-liners cycled into the row chips. */
+const MOCK_POSITIVES = [
   'Progressão consistente em vendas B2B',
   'Gestão de contas estratégicas (key account)',
   'Experiência consultiva em SaaS',
 ];
-const MOCK_WARNINGS = [
+const MOCK_NEGATIVES = [
   'Pouco tempo na posição atual',
   'Foco recente em marketing, não vendas',
   'Senioridade acima da faixa da campanha',
 ];
-const MOCK_INFOS = ['Baseado em Goiânia, GO', 'MBA Executivo (FGV)'];
+const MOCK_CONTEXT_NOTES = ['Baseado em Goiânia, GO', 'MBA Executivo (FGV)'];
 
-/** Builds 1–3 categorized highlights whose mix matches the model decision. */
-function mockHighlights(
+/** Builds the positive points whose count and mix match the model decision. */
+function mockPositives(
   index: number,
   decision: 'approved' | 'manual_review' | 'rejected',
-): ProfileHighlight[] {
-  const strength: ProfileHighlight = { kind: 'strength', text: MOCK_STRENGTHS[index % MOCK_STRENGTHS.length]! };
-  const warning: ProfileHighlight = { kind: 'warning', text: MOCK_WARNINGS[index % MOCK_WARNINGS.length]! };
-  const info: ProfileHighlight = { kind: 'info', text: MOCK_INFOS[index % MOCK_INFOS.length]! };
+): string[] {
+  if (decision === 'rejected') return [];
 
-  if (decision === 'approved') {
-    return index % 2 === 0 ? [strength, info] : [strength, info, warning];
-  }
-  if (decision === 'rejected') {
-    return [warning, info];
-  }
-  return index % 2 === 0 ? [strength, warning] : [strength, warning, info];
+  const strength = MOCK_POSITIVES[index % MOCK_POSITIVES.length]!;
+  const note = MOCK_CONTEXT_NOTES[index % MOCK_CONTEXT_NOTES.length]!;
+  return index % 2 === 0 ? [strength] : [strength, note];
 }
 
-/** Warning-like uncertainties the list turns into chips. */
+/** Builds the negative points, folding in the fabricated uncertainties. */
+function mockNegatives(
+  index: number,
+  decision: 'approved' | 'manual_review' | 'rejected',
+): string[] {
+  const warning = MOCK_NEGATIVES[index % MOCK_NEGATIVES.length]!;
+  const uncertainties = mockUncertainties(index);
+
+  if (decision === 'approved') {
+    return index % 2 === 0 ? uncertainties : [warning, ...uncertainties];
+  }
+  return [warning, ...uncertainties];
+}
+
+/** Uncertainty-flavored negatives cycled into the list. */
 function mockUncertainties(index: number): string[] {
   const items: string[] = [];
   if (index % UNCERTAIN_LOCATION_EVERY === 1) items.push('Localização incerta no perfil');

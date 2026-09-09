@@ -346,10 +346,9 @@ function registerResultsRoute(server: FastifyInstance)
                         ? {
                             modelDecision: model.decision,
                             matchPercent: model.matchPercent,
-                            reasons: model.reasons,
-                            evidence: model.evidence,
-                            uncertainties: model.uncertainties,
-                            ...(model.highlights?.length ? { highlights: model.highlights } : {}),
+                            positives: model.positives,
+                            negatives: model.negatives,
+                            summary: model.summary,
                             compensation: model.estimatedTotalMonthlyCompensation,
                             ...(model.compensationRangeMatch
                                 ? { compensationMatch: model.compensationRangeMatch }

@@ -51,25 +51,17 @@ export interface CompensationRangeMatch {
   readonly explanation: string;
 }
 
-/** How a one-line profile highlight is characterized for the review list. */
-export type ProfileHighlightKind = 'strength' | 'warning' | 'info';
-
-/** A short, categorized signal the review list shows as a colored row chip. */
-export interface ProfileHighlight {
-  readonly kind: ProfileHighlightKind;
-  readonly text: string;
-}
-
 /** One validated professional-fit assessment returned directly by the model. */
 export interface ProfileModelAssessment {
   readonly profileId: string;
   readonly matchPercent: number;
   readonly estimatedTotalMonthlyCompensation: EstimatedTotalMonthlyCompensation;
-  readonly reasons: readonly string[];
-  readonly evidence: readonly string[];
-  readonly uncertainties: readonly string[];
-  /** Up to three categorized one-liners summarizing the fit in the row. */
-  readonly highlights?: readonly ProfileHighlight[];
+  /** Short, decision-relevant points supporting the campaign fit. */
+  readonly positives: readonly string[];
+  /** Short, decision-relevant concerns, risks, or uncertainties against it. */
+  readonly negatives: readonly string[];
+  /** One or two sentences explaining why the model landed on this matchPercent. */
+  readonly summary: string;
   /** Age range inferred from the photo and the profile's career timeline. */
   readonly estimatedAge?: EstimatedAge;
   /** Present only when the profile was sent with a photo. */

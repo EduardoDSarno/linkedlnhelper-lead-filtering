@@ -7,13 +7,8 @@ import {
   type EstimatedAgeConfidence,
   type EstimatedTotalMonthlyCompensation,
   type ModelImageAssessment,
-  type ProfileHighlight,
-  type ProfileHighlightKind,
   type ProfileModelAssessment,
 } from './types.js';
-
-/** The categories a profile highlight may use. */
-const HIGHLIGHT_KINDS: readonly ProfileHighlightKind[] = ['strength', 'warning', 'info'];
 
 /** Campaign currency stored on every accepted compensation estimate. */
 const COMPENSATION_CURRENCY = 'BRL' as const;
@@ -86,37 +81,17 @@ export const MODEL_EVALUATION_JSON_SCHEMA = {
             },
             required: ['status'],
           },
-          reasons: {
+          positives: {
             type: 'array',
-            minItems: 1,
-            maxItems: MODEL_EVALUATION_LIMITS.reasonsPerProfile,
+            maxItems: MODEL_EVALUATION_LIMITS.positivesPerProfile,
             items: { type: 'string' },
           },
-          evidence: {
+          negatives: {
             type: 'array',
-            minItems: 1,
-            maxItems: MODEL_EVALUATION_LIMITS.evidencePerProfile,
+            maxItems: MODEL_EVALUATION_LIMITS.negativesPerProfile,
             items: { type: 'string' },
           },
-          uncertainties: {
-            type: 'array',
-            maxItems: MODEL_EVALUATION_LIMITS.uncertaintiesPerProfile,
-            items: { type: 'string' },
-          },
-          highlights: {
-            type: 'array',
-            minItems: 1,
-            maxItems: MODEL_EVALUATION_LIMITS.highlightsPerProfile,
-            items: {
-              type: 'object',
-              additionalProperties: false,
-              properties: {
-                kind: { type: 'string', enum: ['strength', 'warning', 'info'] },
-                text: { type: 'string' },
-              },
-              required: ['kind', 'text'],
-            },
-          },
+          summary: { type: 'string' },
           estimatedAge: {
             type: 'object',
             additionalProperties: false,
@@ -215,10 +190,9 @@ export const MODEL_EVALUATION_JSON_SCHEMA = {
           'profileId',
           'matchPercent',
           'estimatedTotalMonthlyCompensation',
-          'reasons',
-          'evidence',
-          'uncertainties',
-          'highlights',
+          'positives',
+          'negatives',
+          'summary',
           'estimatedAge',
         ],
       },
@@ -262,26 +236,35 @@ function requiredString(value: unknown, field: string): string {
   );
 }
 
-/** Parses a bounded collection of non-empty strings. */
+/**
+ * Parses a bounded collection of non-empty strings.
+ *
+ * A lone string is read as a one-item list: replies regularly write the single
+ * justification they have as `"basis": "..."` rather than wrapping it, and the
+ * text is exactly what the list was asking for, so rejecting the shape would
+ * discard a good evaluation over a pair of brackets.
+ */
 function stringList(
   value: unknown,
   field: string,
   maximumItems: number,
   minimumItems: number,
 ): string[] {
-  if (!Array.isArray(value)) {
+  const items = asString(value) ? [value as string] : value;
+
+  if (!Array.isArray(items)) {
     throw new ModelEvaluationResponseError(
       `The evaluation field "${field}" must be an array.`,
     );
   }
 
-  if (value.length < minimumItems || value.length > maximumItems) {
+  if (items.length < minimumItems || items.length > maximumItems) {
     throw new ModelEvaluationResponseError(
       `The evaluation field "${field}" has an invalid item count.`,
     );
   }
 
-  return value.map((item, index) =>
+  return items.map((item, index) =>
     requiredString(item, `${field}[${String(index)}]`),
   );
 }
@@ -421,98 +404,56 @@ function compensationCurrency(value: unknown): typeof COMPENSATION_CURRENCY {
 }
 
 /**
- * Parses up to three categorized highlights, tolerating a missing or partly
+ * Parses a bounded list of short points, tolerating a missing or partly
  * malformed list. Invalid items are skipped and text is capped rather than
- * failing the whole profile, since highlights are a presentation summary.
+ * failing the whole profile, since positives/negatives are a presentation
+ * summary, not the source of truth for the score.
  */
-function highlights(value: unknown): ProfileHighlight[] {
+function points(value: unknown, maximumItems: number): string[] {
   if (!Array.isArray(value)) return [];
 
-  const parsed: ProfileHighlight[] = [];
+  const parsed: string[] = [];
   for (const item of value) {
-    const record = asRecord(item);
-    const kind = asString(record?.['kind']) as ProfileHighlightKind | undefined;
-    const text = asString(record?.['text'])
-      ?.slice(0, MODEL_EVALUATION_LIMITS.highlightTextMaxLength)
+    const text = asString(item)
+      ?.slice(0, MODEL_EVALUATION_LIMITS.pointTextMaxLength)
       .trimEnd();
+    if (!text) continue;
 
-    if (!text || !kind || !HIGHLIGHT_KINDS.includes(kind)) continue;
-
-    parsed.push({ kind, text });
-    if (parsed.length >= MODEL_EVALUATION_LIMITS.highlightsPerProfile) break;
+    parsed.push(text);
+    if (parsed.length >= maximumItems) break;
   }
 
   return parsed;
 }
 
 /**
- * Reads the justification list, tolerating the shapes providers substitute.
+ * Reads the decision summary, tolerating the shapes providers substitute.
  *
- * Preference order is the contract field, then a single "rationale" string, and
- * finally the highlight text. The fallbacks keep a scored profile whose reply
- * merged its justification into another field instead of dropping the person.
+ * Preference order is the contract field, then a single "rationale" string,
+ * and finally the strongest point available. The fallbacks keep a scored
+ * profile whose reply merged its explanation into another field instead of
+ * dropping the person; only a reply with nothing usable at all fails.
  */
-function reasonsList(
+function summaryText(
   record: Record<string, unknown>,
-  parsedHighlights: readonly ProfileHighlight[],
-): string[] {
-  if (Array.isArray(record['reasons'])) {
-    return stringList(
-      record['reasons'],
-      'reasons',
-      MODEL_EVALUATION_LIMITS.reasonsPerProfile,
-      1,
-    );
-  }
+  positives: readonly string[],
+  negatives: readonly string[],
+): string {
+  const summary = asString(record['summary'])
+    ?.slice(0, MODEL_EVALUATION_LIMITS.summaryMaxLength)
+    .trim();
+  if (summary) return summary;
 
-  const rationale = asString(record['rationale']);
-  if (rationale) return [rationale];
+  const rationale = asString(record['rationale'])
+    ?.slice(0, MODEL_EVALUATION_LIMITS.summaryMaxLength)
+    .trim();
+  if (rationale) return rationale;
 
-  if (parsedHighlights.length > 0) {
-    return parsedHighlights
-      .slice(0, MODEL_EVALUATION_LIMITS.reasonsPerProfile)
-      .map((highlight) => highlight.text);
-  }
+  const fallbackPoint = positives[0] ?? negatives[0];
+  if (fallbackPoint) return fallbackPoint;
 
-  // Nothing usable: fail this profile with the standard contract message.
-  return stringList(
-    record['reasons'],
-    'reasons',
-    MODEL_EVALUATION_LIMITS.reasonsPerProfile,
-    1,
-  );
-}
-
-/**
- * Reads the evidence list, falling back to highlight text.
- *
- * Highlights are the model's own short justifications, so they are the closest
- * honest stand-in when a reply omits a separate evidence array.
- */
-function evidenceList(
-  record: Record<string, unknown>,
-  parsedHighlights: readonly ProfileHighlight[],
-): string[] {
-  if (Array.isArray(record['evidence'])) {
-    return stringList(
-      record['evidence'],
-      'evidence',
-      MODEL_EVALUATION_LIMITS.evidencePerProfile,
-      1,
-    );
-  }
-
-  if (parsedHighlights.length > 0) {
-    return parsedHighlights
-      .slice(0, MODEL_EVALUATION_LIMITS.evidencePerProfile)
-      .map((highlight) => highlight.text);
-  }
-
-  return stringList(
-    record['evidence'],
-    'evidence',
-    MODEL_EVALUATION_LIMITS.evidencePerProfile,
-    1,
+  throw new ModelEvaluationResponseError(
+    'The evaluation field "summary" must be a non-empty string.',
   );
 }
 
@@ -525,25 +466,34 @@ function profileEvaluation(value: unknown): ProfileModelAssessment {
     );
   }
 
-  const parsedHighlights = highlights(record['highlights']);
-  const parsedAge = estimatedAge(record['estimatedAge']);
+  const parsedPositives = points(
+    record['positives'],
+    MODEL_EVALUATION_LIMITS.positivesPerProfile,
+  );
+  const parsedNegatives = points(
+    record['negatives'],
+    MODEL_EVALUATION_LIMITS.negativesPerProfile,
+  );
+  // Some replies file the age and compensation estimates inside
+  // `imageAssessment` instead of beside it, because the photo is what they
+  // reasoned from. The values are the profile-level ones that were asked for,
+  // so read them one level down when the top level omitted them.
+  const nested = asRecord(record['imageAssessment']);
+  const parsedAge = estimatedAge(
+    record['estimatedAge'] ?? nested?.['estimatedAge'],
+  );
   const parsedImage = imageAssessment(record['imageAssessment']);
 
   return {
     profileId: requiredString(record['profileId'], 'profileId'),
     matchPercent: matchPercent(record['matchPercent']),
     estimatedTotalMonthlyCompensation: estimatedTotalMonthlyCompensation(
-      record['estimatedTotalMonthlyCompensation'],
+      record['estimatedTotalMonthlyCompensation'] ??
+        nested?.['estimatedTotalMonthlyCompensation'],
     ),
-    reasons: reasonsList(record, parsedHighlights),
-    evidence: evidenceList(record, parsedHighlights),
-    uncertainties: stringList(
-      record['uncertainties'],
-      'uncertainties',
-      MODEL_EVALUATION_LIMITS.uncertaintiesPerProfile,
-      0,
-    ),
-    highlights: parsedHighlights,
+    positives: parsedPositives,
+    negatives: parsedNegatives,
+    summary: summaryText(record, parsedPositives, parsedNegatives),
     ...(parsedAge ? { estimatedAge: parsedAge } : {}),
     ...(parsedImage ? { imageAssessment: parsedImage } : {}),
   };
@@ -706,9 +656,11 @@ export function parseModelEvaluationResponse(
   expectedProfileIds: readonly string[],
 ): ParsedModelEvaluationResponse {
   const response = asRecord(responseJson(text));
-  // Some providers name the batch array "results". The rows inside are still
-  // the scored profiles, so accept the alias rather than discarding the batch.
-  const values = response?.['evaluations'] ?? response?.['results'];
+  // Some providers name the batch array "results" or "profiles". The rows
+  // inside are still the scored profiles, so accept the aliases rather than
+  // discarding a whole batch over the envelope's key.
+  const values =
+    response?.['evaluations'] ?? response?.['results'] ?? response?.['profiles'];
 
   if (!Array.isArray(values)) {
     throw new ModelEvaluationResponseError(

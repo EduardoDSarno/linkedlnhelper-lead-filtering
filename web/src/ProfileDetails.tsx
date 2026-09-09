@@ -235,7 +235,10 @@ function ExperienceTimeline({ items }: { items: ProfileExperience[] }) {
   );
 }
 
-/** Reasons, evidence, and uncertainty lists returned by the model. */
+/**
+ * The model's fit assessment at a glance: positive points, points of
+ * concern, and a one-line summary of why it landed on this score.
+ */
 function AnalysisContent({ profile }: { profile: ProfileResult }) {
   if (!profile.modelDecision) {
     return (
@@ -247,34 +250,52 @@ function AnalysisContent({ profile }: { profile: ProfileResult }) {
 
   return (
     <div className="profile-analysis-content">
-      <LabeledList label="Por que recebeu esta nota" items={profile.reasons} />
-      <LabeledList label="Evidências consideradas" items={profile.evidence} />
-      <LabeledList
-        label="Pontos incertos"
-        items={profile.uncertainties}
-        emptyText="Nenhuma incerteza relevante registrada."
+      <PointList
+        label="Pontos positivos"
+        tone="positive"
+        items={profile.positives}
+        emptyText="Nenhum ponto positivo destacado."
       />
+      <PointList
+        label="Pontos de atenção"
+        tone="negative"
+        items={profile.negatives}
+        emptyText="Nenhum ponto de atenção destacado."
+      />
+      {profile.summary && (
+        <div className="profile-analysis-summary">
+          <span className="profile-details-label">Por que essa nota</span>
+          <p>{profile.summary}</p>
+        </div>
+      )}
     </div>
   );
 }
 
-/** A labeled bullet list that handles missing model output consistently. */
-function LabeledList({
+/** A bullet list of short model points, colored by whether it helps or hurts the fit. */
+function PointList({
   label,
+  tone,
   items,
-  emptyText = 'Não informado.',
+  emptyText,
 }: {
   label: string;
+  tone: 'positive' | 'negative';
   items?: readonly string[];
-  emptyText?: string;
+  emptyText: string;
 }) {
   return (
-    <div className="profile-labeled-list">
+    <div className={`profile-point-list is-${tone}`}>
       <span className="profile-details-label">{label}</span>
       {items?.length ? (
         <ul>
           {items.map((item, index) => (
-            <li key={`${label}-${index}`}>{item}</li>
+            <li key={`${tone}-${index}`}>
+              <span className="profile-point-icon" aria-hidden="true">
+                {tone === 'positive' ? '✓' : '!'}
+              </span>
+              <span>{item}</span>
+            </li>
           ))}
         </ul>
       ) : (

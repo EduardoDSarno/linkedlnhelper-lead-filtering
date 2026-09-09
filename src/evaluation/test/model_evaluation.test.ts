@@ -69,9 +69,9 @@ function compensationEvaluation(
       basis: ['Senior customer-success role in the supplied profile.'],
       ...compensation,
     },
-    reasons: ['Senior customer-success trajectory in the campaign market.'],
-    evidence: ['Headline is Customer Success Manager in Goiânia.'],
-    uncertainties: [],
+    positives: ['Senior customer-success trajectory in the campaign market.'],
+    negatives: [],
+    summary: 'Headline is Customer Success Manager in Goiânia.',
   };
 }
 
@@ -192,9 +192,9 @@ test('parses a supported total monthly compensation range', () => {
             confidence: 'medium',
             basis: ['Senior customer-success role in the supplied profile.'],
           },
-          reasons: ['Senior customer-success trajectory in the campaign market.'],
-          evidence: ['Headline is Customer Success Manager in Goiânia.'],
-          uncertainties: [],
+          positives: ['Senior customer-success trajectory in the campaign market.'],
+          negatives: [],
+          summary: 'Headline is Customer Success Manager in Goiânia.',
         },
       ],
     }),
@@ -211,7 +211,7 @@ test('parses a supported total monthly compensation range', () => {
   });
 });
 
-test('parses at most three highlights, dropping invalid kinds and capping text', () => {
+test('parses positives and negatives, capping count at five and text at 100 characters', () => {
   const longText = 'x'.repeat(120);
   const { assessments } = parseModelEvaluationResponse(
     JSON.stringify({
@@ -223,31 +223,37 @@ test('parses at most three highlights, dropping invalid kinds and capping text',
             status: 'insufficient_evidence',
             reasons: ['n/a'],
           },
-          reasons: ['Strong fit.'],
-          evidence: ['Headline matches.'],
-          uncertainties: [],
-          highlights: [
-            { kind: 'strength', text: 'Consistent B2B sales progression' },
-            { kind: 'bogus', text: 'invalid kind, skipped' },
-            { kind: 'warning', text: longText },
-            { kind: 'info', text: 'Based in Goiânia' },
-            { kind: 'info', text: 'over the cap, never reached' },
+          positives: [
+            'Consistent B2B sales progression',
+            'Strong headline match',
+            'Located in target region',
+            'Relevant academic background',
+            'Open to the campaign employment status',
+            'Six: over the cap, never reached',
           ],
+          negatives: [longText],
+          summary: 'Strong overall fit for the campaign.',
         },
       ],
     }),
     ['profile-1'],
   );
 
-  const highlights = assessments[0]?.highlights ?? [];
-  assert.equal(highlights.length, 3);
-  assert.deepEqual(highlights[0], { kind: 'strength', text: 'Consistent B2B sales progression' });
-  assert.equal(highlights[1]?.kind, 'warning');
-  assert.equal(highlights[1]?.text.length, 80);
-  assert.deepEqual(highlights[2], { kind: 'info', text: 'Based in Goiânia' });
+  const positives = assessments[0]?.positives ?? [];
+  const negatives = assessments[0]?.negatives ?? [];
+  assert.equal(positives.length, 5);
+  assert.deepEqual(positives, [
+    'Consistent B2B sales progression',
+    'Strong headline match',
+    'Located in target region',
+    'Relevant academic background',
+    'Open to the campaign employment status',
+  ]);
+  assert.equal(negatives.length, 1);
+  assert.equal(negatives[0]?.length, 100);
 });
 
-test('defaults highlights to an empty list when the model omits them', () => {
+test('defaults positives and negatives to an empty list when the model omits them', () => {
   const { assessments } = parseModelEvaluationResponse(
     JSON.stringify({
       evaluations: [
@@ -258,16 +264,15 @@ test('defaults highlights to an empty list when the model omits them', () => {
             status: 'insufficient_evidence',
             reasons: ['n/a'],
           },
-          reasons: ['Some fit.'],
-          evidence: ['Some evidence.'],
-          uncertainties: [],
+          summary: 'Some fit.',
         },
       ],
     }),
     ['profile-1'],
   );
 
-  assert.deepEqual(assessments[0]?.highlights, []);
+  assert.deepEqual(assessments[0]?.positives, []);
+  assert.deepEqual(assessments[0]?.negatives, []);
 });
 
 test('parses an explicit insufficient-evidence compensation result', () => {
@@ -281,9 +286,9 @@ test('parses an explicit insufficient-evidence compensation result', () => {
             status: 'insufficient_evidence',
             reasons: ['The supplied profile has no role or seniority details.'],
           },
-          reasons: ['Professional evidence is incomplete.'],
-          evidence: ['Only a profile identifier was supplied.'],
-          uncertainties: ['Current role and seniority are unknown.'],
+          positives: [],
+          negatives: ['Current role and seniority are unknown.'],
+          summary: 'Professional evidence is incomplete.',
         },
       ],
     }),
@@ -311,9 +316,9 @@ test('fails only the profile whose estimated compensation range is inverted', ()
             confidence: 'low',
             basis: ['The profile contains limited professional evidence.'],
           },
-          reasons: ['Range is invalid.'],
-          evidence: ['Salary bounds are inverted.'],
-          uncertainties: [],
+          positives: [],
+          negatives: ['Salary bounds are inverted.'],
+          summary: 'Range is invalid.',
         },
       ],
     }),
@@ -334,17 +339,18 @@ function validEvaluation(profileId: string): Record<string, unknown> {
       status: 'insufficient_evidence',
       reasons: ['No salary evidence in the profile.'],
     },
-    reasons: ['Fits the campaign.'],
-    evidence: ['Headline matches.'],
-    uncertainties: [],
-    highlights: [{ kind: 'strength', text: 'Relevant experience' }],
+    positives: ['Fits the campaign.', 'Headline matches.'],
+    negatives: [],
+    summary: 'Fits the campaign based on headline match.',
   };
 }
 
 test('keeps the valid profiles when one object in the group is malformed', () => {
   const ids = ['p1', 'p2', 'p3', 'p4', 'p5'];
   const evaluations = ids.map((id) =>
-    id === 'p3' ? { ...validEvaluation(id), reasons: [] } : validEvaluation(id),
+    id === 'p3'
+      ? { ...validEvaluation(id), matchPercent: 'invalid' }
+      : validEvaluation(id),
   );
 
   const { assessments, failures } = parseModelEvaluationResponse(
@@ -457,10 +463,10 @@ test('accepts "results" as an alias for the evaluations array', () => {
   assert.equal(failures.length, 0);
 });
 
-test('accepts a rationale string when reasons is missing', () => {
+test('accepts a rationale string when summary is missing', () => {
   const { profileId: _drop, ...rest } = validEvaluation('p1') as Record<string, unknown>;
   const item = { ...rest, profileId: 'p1', rationale: 'Strong commercial trajectory.' };
-  delete (item as Record<string, unknown>)['reasons'];
+  delete (item as Record<string, unknown>)['summary'];
 
   const { assessments, failures } = parseModelEvaluationResponse(
     JSON.stringify({ evaluations: [item] }),
@@ -468,17 +474,14 @@ test('accepts a rationale string when reasons is missing', () => {
   );
 
   assert.equal(failures.length, 0);
-  assert.deepEqual(assessments[0]?.reasons, ['Strong commercial trajectory.']);
+  assert.equal(assessments[0]?.summary, 'Strong commercial trajectory.');
 });
 
-test('falls back to highlight text when reasons and evidence are both absent', () => {
+test('falls back to the first available point when summary and rationale are both absent', () => {
   const item = validEvaluation('p1') as Record<string, unknown>;
-  delete item['reasons'];
-  delete item['evidence'];
-  item['highlights'] = [
-    { kind: 'strength', text: 'Gestor comercial com carteira B2B' },
-    { kind: 'warning', text: 'Pouco tempo na posição atual' },
-  ];
+  delete item['summary'];
+  item['positives'] = ['Gestor comercial com carteira B2B'];
+  item['negatives'] = ['Pouco tempo na posição atual'];
 
   const { assessments, failures } = parseModelEvaluationResponse(
     JSON.stringify({ evaluations: [item] }),
@@ -486,25 +489,17 @@ test('falls back to highlight text when reasons and evidence are both absent', (
   );
 
   assert.equal(failures.length, 0);
-  assert.deepEqual(assessments[0]?.reasons, [
-    'Gestor comercial com carteira B2B',
-    'Pouco tempo na posição atual',
-  ]);
-  assert.deepEqual(assessments[0]?.evidence, [
-    'Gestor comercial com carteira B2B',
-    'Pouco tempo na posição atual',
-  ]);
+  assert.equal(assessments[0]?.summary, 'Gestor comercial com carteira B2B');
 });
 
 test('recovers a whole batch in the shape a provider actually returned', () => {
   // Observed in the 604-profile run: fenced, "results" instead of
-  // "evaluations", no reasons/evidence, justification only in highlights.
+  // "evaluations", no summary, justification only in positives.
   const ids = ['p1', 'p2', 'p3', 'p4', 'p5'];
   const results = ids.map((id) => {
     const item = validEvaluation(id) as Record<string, unknown>;
-    delete item['reasons'];
-    delete item['evidence'];
-    item['highlights'] = [{ kind: 'strength', text: `Justification for ${id}` }];
+    delete item['summary'];
+    item['positives'] = [`Justification for ${id}`];
     return item;
   });
   const reply = '```json\n' + JSON.stringify({ results }) + '\n```';
@@ -524,4 +519,113 @@ test('still fails only the omitted id inside a recovered batch', () => {
 
   assert.deepEqual(assessments.map((a) => a.profileId), ['p1', 'p3']);
   assert.deepEqual(failures.map((f) => f.profileId), ['p2']);
+});
+
+test('accepts "profiles" as an alias for the evaluations array', () => {
+  const { assessments, failures } = parseModelEvaluationResponse(
+    JSON.stringify({ profiles: [validEvaluation('p1')] }),
+    ['p1'],
+  );
+
+  assert.deepEqual(assessments.map((a) => a.profileId), ['p1']);
+  assert.equal(failures.length, 0);
+});
+
+test('reads a single-string basis as a one-item list', () => {
+  const item = validEvaluation('p1');
+  item['estimatedAge'] = {
+    minimumAge: 35,
+    maximumAge: 42,
+    confidence: 'medium',
+    basis: 'Graduação iniciada em 2007; foto compatível com a faixa.',
+  };
+
+  const { assessments, failures } = parseModelEvaluationResponse(
+    JSON.stringify({ evaluations: [item] }),
+    ['p1'],
+  );
+
+  assert.equal(failures.length, 0);
+  assert.deepEqual(assessments[0]?.estimatedAge?.basis, [
+    'Graduação iniciada em 2007; foto compatível com a faixa.',
+  ]);
+});
+
+test('keeps the profile when compensation basis arrives as a single string', () => {
+  const item = compensationEvaluation({ basis: 'Cargo sênior na região.' });
+
+  const { assessments, failures } = parseModelEvaluationResponse(
+    JSON.stringify({ evaluations: [item] }),
+    ['profile-1'],
+  );
+
+  assert.equal(failures.length, 0);
+  const compensation = assessments[0]?.estimatedTotalMonthlyCompensation;
+  assert.equal(compensation?.status, 'estimated');
+  assert.deepEqual(
+    compensation?.status === 'estimated' ? compensation.basis : undefined,
+    ['Cargo sênior na região.'],
+  );
+});
+
+test('reads age and compensation misnested inside imageAssessment', () => {
+  // Observed in the 578-profile run: the reply reasoned from the photo and
+  // filed both profile-level estimates under the image block.
+  const item = validEvaluation('p1');
+  delete item['estimatedTotalMonthlyCompensation'];
+  item['imageAssessment'] = {
+    observations: 'Retrato individual, rosto nítido.',
+    estimatedAge: {
+      minimumAge: 37,
+      maximumAge: 45,
+      confidence: 'medium',
+      basis: ['Primeira função registrada em nov/2010.'],
+    },
+    estimatedTotalMonthlyCompensation: {
+      status: 'estimated',
+      currency: 'BRL',
+      minimumMonthlyCompensation: 8_000,
+      maximumMonthlyCompensation: 18_000,
+      confidence: 'low',
+      basis: ['15 anos em vendas B2B.'],
+    },
+  };
+
+  const { assessments, failures } = parseModelEvaluationResponse(
+    JSON.stringify({ evaluations: [item] }),
+    ['p1'],
+  );
+
+  assert.equal(failures.length, 0);
+  assert.equal(assessments[0]?.estimatedAge?.minimumAge, 37);
+  assert.equal(
+    assessments[0]?.estimatedTotalMonthlyCompensation.status,
+    'estimated',
+  );
+});
+
+test('prefers the top-level estimates over misnested duplicates', () => {
+  const item = validEvaluation('p1');
+  item['estimatedAge'] = {
+    minimumAge: 30,
+    maximumAge: 36,
+    confidence: 'high',
+    basis: ['Ano acadêmico datado.'],
+  };
+  item['imageAssessment'] = {
+    observations: 'Retrato individual.',
+    estimatedAge: {
+      minimumAge: 50,
+      maximumAge: 58,
+      confidence: 'low',
+      basis: ['Apenas a foto.'],
+    },
+  };
+
+  const { assessments } = parseModelEvaluationResponse(
+    JSON.stringify({ evaluations: [item] }),
+    ['p1'],
+  );
+
+  assert.equal(assessments[0]?.estimatedAge?.minimumAge, 30);
 });

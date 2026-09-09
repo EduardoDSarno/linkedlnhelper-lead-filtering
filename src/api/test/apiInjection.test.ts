@@ -32,9 +32,9 @@ function storedEvaluationRun(id: string): StoredEvaluationRun {
       status: 'insufficient_evidence' as const,
       reasons: [],
     },
-    reasons: ['fits the campaign'],
-    evidence: [],
-    uncertainties: [],
+    positives: ['fits the campaign'],
+    negatives: [],
+    summary: 'fits the campaign',
   }));
 
   return {

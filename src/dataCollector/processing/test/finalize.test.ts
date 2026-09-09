@@ -27,9 +27,9 @@ function modelEvaluation(
       status: 'insufficient_evidence',
       reasons: [],
     },
-    reasons: [],
-    evidence: [],
-    uncertainties: [],
+    positives: [],
+    negatives: [],
+    summary: '',
   };
 }
 

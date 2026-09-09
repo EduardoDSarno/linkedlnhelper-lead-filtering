@@ -66,7 +66,7 @@ export const DECISION_POLICY_MODE = {
 /**
  * Keeps every successfully scored profile available for human review.
  *
- * the model still supplies the match percentage, evidence, and uncertainties.
+ * the model still supplies the match percentage, positives, and negatives.
  */
 export interface ManualDecisionPolicyCriteria {
   mode: typeof DECISION_POLICY_MODE.manual;

@@ -256,9 +256,9 @@ function logModelEvaluation(
         estimatedTotalMonthlyCompensation:
           evaluation.estimatedTotalMonthlyCompensation,
         compensationRangeMatch: evaluation.compensationRangeMatch,
-        reasons: evaluation.reasons,
-        evidence: evaluation.evidence,
-        uncertainties: evaluation.uncertainties,
+        positives: evaluation.positives,
+        negatives: evaluation.negatives,
+        summary: evaluation.summary,
       })),
       failures: result.failures,
       tokenUsage: result.tokenUsage,
@@ -366,7 +366,7 @@ test(
           (evaluation) =>
             Object.values(MODEL_EVALUATION_DECISION).includes(
               evaluation.decision,
-            ) && evaluation.reasons.length > 0,
+            ) && evaluation.summary.length > 0,
         ),
       );
 

@@ -11,7 +11,6 @@ import type {
   Compensation,
   CompensationMatch,
   ManualDecision,
-  ProfileHighlightKind,
   ProfileResult,
 } from './api';
 
@@ -112,13 +111,6 @@ const WARN_TONE = {
   bad: { fg: '#9f1239', bg: '#fff1f2', bd: '#fecdd3' },
 } as const;
 
-/** Row chip icon and tone for each highlight category the model returns. */
-const HIGHLIGHT_STYLE: Record<ProfileHighlightKind, { icon: string; tone: keyof typeof WARN_TONE }> = {
-  strength: { icon: '✓', tone: 'good' },
-  warning: { icon: '!', tone: 'warn' },
-  info: { icon: '', tone: 'info' },
-};
-
 /** Status badge look, matching the design. */
 const STATUS_TONE = {
   approved: { text: 'Aprovado', icon: '✓', fg: '#047857', bg: '#ecfdf5', bd: '#a7f3d0' },
@@ -197,7 +189,7 @@ export function presentRow(
     warnings: warningsOf(profile),
     compensation: compensation.amount,
     compensationMeta: compensation.meta,
-    age: graded ? formatAge(profile.apparentAge) : '—',
+    age: graded ? formatAge(profile.estimatedAge) : '—',
     score: graded && profile.matchPercent != null ? String(profile.matchPercent) : '—',
     scoreSub: graded ? 'de 100' : status === REVIEW_STATUS.failed ? 'sem nota' : 'não avaliado',
     scoreFg: graded ? scoreColor(profile.matchPercent ?? 0, bands) : '#94a3b8',
@@ -354,13 +346,13 @@ function subtitleOf(profile: ProfileResult): string {
   return [profile.position, profile.company, profile.location].filter(Boolean).join(' · ');
 }
 
-/** Maximum chips shown on a row, combining critical flags and model highlights. */
+/** Maximum chips shown on a row, combining critical flags and model points. */
 const MAX_ROW_CHIPS = 3;
 
 /**
- * Row chips: critical, non-model flags first (they explain a profile that never
- * scored), then the model's categorized highlights, capped so the row stays
- * compact. Photo, compensation, and raw uncertainties are shown elsewhere.
+ * Row chips: critical, non-model flags first (they explain a profile that
+ * never scored), then the model's negatives, then its positives, capped so
+ * the row stays compact. The full lists are shown in the expanded analysis.
  */
 function warningsOf(profile: ProfileResult): PresentedWarning[] {
   const chips: PresentedWarning[] = [];
@@ -373,9 +365,12 @@ function warningsOf(profile: ProfileResult): PresentedWarning[] {
     chips.push(chip('fail', '!', profile.broadDecisionMessage || 'Falha no processamento do perfil', 'bad'));
   }
 
-  for (const [index, highlight] of (profile.highlights ?? []).entries()) {
-    const style = HIGHLIGHT_STYLE[highlight.kind];
-    chips.push(chip(`h-${index}`, style.icon, highlight.text, style.tone));
+  for (const [index, negative] of (profile.negatives ?? []).entries()) {
+    chips.push(chip(`neg-${index}`, '!', negative, 'warn'));
+  }
+
+  for (const [index, positive] of (profile.positives ?? []).entries()) {
+    chips.push(chip(`pos-${index}`, '✓', positive, 'good'));
   }
 
   return chips.slice(0, MAX_ROW_CHIPS);
@@ -425,18 +420,17 @@ function scoreColor(score: number, bands: ScoreBands): string {
 }
 
 /**
- * Formats apparent age from either the mock's range string or the backend's
- * `{ bracket, confidence }` object.
+ * Formats estimated age from either the mock's range string or the model's
+ * `{ minimumAge, maximumAge }` range.
  */
 function formatAge(value: unknown): string {
   if (value == null) return '—';
   if (typeof value === 'string') {
     return value.includes('anos') ? value : `${value} anos`;
   }
-  if (typeof value === 'object' && 'bracket' in value) {
-    const bracket = String((value as { bracket: string }).bracket);
-    if (bracket === 'unknown') return '—';
-    return `${bracket.replace('_', '–')} anos`;
+  if (typeof value === 'object' && 'minimumAge' in value && 'maximumAge' in value) {
+    const { minimumAge, maximumAge } = value as { minimumAge: number; maximumAge: number };
+    return `${minimumAge}–${maximumAge} anos`;
   }
   return '—';
 }

@@ -47,7 +47,7 @@ function broad(
 function model(
   publicId: string,
   matchPercent: number,
-  reasons: string[],
+  summary: string,
 ): ProfileModelEvaluation {
   return {
     profileId: `profile-${publicId}`,
@@ -58,9 +58,9 @@ function model(
       status: 'insufficient_evidence',
       reasons: [],
     },
-    reasons,
-    evidence: ['profile says senior engineer'],
-    uncertainties: ['tenure unclear'],
+    summary,
+    positives: ['profile says senior engineer'],
+    negatives: ['tenure unclear'],
   };
 }
 
@@ -107,7 +107,7 @@ test('buildEvaluationReportCsv reports one row per profile with the right status
       broad('b', 'Failed', 'Located outside target region'),
       broad('c', 'NextPhase', 'passed'),
     ],
-    [model('a', 90, ['strong fit, senior role'])],
+    [model('a', 90, 'strong fit, senior role')],
     [
       {
         profileIds: ['profile-c'],
@@ -124,7 +124,7 @@ test('buildEvaluationReportCsv reports one row per profile with the right status
 
   // Header (with BOM) plus one row per profile.
   assert.equal(lines.length, 4);
-  assert.ok(lines[0]?.endsWith('public_id,name,linkedin_url,broad_decision,model_decision,match_percent,reasons,evidence,uncertainties,status,final_decision,manual_reason'));
+  assert.ok(lines[0]?.endsWith('public_id,name,linkedin_url,broad_decision,model_decision,match_percent,summary,positives,negatives,status,final_decision,manual_reason'));
 
   // Approved profile: evaluated, comma-containing reason is quoted.
   assert.ok(lines[1]?.startsWith('a,Ada Lovelace,https://linkedin.com/in/a,NextPhase,approved,90,'));
@@ -148,7 +148,7 @@ test('buildEvaluationReportCsv records manual overrides with their reason', () =
 
   const stored = run(
     [broad('a', 'NextPhase', 'passed'), broad('b', 'NextPhase', 'passed')],
-    [model('a', 90, ['strong fit']), model('b', 88, ['good fit'])],
+    [model('a', 90, 'strong fit'), model('b', 88, 'good fit')],
     [],
   );
 

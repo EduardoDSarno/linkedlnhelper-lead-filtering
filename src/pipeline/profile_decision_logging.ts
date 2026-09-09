@@ -137,9 +137,9 @@ function logSuccessfulModelDecisions(
         linkedinUrl: profileLookup.get(result.profileId)?.linkedinUrl,
         decision: result.decision,
         matchPercent: result.matchPercent,
-        reasons: result.reasons,
-        evidence: result.evidence,
-        uncertainties: result.uncertainties,
+        positives: result.positives,
+        negatives: result.negatives,
+        summary: result.summary,
       },
       'Model profile decision.',
     );
