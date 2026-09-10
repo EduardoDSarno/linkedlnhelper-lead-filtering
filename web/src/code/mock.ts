@@ -270,8 +270,22 @@ function mockDetails(
         position: 'Assistente comercial',
         companyName: MOCK_PRIOR_COMPANIES[(index + 2) % MOCK_PRIOR_COMPANIES.length]!,
         location,
-        startDate: { month: 8, year: graduationYear },
+        startDate: { month: 8, year: graduationYear + 1 },
         endDate: { month: 2, year: graduationYear + 2 },
+      },
+      {
+        position: 'Estagiário comercial',
+        companyName: MOCK_PRIOR_COMPANIES[(index + 3) % MOCK_PRIOR_COMPANIES.length]!,
+        location,
+        startDate: { month: 3, year: graduationYear },
+        endDate: { month: 7, year: graduationYear + 1 },
+      },
+      {
+        position: 'Jovem aprendiz',
+        companyName: MOCK_PRIOR_COMPANIES[(index + 4) % MOCK_PRIOR_COMPANIES.length]!,
+        location,
+        startDate: { month: 2, year: graduationYear - 2 },
+        endDate: { month: 2, year: graduationYear },
       },
     ],
     // Newest first, as the providers return it — the list sorts it oldest-first
@@ -290,11 +304,23 @@ function mockDetails(
         startDate: { year: previousStartYear },
       },
       {
+        schoolName: MOCK_SCHOOLS[(index + 2) % MOCK_SCHOOLS.length]!,
+        degree: 'Extensão',
+        fieldOfStudy: 'Finanças Corporativas',
+        startDate: { year: graduationYear + 3 },
+      },
+      {
         schoolName: school,
         degree: 'Bacharelado',
         fieldOfStudy: degree,
         startDate: { year: graduationYear },
         endDate: { year: previousStartYear },
+      },
+      {
+        schoolName: 'Colégio Objetivo',
+        degree: 'Ensino Médio',
+        startDate: { year: graduationYear - 4 },
+        endDate: { year: graduationYear - 1 },
       },
     ],
     ...(hasPhoto
