@@ -54,11 +54,6 @@ select {
    fixed five-column grid so the score and status stay aligned down the page
    however tall an individual row's career blocks make it. */
 .lead-list {
-  max-width: 1180px;
-  margin: 0 auto;
-  border: 1px solid #e2e8f0;
-  border-top: none;
-  border-radius: 0 0 14px 14px;
   background: #fff;
 }
 
@@ -72,12 +67,8 @@ select {
   align-items: center;
   gap: 12px;
   flex-wrap: wrap;
-  max-width: 1180px;
-  margin: 0 auto;
-  padding: 11px 18px 11px 15px;
-  border: 1px solid #e6eaf0;
-  border-bottom: none;
-  border-radius: 14px 14px 0 0;
+  padding: 11px 22px 11px 19px;
+  border-bottom: 1px solid #e6eaf0;
   background: #fbfcfe;
   transition: background 0.13s;
 }
@@ -170,7 +161,7 @@ select {
   grid-template-columns: 26px 44px minmax(0, 1fr) minmax(64px, auto) minmax(132px, auto);
   gap: 14px;
   align-items: start;
-  padding: 14px 18px 14px 15px;
+  padding: 14px 22px 14px 19px;
   border-top: 1px solid #eceff3;
   border-left: 3px solid transparent;
   background: #fff;
@@ -179,11 +170,6 @@ select {
 .lead-row:hover {
   background: #f7faff;
 }
-.lead-row.is-selected {
-  border-left-color: #93c5fd;
-  background: #f5f9ff;
-}
-/* Checked outranks keyboard-selected: it is the state a bulk action reads. */
 .lead-row.is-checked {
   border-left-color: #2563eb;
   background: #f2f7ff;
@@ -298,8 +284,11 @@ select {
 .lead-block:focus-within {
   z-index: 2;
   border-color: #bfd6fb;
+  border-radius: 10px 10px 0 0;
   background: #fff;
-  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.09);
+  /* No downward spread: the overlay below continues this card, and a shadow
+     here would draw a seam across the join. */
+  box-shadow: 0 -2px 14px rgba(15, 23, 42, 0.09);
 }
 .lead-block-head {
   display: flex;
@@ -343,12 +332,32 @@ select {
 .lead-block:focus-within .lead-block-cue {
   opacity: 0;
 }
+/* The rest of the history hangs below the block as an overlay rather than
+   growing it. Expanding in flow would push every row beneath it down the page
+   on hover, which on a long career is a jump of several hundred pixels; as an
+   overlay the list can run to any length without moving anything. */
 .lead-block-more {
   display: none;
+  position: absolute;
+  top: 100%;
+  right: -1px;
+  left: -1px;
+  margin-top: -1px;
+  padding: 0 11px 9px;
+  border: 1px solid #bfd6fb;
+  border-top: none;
+  border-radius: 0 0 10px 10px;
+  background: #fff;
+  box-shadow: 0 8px 14px -4px rgba(15, 23, 42, 0.12);
 }
 .lead-block:hover .lead-block-more,
 .lead-block:focus-within .lead-block-more {
   display: block;
+}
+/* Nothing to reveal: keep the card square-free rather than opening a seam. */
+.lead-block:not(:has(.lead-block-more)):hover,
+.lead-block:not(:has(.lead-block-more)):focus-within {
+  border-radius: 10px;
 }
 .lead-entry {
   display: block;
@@ -567,7 +576,7 @@ select {
 /* ── Expanded analysis ──────────────────────────────────────────────────────
    Only the model's reasoning: identity and career are already on the row. */
 .profile-details {
-  padding: 12px 18px 15px 15px;
+  padding: 12px 22px 15px 19px;
   border-top: 1px solid #e4eaf3;
   border-left: 3px solid #2563eb;
   background: #fff;
