@@ -12,9 +12,10 @@ import type { ProfileCollector } from '../provider.js';
 
 const ASCII_URL_A = 'https://www.linkedin.com/in/jane-doe-123/';
 const ASCII_URL_B = 'https://www.linkedin.com/in/john-smith-456/';
-// A symbol Bebity still truncates on. Accented letters no longer belong
-// here — Bebity resolves those correctly now, so they go to Bebity.
-const REQUIRES_HARVEST_URL =
+// A slug holding a symbol. Bebity used to truncate these and return the
+// wrong member, so they were routed straight to Harvest; it resolves them
+// correctly now, so they go to Bebity like every other URL.
+const SYMBOL_URL =
   'https://www.linkedin.com/in/roberto-alencar-cfp®-cpro-i-892529a/';
 
 function stats(overrides: Partial<ApifyCollectionStats> = {}): ApifyCollectionStats {
@@ -107,11 +108,11 @@ function trackCalls(base: ProfileCollector): {
   return { collector, calls };
 }
 
-test('sends only Bebity-compatible URLs to Bebity and adapts its raw records', async () => {
+test('sends every URL to Bebity, symbol slugs included, and adapts its raw records', async () => {
   const harvestTracker = trackCalls(fakeCollector(harvestRawProfile));
 
   const result = await collectHybridProfiles(
-    [ASCII_URL_A, ASCII_URL_B, REQUIRES_HARVEST_URL],
+    [ASCII_URL_A, ASCII_URL_B, SYMBOL_URL],
     undefined,
     {},
     undefined,
@@ -121,9 +122,9 @@ test('sends only Bebity-compatible URLs to Bebity and adapts its raw records', a
     },
   );
 
-  // Exactly one Harvest call — the first pass for the symbol URL. With no
-  // Bebity failures, there is nothing for a second pass to retry.
-  assert.deepEqual(harvestTracker.calls, [[REQUIRES_HARVEST_URL]]);
+  // Harvest is never called: nothing is held back from Bebity up front, and
+  // Bebity failed on nothing, so there is nothing to retry.
+  assert.deepEqual(harvestTracker.calls, []);
   assert.equal(result.profiles.length, 3);
 
   const adaptedBebityProfile = result.profiles.find(
@@ -133,11 +134,11 @@ test('sends only Bebity-compatible URLs to Bebity and adapts its raw records', a
   assert.equal(adaptedBebityProfile?.['summary'], undefined);
 });
 
-test('retries a Bebity failure through Harvest as a separate second pass', async () => {
+test('retries a Bebity failure through Harvest, and only that failure', async () => {
   const harvestTracker = trackCalls(fakeCollector(harvestRawProfile));
 
   const result = await collectHybridProfiles(
-    [ASCII_URL_A, REQUIRES_HARVEST_URL],
+    [ASCII_URL_A, SYMBOL_URL],
     undefined,
     {},
     undefined,
@@ -147,43 +148,34 @@ test('retries a Bebity failure through Harvest as a separate second pass', async
     },
   );
 
-  // Two separate calls, not one combined batch: the first pass for the
-  // ASCII-ineligible URL fires immediately, the second pass for the Bebity
-  // failure only happens once Bebity is known to have failed on it.
-  assert.deepEqual(harvestTracker.calls, [[REQUIRES_HARVEST_URL], [ASCII_URL_A]]);
+  // One Harvest call carrying only the URL Bebity failed on — the symbol URL
+  // Bebity handled never reaches the more expensive provider.
+  assert.deepEqual(harvestTracker.calls, [[ASCII_URL_A]]);
   assert.equal(result.failures.length, 0);
   assert.equal(result.profiles.length, 2);
 });
 
-test('launches Bebity and Harvest\'s first pass concurrently, not sequentially', async () => {
-  const DELAY_MS = 60;
-  const delayedCollector = (
-    buildRawProfile: (url: string) => RawApifyProfile,
-  ): ProfileCollector =>
-    async (profileLinks) => {
-      await new Promise((resolve) => setTimeout(resolve, DELAY_MS));
-      return fakeCollector(buildRawProfile)(profileLinks);
-    };
+test('a wrong-person record Bebity returns still reaches Harvest as a failure', async () => {
+  // The name check in the shared matching engine turns a mismatched record
+  // into an ordinary failure, so a slug-truncation regression costs a slower
+  // profile rather than a wrong one. That is what makes routing symbol slugs
+  // to Bebity safe without the old up-front carve-out.
+  const harvestTracker = trackCalls(fakeCollector(harvestRawProfile));
 
-  const startedAt = Date.now();
-  await collectHybridProfiles(
-    [ASCII_URL_A, REQUIRES_HARVEST_URL],
+  const result = await collectHybridProfiles(
+    [SYMBOL_URL],
     undefined,
     {},
     undefined,
     {
-      collectBebity: delayedCollector(bebityRawProfile),
-      collectHarvest: delayedCollector(harvestRawProfile),
+      collectBebity: fakeCollector(bebityRawProfile, [SYMBOL_URL]),
+      collectHarvest: harvestTracker.collector,
     },
   );
-  const durationMs = Date.now() - startedAt;
 
-  // Sequential (Bebity fully finished, then Harvest's first pass started)
-  // would take roughly 2x DELAY_MS. Concurrent should take roughly 1x.
-  assert.ok(
-    durationMs < DELAY_MS * 2,
-    `expected the first passes to overlap, took ${durationMs}ms`,
-  );
+  assert.deepEqual(harvestTracker.calls, [[SYMBOL_URL]]);
+  assert.equal(result.failures.length, 0);
+  assert.equal(result.profiles[0]?.['about'], 'A Harvest-shaped bio.');
 });
 
 test('a failure that persists through Harvest is the only final failure, not duplicated', async () => {
@@ -205,7 +197,7 @@ test('a failure that persists through Harvest is the only final failure, not dup
 
 test('requestedProfiles reflects the true input count, not a sum that double-counts a retried URL', async () => {
   const result = await collectHybridProfiles(
-    [ASCII_URL_A, REQUIRES_HARVEST_URL],
+    [ASCII_URL_A, SYMBOL_URL],
     undefined,
     {},
     undefined,
@@ -220,23 +212,24 @@ test('requestedProfiles reflects the true input count, not a sum that double-cou
 
 test('returns each provider\'s own stats untouched, alongside the merged totals', async () => {
   const result = await collectHybridProfiles(
-    [ASCII_URL_A, REQUIRES_HARVEST_URL],
+    [ASCII_URL_A, SYMBOL_URL],
     undefined,
     {},
     undefined,
     {
-      collectBebity: fakeCollector(bebityRawProfile),
+      collectBebity: fakeCollector(bebityRawProfile, [ASCII_URL_A]),
       collectHarvest: fakeCollector(harvestRawProfile),
     },
   );
 
-  assert.equal(result.providerBreakdown.bebity.requestedProfiles, 1);
+  // Bebity is asked for the whole batch; Harvest sees only the one it lost.
+  assert.equal(result.providerBreakdown.bebity.requestedProfiles, 2);
   assert.equal(result.providerBreakdown.bebity.collectedProfiles, 1);
   assert.equal(result.providerBreakdown.harvest.requestedProfiles, 1);
   assert.equal(result.providerBreakdown.harvest.collectedProfiles, 1);
 });
 
-test('never calls Harvest when every URL is Bebity-compatible and none fail', async () => {
+test('never calls Harvest when Bebity collects the whole batch', async () => {
   const result = await collectHybridProfiles(
     [ASCII_URL_A, ASCII_URL_B],
     undefined,
@@ -250,22 +243,6 @@ test('never calls Harvest when every URL is Bebity-compatible and none fail', as
 
   assert.equal(result.profiles.length, 2);
   assert.equal(result.providerBreakdown.harvest.requestedProfiles, 0);
-});
-
-test('never calls Bebity when every URL requires Harvest', async () => {
-  const result = await collectHybridProfiles(
-    [REQUIRES_HARVEST_URL],
-    undefined,
-    {},
-    undefined,
-    {
-      collectBebity: unreachableCollector,
-      collectHarvest: fakeCollector(harvestRawProfile),
-    },
-  );
-
-  assert.equal(result.profiles.length, 1);
-  assert.equal(result.providerBreakdown.bebity.requestedProfiles, 0);
 });
 
 test('rejects an empty input instead of silently returning a no-op result', async () => {
