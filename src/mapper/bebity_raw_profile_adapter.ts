@@ -1,5 +1,7 @@
 import { resolveBrazilRegion } from './brazil_location.js';
+import { mapMonth, mapYear } from './apify_profile_mapper.js';
 import { asRecord, asString } from '../helpers/index.js';
+import type { ProfileDate } from '../profile/index.js';
 import type { RawApifyProfile } from '../dataCollector/apify_profile_collector/index.js';
 
 /** Treats a non-array provider value as an empty collection. */
@@ -7,10 +9,57 @@ function asArray(value: unknown): unknown[] {
   return Array.isArray(value) ? value : [];
 }
 
-/** Wraps a Bebity date string ("Sep 2021", "Present") into mapApifyProfile's `{ text }` shape. */
-function adaptBebityDate(value: unknown): { text: string } | undefined {
+/**
+ * The span a four-digit number in a date field has to fall in to be read as a
+ * year. LinkedIn lets people post-date a role, so the upper bound sits ahead
+ * of today rather than at it; the lower bound only has to exclude a stray
+ * number that is plainly not a working year.
+ */
+const EARLIEST_PLAUSIBLE_YEAR = 1900;
+const YEARS_AHEAD_ALLOWED = 10;
+
+/** Reads a four-digit year out of a date string, ignoring everything around it. */
+function yearFromDateText(text: string): number | undefined {
+  const year = mapYear(/\b(\d{4})\b/.exec(text)?.[1]);
+  if (year === undefined) return undefined;
+
+  const latest = new Date().getUTCFullYear() + YEARS_AHEAD_ALLOWED;
+  return year >= EARLIEST_PLAUSIBLE_YEAR && year <= latest ? year : undefined;
+}
+
+/**
+ * Splits a Bebity date string ("Sep 2021", "2018", "Present") into the
+ * `{ year, month, text }` shape Harvest already returns, so `mapDate` in
+ * apify_profile_mapper.ts and `buildCareerTimeline` both read a real year.
+ *
+ * Bebity sends dates as one display string with no numeric parts, which is
+ * why every Bebity-collected profile reached the evaluator with no age
+ * anchors at all until this parsed them out.
+ *
+ * The year and the month are read independently, and neither depends on the
+ * other being found. That matters because the scraper's locale leaks into
+ * other display text Bebity returns — locations come back as "Brésil" or
+ * "Brezilya" — so a month name may one day arrive in a language `mapMonth`
+ * does not know. Pulling the digits out separately means such a date still
+ * yields its year, which is the part age reasoning actually needs, instead of
+ * failing whole. Both parts are handed to the shared normalizers rather than
+ * validated here, so the two providers can never disagree about what "Sept"
+ * or a four-digit string means.
+ */
+function adaptBebityDate(value: unknown): ProfileDate | undefined {
   const text = asString(value);
-  return text ? { text } : undefined;
+  if (!text) return undefined;
+
+  const year = yearFromDateText(text);
+  // The leading word of "Sep 2021"; `mapMonth` rejects anything that is not
+  // really a month, so "Present" and stray prose fall away here.
+  const month = mapMonth(/^\s*([A-Za-z]+)/.exec(text)?.[1]?.toLowerCase());
+
+  return {
+    ...(year !== undefined ? { year } : {}),
+    ...(month !== undefined ? { month } : {}),
+    text,
+  };
 }
 
 /**

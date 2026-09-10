@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import { mapApifyProfile } from '../apify_profile_mapper.js';
 import { adaptBebityRawProfile } from '../bebity_raw_profile_adapter.js';
+import { buildCareerTimeline } from '../../evaluation/career_timeline.js';
 
 // A trimmed version of a real Bebity dataset record (arietamelo), captured
 // during the live Bebity/Harvest comparison benchmark.
@@ -52,7 +53,7 @@ test('renames the bio, photo, and experience/education fields Harvest uses', () 
   const [experience] = adapted['experience'] as Record<string, unknown>[];
   assert.equal(experience?.['position'], 'Especialista Santander');
   assert.equal(experience?.['title'], undefined);
-  assert.deepEqual(experience?.['startDate'], { text: 'Aug 2024' });
+  assert.deepEqual(experience?.['startDate'], { year: 2024, month: 8, text: 'Aug 2024' });
   assert.deepEqual(experience?.['endDate'], { text: 'Present' });
   assert.equal(experience?.['companyName'], 'Santander');
   assert.equal(experience?.['employmentType'], 'Full-time');
@@ -202,4 +203,84 @@ test('the adapted record maps into a fully populated Profile', () => {
   assert.equal(profile.experience[0]?.companyName, 'Santander');
   assert.equal(profile.education.length, 1);
   assert.equal(profile.education[0]?.degree, 'Master of Business Administration');
+});
+
+test('reads a year and month out of every date shape Bebity sends', () => {
+  const raw = {
+    ...BEBITY_RAW_PROFILE,
+    experience: [
+      // "Mon YYYY" and a bare "YYYY" are 89% of the dates in stored data.
+      { title: 'A', companyName: 'A', startDate: 'Mar 2024', endDate: 'Present' },
+      { title: 'B', companyName: 'B', startDate: '2011', endDate: '2014' },
+      // A month name mapDate spells out rather than abbreviates.
+      { title: 'C', companyName: 'C', startDate: 'September 2018' },
+    ],
+  };
+
+  const profile = mapApifyProfile(adaptBebityRawProfile(raw));
+
+  assert.deepEqual(profile.experience[0]?.startDate, {
+    year: 2024,
+    month: 3,
+    text: 'Mar 2024',
+  });
+  assert.deepEqual(profile.experience[0]?.endDate, { text: 'Present' });
+  assert.deepEqual(profile.experience[1]?.startDate, { year: 2011, text: '2011' });
+  assert.deepEqual(profile.experience[2]?.startDate, {
+    year: 2018,
+    month: 9,
+    text: 'September 2018',
+  });
+});
+
+test('keeps the year when the month name is in an unknown language', () => {
+  // Bebity's scrapers run under whatever locale they were assigned, and that
+  // locale already leaks into other display text it returns. The year is what
+  // age reasoning needs, so it must survive a month word we cannot read.
+  const raw = {
+    ...BEBITY_RAW_PROFILE,
+    education: [{ schoolName: 'X', degreeName: 'Y', startDate: 'márc 1994' }],
+  };
+
+  const profile = mapApifyProfile(adaptBebityRawProfile(raw));
+
+  assert.deepEqual(profile.education[0]?.startDate, {
+    year: 1994,
+    text: 'márc 1994',
+  });
+});
+
+test('ignores a four-digit number that cannot be a year', () => {
+  const raw = {
+    ...BEBITY_RAW_PROFILE,
+    experience: [
+      { title: 'A', companyName: 'A', startDate: 'Turma 1042' },
+      { title: 'B', companyName: 'B', startDate: 'Grade: MBA' },
+    ],
+  };
+
+  const profile = mapApifyProfile(adaptBebityRawProfile(raw));
+
+  assert.deepEqual(profile.experience[0]?.startDate, { text: 'Turma 1042' });
+  assert.deepEqual(profile.experience[1]?.startDate, { text: 'Grade: MBA' });
+});
+
+test('gives buildCareerTimeline the anchors it reads the age from', () => {
+  const raw = {
+    ...BEBITY_RAW_PROFILE,
+    experience: [
+      { title: 'Analista', companyName: 'A', startDate: 'Feb 1998', endDate: 'Present' },
+    ],
+    education: [
+      { schoolName: 'Universidade de Fortaleza', degreeName: 'Bacharelado, Informática', startDate: '1994', endDate: '1998' },
+      { schoolName: 'FGV', degreeName: 'MBA, Gestão Empresarial', startDate: 'Jan 2009' },
+    ],
+  };
+
+  const profile = mapApifyProfile(adaptBebityRawProfile(raw));
+  const timeline = buildCareerTimeline(profile.experience, profile.education);
+
+  assert.equal(timeline.firstAcademicYear, 1994);
+  assert.equal(timeline.firstProfessionalYear, 1998);
+  assert.equal(timeline.academicEntries[0]?.startYear, 1994);
 });

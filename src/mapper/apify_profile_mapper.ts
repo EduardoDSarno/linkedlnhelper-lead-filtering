@@ -53,7 +53,7 @@ function recordString(
 }
 
 /** Maps a positive numeric or four-digit text year without inventing precision. */
-function mapYear(value: unknown): number | undefined {
+export function mapYear(value: unknown): number | undefined {
   if (typeof value === 'number' && Number.isInteger(value) && value > 0) {
     return value;
   }
@@ -65,7 +65,7 @@ function mapYear(value: unknown): number | undefined {
 }
 
 /** Maps a numeric or English provider month into the normalized month number. */
-function mapMonth(value: unknown): number | undefined {
+export function mapMonth(value: unknown): number | undefined {
   if (
     typeof value === 'number' &&
     Number.isInteger(value) &&
