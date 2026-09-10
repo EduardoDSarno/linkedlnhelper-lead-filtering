@@ -17,7 +17,6 @@ function LinkedInIcon() {
 /** Props for one evaluated-profile row. */
 interface ProfileRowProps {
   row: PresentedRow;
-  selected: boolean;
   expanded: boolean;
   checked: boolean;
   onSelect: () => void;
@@ -29,15 +28,15 @@ interface ProfileRowProps {
 /**
  * One profile in the review list.
  *
- * The row carries every field a decision normally needs — identity, the two
- * most recent roles, the two oldest courses, the estimates, the score and the
- * status — so the expanded panel is only for the model's reasoning. The career
- * blocks reveal the rest of their history on hover rather than on a click,
- * which keeps a scan of twenty rows to zero navigation.
+ * The row carries every field a decision normally needs — identity, the start
+ * of the career and of the education, the estimates, the score and the status
+ * — so the expanded panel is only for the model's reasoning. Both career
+ * blocks read oldest first and reveal the rest of their history on hover
+ * rather than on a click, which keeps a scan of twenty rows to zero
+ * navigation.
  */
 export function ProfileRow({
   row,
-  selected,
   expanded,
   checked,
   onSelect,
@@ -54,7 +53,7 @@ export function ProfileRow({
 
   return (
     <div
-      className={`lead-row${selected ? ' is-selected' : ''}${checked ? ' is-checked' : ''}${expanded ? ' is-open' : ''}`}
+      className={`lead-row${checked ? ' is-checked' : ''}${expanded ? ' is-open' : ''}`}
       data-row={row.publicId}
       onClick={onSelect}
     >
@@ -169,7 +168,7 @@ export function ProfileRow({
         <span className="lead-acts">
           <button
             type="button"
-            title="Aprovar (A)"
+            title="Aprovar"
             className="lead-act"
             onClick={(event) => {
               event.stopPropagation();
@@ -185,7 +184,7 @@ export function ProfileRow({
           </button>
           <button
             type="button"
-            title="Reprovar (R)"
+            title="Reprovar"
             className="lead-act"
             onClick={(event) => {
               event.stopPropagation();

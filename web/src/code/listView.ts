@@ -107,14 +107,15 @@ export interface PresentedRow {
   initials: string;
   avBg: string;
   avFg: string;
+  /** The campaign's seniority rung, or the raw current title when none fits. */
   seniority?: string;
   location?: string;
   /** No role is currently open, so the row carries the "Desempregado" chip. */
   jobless: boolean;
   warnings: PresentedWarning[];
-  /** Every role, newest first; the first two show without interaction. */
+  /** Every role, oldest first; the first two show without interaction. */
   jobs: PresentedEntry[];
-  /** Every course, oldest first, so the age-anchoring degree stays visible. */
+  /** Every course, oldest first, so the age-anchoring degree leads. */
   education: PresentedEntry[];
   /** "5 cargos · 11 anos", or a gap notice when nothing is current. */
   experienceTag: string;
@@ -185,6 +186,13 @@ const CONFIDENCE_LABEL = {
   medium: 'média',
   low: 'baixa',
 } as const;
+
+/**
+ * Longest raw job title the chip carries before it is cut short. Real titles
+ * run to "Analista de Comunicação Pleno - PR | Nutriex e Rennova"; past this
+ * the chip stops being a chip and starts crowding the name line.
+ */
+const LONGEST_TITLE_CHIP = 34;
 
 /** Job-title patterns used only to paint a seniority chip. */
 const SENIORITY_MATCHERS: ReadonlyArray<readonly [RegExp, string]> = [
@@ -516,21 +524,31 @@ function monthIndex(date: ProfileDate): number {
   return (date.year ?? 0) * MONTHS_IN_YEAR + (date.month ?? 1);
 }
 
-/** Roles as the block paints them, newest first — the provider's own order. */
+/**
+ * Roles as the block paints them, oldest first — the same direction as
+ * education, so both blocks read as one timeline running the same way.
+ *
+ * Roles with no usable date sort last rather than being dropped, since an
+ * undated role is still part of the history.
+ */
 function presentJobs(
   experience: readonly ProfileExperience[],
   jobless: boolean,
 ): PresentedEntry[] {
-  const entries = experience.map((role, index) => ({
-    key: `job-${String(index)}`,
-    text: [role.position, role.companyName].filter(Boolean).join(' · '),
-    when: formatPeriod(role.startDate, role.endDate),
-  }));
+  const entries = [...experience]
+    .map((role, index) => ({ role, index }))
+    .sort((a, b) => (roleYear(a.role) ?? Infinity) - (roleYear(b.role) ?? Infinity))
+    .map(({ role, index }) => ({
+      key: `job-${String(index)}`,
+      text: [role.position, role.companyName].filter(Boolean).join(' · '),
+      when: formatPeriod(role.startDate, role.endDate),
+    }));
 
   if (!jobless) return entries;
 
-  // Lead with the gap itself, so "what is this person doing now" is answered
-  // by the first line rather than by inference from the newest end date.
+  // Pinned above the timeline rather than placed in it: this is a status, not
+  // another role, and it answers "what is this person doing now" without the
+  // reader having to reach the end of the list to find out.
   const months = monthsSinceLastRole(experience);
   return [
     {
@@ -570,6 +588,11 @@ function presentEducation(education: readonly ProfileEducation[]): PresentedEntr
 /** The year a course is filed under: when it started, else when it ended. */
 function courseYear(course: ProfileEducation): number | undefined {
   return course.startDate?.year ?? course.endDate?.year;
+}
+
+/** The year a role is filed under, on the same rule as {@link courseYear}. */
+function roleYear(role: ProfileExperience): number | undefined {
+  return role.startDate?.year ?? role.endDate?.year;
 }
 
 /** Formats a start/end pair without pretending missing dates are known. */
@@ -636,13 +659,26 @@ function avatarTone(publicId: string): readonly [string, string] {
   return AVATAR_TONES[hash]!;
 }
 
-/** Best-effort seniority chip from the current job title; omitted when unknown. */
+/**
+ * The chip beside the name: the campaign's seniority rung when the current
+ * title maps onto one, otherwise the title itself.
+ *
+ * Falling back to the raw title matters more than it looks. Against real
+ * profiles the ladder only matches about half of them — "Corretor
+ * imobiliário", "Sócio-fundador" and "Comunicóloga" are real current titles
+ * with no rung — and since the row lists experience oldest first, the current
+ * role is not otherwise visible without hovering. An unmatched title left the
+ * row with nothing at all to say what the person does now.
+ */
 function seniorityOf(position: string | undefined): string | undefined {
-  if (!position) return undefined;
+  const title = position?.trim();
+  if (!title) return undefined;
   for (const [pattern, label] of SENIORITY_MATCHERS) {
-    if (pattern.test(position)) return label;
+    if (pattern.test(title)) return label;
   }
-  return undefined;
+  return title.length > LONGEST_TITLE_CHIP
+    ? `${title.slice(0, LONGEST_TITLE_CHIP).trimEnd()}…`
+    : title;
 }
 
 /** Short Portuguese date for the run summary line. */
