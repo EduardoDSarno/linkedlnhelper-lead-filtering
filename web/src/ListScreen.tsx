@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { ProfileDetails } from './ProfileDetails';
 import { ProfileRow } from './ProfileRow';
@@ -88,12 +88,15 @@ function CampaignName({ name, onRename }: { name: string; onRename: (name: strin
  * sort, which row is selected) stays local because it does not need to persist.
  */
 export function ListScreen({ flow }: { flow: ReviewFlow }) {
-  const { decide, results, overrides, criteria, status, loading } = flow;
+  const { decide, decideMany, results, overrides, criteria, status, loading } = flow;
   const [tab, setTab] = useState<ListTab>(LIST_TAB.all);
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState<ListSort>(LIST_SORT.score);
   const [selected, setSelected] = useState(0);
   const [expandedPublicId, setExpandedPublicId] = useState<string | undefined>(undefined);
+  const [checked, setChecked] = useState<ReadonlySet<string>>(() => new Set());
+  // Anchor for shift-click, which selects every row between it and the click.
+  const [anchor, setAnchor] = useState<string | undefined>(undefined);
 
   const bands = { approveMin: criteria.approveMin, manualMin: criteria.manualMin };
   const counts = useMemo(() => tabCounts(results, overrides), [results, overrides]);
@@ -104,6 +107,44 @@ export function ListScreen({ flow }: { flow: ReviewFlow }) {
 
   const selectedIndex = visible.length === 0 ? 0 : Math.min(selected, visible.length - 1);
   const selectedId = visible[selectedIndex]?.publicId;
+
+  // Only rows the current tab and search actually show can be acted on, so a
+  // selection left behind by a tab change never applies a decision off-screen.
+  const checkedVisible = useMemo(
+    () => visible.filter((profile) => checked.has(profile.publicId)).map((p) => p.publicId),
+    [visible, checked],
+  );
+
+  const clearChecked = () => setChecked(new Set());
+
+  const applyBulk = (action: 'approved' | 'rejected' | 'manual') => {
+    decideMany(checkedVisible, action);
+    clearChecked();
+  };
+
+  /** Toggles one row, or extends the selection from the anchor on shift-click. */
+  const toggleChecked = (publicId: string, shiftKey: boolean) => {
+    setChecked((current) => {
+      const next = new Set(current);
+
+      if (shiftKey && anchor) {
+        const ids = visible.map((profile) => profile.publicId);
+        const from = ids.indexOf(anchor);
+        const to = ids.indexOf(publicId);
+        if (from !== -1 && to !== -1) {
+          for (const id of ids.slice(Math.min(from, to), Math.max(from, to) + 1)) {
+            next.add(id);
+          }
+          return next;
+        }
+      }
+
+      if (next.has(publicId)) next.delete(publicId);
+      else next.add(publicId);
+      return next;
+    });
+    setAnchor(publicId);
+  };
 
   useEffect(() => {
     if (!selectedId) return;
@@ -284,7 +325,25 @@ export function ListScreen({ flow }: { flow: ReviewFlow }) {
         </div>
       </div>
 
-      <div className="sc" style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: '0 0 60px' }}>
+      <div
+        className="sc"
+        style={{ flex: 1, minHeight: 0, overflow: 'auto', background: '#eef1f6', padding: '0 24px 70px' }}
+      >
+        <SelectionBar
+          checkedCount={checkedVisible.length}
+          visibleCount={visible.length}
+          counts={counts}
+          onToggleAll={() => {
+            if (checkedVisible.length === visible.length) clearChecked();
+            else setChecked(new Set(visible.map((profile) => profile.publicId)));
+          }}
+          onApprove={() => applyBulk('approved')}
+          onReject={() => applyBulk('rejected')}
+          onManual={() => applyBulk('manual')}
+          onClear={clearChecked}
+        />
+
+        <div className="lead-list">
         {visible.length === 0 ? (
           <div style={{ padding: '70px 24px', textAlign: 'center', color: '#94a3b8' }}>
             <div style={{ fontSize: 15, fontWeight: 600, color: '#334155' }}>
@@ -305,11 +364,16 @@ export function ListScreen({ flow }: { flow: ReviewFlow }) {
                   row={presented}
                   selected={index === selectedIndex}
                   expanded={expanded}
+                  checked={checked.has(profile.publicId)}
                   onSelect={() => {
                     setSelected(index);
                     setExpandedPublicId((current) =>
                       current === profile.publicId ? undefined : profile.publicId,
                     );
+                  }}
+                  onCheck={(event) => {
+                    setSelected(index);
+                    toggleChecked(profile.publicId, event.shiftKey);
                   }}
                   onApprove={() => decide(profile.publicId, 'approved')}
                   onReject={() => decide(profile.publicId, 'rejected')}
@@ -325,8 +389,95 @@ export function ListScreen({ flow }: { flow: ReviewFlow }) {
             );
           })
         )}
+        </div>
       </div>
     </main>
+  );
+}
+
+/** Props for the bulk-action bar above the rows. */
+interface SelectionBarProps {
+  checkedCount: number;
+  visibleCount: number;
+  counts: Record<ListTab, number>;
+  onToggleAll: () => void;
+  onApprove: () => void;
+  onReject: () => void;
+  onManual: () => void;
+  onClear: () => void;
+}
+
+/**
+ * The bar that turns a selection into one decision for many profiles.
+ *
+ * With nothing selected it explains how selection works rather than showing
+ * disabled buttons, and it always carries the live decision tally so the
+ * reviewer can see the shape of the run without counting rows.
+ */
+function SelectionBar({
+  checkedCount,
+  visibleCount,
+  counts,
+  onToggleAll,
+  onApprove,
+  onReject,
+  onManual,
+  onClear,
+}: SelectionBarProps) {
+  const master = useRef<HTMLInputElement>(null);
+  const some = checkedCount > 0;
+  const all = visibleCount > 0 && checkedCount === visibleCount;
+
+  // `indeterminate` is a DOM property with no HTML attribute, so a partial
+  // selection can only be painted through the node itself.
+  useEffect(() => {
+    if (master.current) master.current.indeterminate = some && !all;
+  }, [some, all]);
+
+  return (
+    <div className={`bulk-bar${some ? ' is-active' : ''}`}>
+      <label className="bulk-select-all">
+        <input
+          ref={master}
+          type="checkbox"
+          className="cbx"
+          checked={all}
+          disabled={visibleCount === 0}
+          onChange={onToggleAll}
+        />
+        <span style={{ color: some ? '#1d4ed8' : '#334155' }}>
+          {some ? `${String(checkedCount)} de ${String(visibleCount)} selecionados` : 'Selecionar todos'}
+        </span>
+      </label>
+
+      {some ? (
+        <span className="bulk-actions">
+          <span className="bulk-divider" />
+          <button type="button" className="bulk-btn is-approve" onClick={onApprove}>
+            Aprovar {checkedCount} selecionados
+          </button>
+          <button type="button" className="bulk-btn is-reject" onClick={onReject}>
+            Reprovar {checkedCount}
+          </button>
+          <button type="button" className="bulk-btn is-manual" onClick={onManual}>
+            Marcar como manual
+          </button>
+          <button type="button" className="bulk-btn is-plain" onClick={onClear}>
+            Limpar seleção
+          </button>
+        </span>
+      ) : (
+        <span className="bulk-hint">
+          Selecione perfis para aprovar, reprovar ou marcar em lote.{' '}
+          <b>Shift + clique</b> seleciona um intervalo.
+        </span>
+      )}
+
+      <span className="bulk-tally">
+        {counts[LIST_TAB.approved]} aprovados · {counts[LIST_TAB.manual]} manuais ·{' '}
+        {counts[LIST_TAB.rejected]} reprovados
+      </span>
+    </div>
   );
 }
 

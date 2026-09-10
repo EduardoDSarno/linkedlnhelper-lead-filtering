@@ -1,6 +1,9 @@
-import { useState } from 'react';
+import { useState, type MouseEvent } from 'react';
 
-import type { PresentedRow, PresentedWarning } from './code/listView';
+import type { PresentedEntry, PresentedRow, PresentedWarning } from './code/listView';
+
+/** How many entries in a block are readable without hovering it. */
+const ALWAYS_VISIBLE_ENTRIES = 2;
 
 /** LinkedIn mark used as the outbound profile link. */
 function LinkedInIcon() {
@@ -16,20 +19,29 @@ interface ProfileRowProps {
   row: PresentedRow;
   selected: boolean;
   expanded: boolean;
+  checked: boolean;
   onSelect: () => void;
+  onCheck: (event: MouseEvent) => void;
   onApprove: () => void;
   onReject: () => void;
 }
 
 /**
- * One profile in the review list: identity, compensation, age, score, status,
- * and the approve/reject actions that appear more clearly on hover.
+ * One profile in the review list.
+ *
+ * The row carries every field a decision normally needs — identity, the two
+ * most recent roles, the two oldest courses, the estimates, the score and the
+ * status — so the expanded panel is only for the model's reasoning. The career
+ * blocks reveal the rest of their history on hover rather than on a click,
+ * which keeps a scan of twenty rows to zero navigation.
  */
 export function ProfileRow({
   row,
   selected,
   expanded,
+  checked,
   onSelect,
+  onCheck,
   onApprove,
   onReject,
 }: ProfileRowProps) {
@@ -38,12 +50,25 @@ export function ProfileRow({
   const [photoFailed, setPhotoFailed] = useState(false);
   const showPhoto = row.photo && !photoFailed;
 
+  const stop = (event: MouseEvent) => event.stopPropagation();
+
   return (
     <div
-      className={`lead-row${selected ? ' is-selected' : ''}${row.override ? ' has-override' : ''}`}
+      className={`lead-row${selected ? ' is-selected' : ''}${checked ? ' is-checked' : ''}${expanded ? ' is-open' : ''}`}
       data-row={row.publicId}
       onClick={onSelect}
     >
+      <span className="lead-check" onClick={stop}>
+        <input
+          type="checkbox"
+          className="cbx"
+          checked={checked}
+          aria-label={`Selecionar ${row.name}`}
+          onChange={() => undefined}
+          onClick={onCheck}
+        />
+      </span>
+
       {showPhoto ? (
         <span className="row-avatar">
           <img
@@ -59,185 +84,188 @@ export function ProfileRow({
           </span>
         </span>
       ) : (
-        <span
-          style={{
-            width: 38,
-            height: 38,
-            flex: 'none',
-            borderRadius: '50%',
-            background: row.avBg,
-            color: row.avFg,
-            display: 'grid',
-            placeItems: 'center',
-            fontSize: 12.5,
-            fontWeight: 600,
-          }}
-        >
+        <span className="lead-initials" style={{ background: row.avBg, color: row.avFg }}>
           {row.initials}
         </span>
       )}
 
-      <span style={{ minWidth: 0 }}>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-          <span
-            style={{
-              fontSize: 14,
-              fontWeight: 600,
-              letterSpacing: '-0.01em',
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-            }}
-          >
-            {row.name}
-          </span>
+      <span className="lead-main">
+        <span className="lead-identity">
+          <span className="lead-name">{row.name}</span>
           <a
             href={row.url}
             target="_blank"
             rel="noreferrer"
             className="lead-in"
-            onClick={(event) => event.stopPropagation()}
+            onClick={stop}
             aria-label={`LinkedIn de ${row.name}`}
           >
             <LinkedInIcon />
           </a>
-          {row.seniority && (
-            <span
-              style={{
-                flex: 'none',
-                fontSize: 11,
-                fontWeight: 600,
-                color: '#475569',
-                background: '#f1f5f9',
-                padding: '2px 7px',
-                borderRadius: 6,
-              }}
-            >
-              {row.seniority}
+          {row.seniority && <span className="lead-tag">{row.seniority}</span>}
+          {row.jobless && <span className="lead-tag is-jobless">Desempregado</span>}
+          {row.location && <span className="lead-location">{row.location}</span>}
+
+          <span className="lead-metrics">
+            <span>
+              R$ <b>{row.compensationAmount}</b>/mês{' '}
+              <span className="lead-qualifier">conf. {row.compensationConfidence}</span>
             </span>
-          )}
+            <span>
+              <b>{row.ageRange}</b> anos <span className="lead-qualifier">est.</span>
+            </span>
+          </span>
+        </span>
+
+        <span className="lead-blocks">
+          <CareerBlock
+            label="Experiência"
+            tag={row.experienceTag}
+            tagWarn={row.experienceTagWarn}
+            entries={row.jobs}
+            emptyText="Histórico profissional não informado"
+            onClick={stop}
+          />
+          <CareerBlock
+            label="Formação"
+            tag={row.educationTag}
+            entries={row.education}
+            emptyText="Formação não informada"
+            onClick={stop}
+          />
+        </span>
+
+        <span className="lead-footer">
+          {row.warnings.map((warning) => (
+            <RowChip key={warning.key} warning={warning} />
+          ))}
           <button
             type="button"
-            className="lead-expand-toggle"
-            aria-label={`${expanded ? 'Recolher' : 'Expandir'} perfil de ${row.name}`}
+            className="lead-analysis-toggle"
             aria-expanded={expanded}
             onClick={(event) => {
               event.stopPropagation();
               onSelect();
             }}
           >
-            {expanded ? '⌃' : '⌄'}
+            {expanded ? 'Recolher ↑' : 'Ver análise da IA ↓'}
           </button>
         </span>
+      </span>
+
+      <span className="lead-score">
+        <span style={{ color: row.scoreFg }}>{row.score}</span>
+        <span className="lead-score-sub">{row.scoreSub}</span>
+      </span>
+
+      <span className="lead-decision">
         <span
-          style={{
-            display: 'block',
-            fontSize: 12.5,
-            color: '#64748b',
-            marginTop: 3,
-            whiteSpace: 'nowrap',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-          }}
-        >
-          {row.line2}
-        </span>
-        {row.warnings.length > 0 && (
-          <span className="lead-chips">
-            {row.warnings.map((warning) => (
-              <RowChip key={warning.key} warning={warning} />
-            ))}
-          </span>
-        )}
-      </span>
-
-      <span style={{ fontSize: 12, lineHeight: 1.35 }}>
-        <span style={{ display: 'block', fontWeight: 600, color: '#334155', whiteSpace: 'nowrap' }}>
-          {row.compensation}
-        </span>
-        <span style={{ display: 'block', color: '#94a3b8', marginTop: 1 }}>{row.compensationMeta}</span>
-      </span>
-
-      <span style={{ fontSize: 12, lineHeight: 1.35 }}>
-        <span style={{ display: 'block', fontWeight: 600, color: '#334155' }}>{row.age}</span>
-        <span style={{ display: 'block', color: '#94a3b8', marginTop: 1 }}>estimativa</span>
-      </span>
-
-      <span style={{ textAlign: 'right' }}>
-        <span
-          style={{
-            display: 'block',
-            fontSize: 19,
-            fontWeight: 700,
-            letterSpacing: '-0.02em',
-            color: row.scoreFg,
-          }}
-        >
-          {row.score}
-        </span>
-        <span style={{ display: 'block', fontSize: 10.5, color: '#94a3b8', marginTop: -1 }}>
-          {row.scoreSub}
-        </span>
-      </span>
-
-      <span style={{ display: 'flex', justifyContent: 'flex-end' }}>
-        <span
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 5,
-            fontSize: 11.5,
-            fontWeight: 600,
-            color: row.statusFg,
-            background: row.statusBg,
-            border: `1px solid ${row.statusBd}`,
-            padding: '3px 9px',
-            borderRadius: 7,
-            whiteSpace: 'nowrap',
-          }}
+          className="lead-status"
+          style={{ color: row.statusFg, background: row.statusBg, borderColor: row.statusBd }}
         >
           {row.statusIcon} {row.statusText}
-          {row.statusBy && (
-            <span style={{ fontWeight: 500, opacity: 0.72 }}>{row.statusBy}</span>
-          )}
+          {row.statusBy && <span className="lead-status-by">{row.statusBy}</span>}
+        </span>
+        <span className="lead-acts">
+          <button
+            type="button"
+            title="Aprovar (A)"
+            className="lead-act"
+            onClick={(event) => {
+              event.stopPropagation();
+              onApprove();
+            }}
+            style={{
+              color: approved ? '#fff' : '#047857',
+              background: approved ? '#059669' : '#fff',
+              border: `1px solid ${approved ? '#059669' : '#a7f3d0'}`,
+            }}
+          >
+            Aprovar
+          </button>
+          <button
+            type="button"
+            title="Reprovar (R)"
+            className="lead-act"
+            onClick={(event) => {
+              event.stopPropagation();
+              onReject();
+            }}
+            style={{
+              color: rejected ? '#fff' : '#be123c',
+              background: rejected ? '#e11d48' : '#fff',
+              border: `1px solid ${rejected ? '#e11d48' : '#fecdd3'}`,
+            }}
+          >
+            Reprovar
+          </button>
         </span>
       </span>
-
-      <span className="lead-acts">
-        <button
-          type="button"
-          title="Aprovar (A)"
-          className="lead-act"
-          onClick={(event) => {
-            event.stopPropagation();
-            onApprove();
-          }}
-          style={{
-            color: approved ? '#fff' : '#047857',
-            background: approved ? '#059669' : '#fff',
-            border: `1px solid ${approved ? '#059669' : '#a7f3d0'}`,
-          }}
-        >
-          Aprovar
-        </button>
-        <button
-          type="button"
-          title="Reprovar (R)"
-          className="lead-act"
-          onClick={(event) => {
-            event.stopPropagation();
-            onReject();
-          }}
-          style={{
-            color: rejected ? '#fff' : '#be123c',
-            background: rejected ? '#e11d48' : '#fff',
-            border: `1px solid ${rejected ? '#e11d48' : '#fecdd3'}`,
-          }}
-        >
-          Reprovar
-        </button>
-      </span>
     </div>
+  );
+}
+
+/**
+ * One career block: a labelled count, the two entries that matter, and the
+ * rest revealed on hover or keyboard focus.
+ *
+ * `tabindex` is what makes the hover reveal reachable without a mouse — the
+ * same `:focus-within` rule that opens it on focus opens it on hover.
+ */
+function CareerBlock({
+  label,
+  tag,
+  tagWarn,
+  entries,
+  emptyText,
+  onClick,
+}: {
+  label: string;
+  tag: string;
+  tagWarn?: boolean;
+  entries: PresentedEntry[];
+  emptyText: string;
+  onClick: (event: MouseEvent) => void;
+}) {
+  const head = entries.slice(0, ALWAYS_VISIBLE_ENTRIES);
+  const rest = entries.slice(ALWAYS_VISIBLE_ENTRIES);
+
+  return (
+    <span className="lead-block" tabIndex={0} onClick={onClick}>
+      <span className="lead-block-head">
+        <span className="lead-block-label">{label}</span>
+        <span className={`lead-block-tag${tagWarn ? ' is-warn' : ''}`}>{tag}</span>
+        {rest.length > 0 && <span className="lead-block-cue">passe o mouse ↓</span>}
+      </span>
+      {head.length === 0 ? (
+        <span className="lead-entry is-empty">{emptyText}</span>
+      ) : (
+        head.map((entry, index) => (
+          <BlockEntry key={entry.key} entry={entry} lead={index === 0} />
+        ))
+      )}
+      {rest.length > 0 && (
+        <span className="lead-block-more">
+          {rest.map((entry) => (
+            <BlockEntry key={entry.key} entry={entry} lead={false} />
+          ))}
+        </span>
+      )}
+    </span>
+  );
+}
+
+/** One line of a career block. The first entry reads darker than the rest. */
+function BlockEntry({ entry, lead }: { entry: PresentedEntry; lead: boolean }) {
+  const className = entry.alert
+    ? 'lead-entry is-alert'
+    : `lead-entry${lead ? ' is-lead' : ''}`;
+
+  return (
+    <span className={className}>
+      {entry.text}
+      {entry.when && <span className="lead-entry-when"> · {entry.when}</span>}
+    </span>
   );
 }
 

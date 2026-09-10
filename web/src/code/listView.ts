@@ -9,10 +9,21 @@
 
 import type {
   Compensation,
-  CompensationMatch,
   ManualDecision,
+  ProfileDate,
+  ProfileEducation,
+  ProfileExperience,
   ProfileResult,
 } from './api';
+
+/** Portuguese month abbreviations, indexed by month number minus one. */
+const MONTH_LABELS = [
+  'jan', 'fev', 'mar', 'abr', 'mai', 'jun',
+  'jul', 'ago', 'set', 'out', 'nov', 'dez',
+] as const;
+
+/** Puts two partial dates on one axis so they can be compared directly. */
+const MONTHS_IN_YEAR = 12;
 
 /** Tabs on the review list, in display order. */
 export const LIST_TAB = {
@@ -76,6 +87,17 @@ export interface PresentedWarning {
   bd: string;
 }
 
+/** One line inside a row's experience or education block. */
+export interface PresentedEntry {
+  key: string;
+  /** "Gerente comercial · Nestlé", or "Bacharelado em Informática · UFC". */
+  text: string;
+  /** "mar 2024 – atual", or a single year for a course. */
+  when: string;
+  /** Set on the "no current role" placeholder, which paints amber. */
+  alert?: boolean;
+}
+
 /** Everything {@link ProfileRow} needs to paint one profile. */
 export interface PresentedRow {
   publicId: string;
@@ -86,11 +108,24 @@ export interface PresentedRow {
   avBg: string;
   avFg: string;
   seniority?: string;
-  line2: string;
+  location?: string;
+  /** No role is currently open, so the row carries the "Desempregado" chip. */
+  jobless: boolean;
   warnings: PresentedWarning[];
-  compensation: string;
-  compensationMeta: string;
-  age: string;
+  /** Every role, newest first; the first two show without interaction. */
+  jobs: PresentedEntry[];
+  /** Every course, oldest first, so the age-anchoring degree stays visible. */
+  education: PresentedEntry[];
+  /** "5 cargos · 11 anos", or a gap notice when nothing is current. */
+  experienceTag: string;
+  /** Paints {@link experienceTag} amber, for a gap rather than a plain count. */
+  experienceTagWarn: boolean;
+  educationTag: string;
+  /** "13–22 mil", shown between a "R$" and a "/mês" the row supplies. */
+  compensationAmount: string;
+  compensationConfidence: string;
+  /** "31–38", or an em dash when the model gave no range. */
+  ageRange: string;
   score: string;
   scoreSub: string;
   scoreFg: string;
@@ -174,7 +209,9 @@ export function presentRow(
   const graded = isGraded(profile);
   const tone = STATUS_TONE[status];
   const [avBg, avFg] = avatarTone(profile.publicId);
-  const compensation = presentCompensation(profile.compensation, profile.compensationMatch, graded);
+  const compensation = presentCompensation(profile.compensation, graded);
+  const experience = profile.details?.experience ?? [];
+  const jobless = experience.length > 0 && !experience.some(isCurrentRole);
 
   return {
     publicId: profile.publicId,
@@ -185,11 +222,17 @@ export function presentRow(
     avBg,
     avFg,
     seniority: seniorityOf(profile.position),
-    line2: subtitleOf(profile),
+    ...(profile.location ? { location: profile.location } : {}),
+    jobless,
     warnings: warningsOf(profile),
-    compensation: compensation.amount,
-    compensationMeta: compensation.meta,
-    age: graded ? formatAge(profile.estimatedAge) : '—',
+    jobs: presentJobs(experience, jobless),
+    education: presentEducation(profile.details?.education ?? []),
+    experienceTag: experienceTag(experience, jobless),
+    experienceTagWarn: jobless,
+    educationTag: countTag(profile.details?.education?.length ?? 0, 'curso'),
+    compensationAmount: compensation.amount,
+    compensationConfidence: compensation.confidence,
+    ageRange: graded ? formatAgeRange(profile.estimatedAge) : '—',
     score: graded && profile.matchPercent != null ? String(profile.matchPercent) : '—',
     scoreSub: graded ? 'de 100' : status === REVIEW_STATUS.failed ? 'sem nota' : 'não avaliado',
     scoreFg: graded ? scoreColor(profile.matchPercent ?? 0, bands) : '#94a3b8',
@@ -341,11 +384,6 @@ function compensationSortValue(profile: ProfileResult): number {
   return compensation.maximumMonthlyCompensation;
 }
 
-/** Keeps the compact identity line limited to role, company, and location. */
-function subtitleOf(profile: ProfileResult): string {
-  return [profile.position, profile.company, profile.location].filter(Boolean).join(' · ');
-}
-
 /** Maximum chips shown on a row, combining critical flags and model points. */
 const MAX_ROW_CHIPS = 3;
 
@@ -386,30 +424,175 @@ function chip(
   return { key, icon, text, ...WARN_TONE[kind] };
 }
 
-/** Amount line plus the "est. · conf." meta line. */
+/**
+ * The compensation range and its confidence, as two pieces.
+ *
+ * The row frames them itself ("R$ <amount>/mês conf. <confidence>") so it can
+ * weight the number differently from the words around it.
+ */
 function presentCompensation(
   compensation: Compensation | undefined,
-  match: CompensationMatch | undefined,
   graded: boolean,
-): { amount: string; meta: string } {
-  if (!graded) return { amount: '—', meta: 'est. · conf. —' };
-  if (!compensation || compensation.status !== 'estimated') {
-    return { amount: '—', meta: 'est. · conf. —' };
+): { amount: string; confidence: string } {
+  if (!graded || !compensation || compensation.status !== 'estimated') {
+    return { amount: '—', confidence: '—' };
   }
 
   const lo = Math.round(compensation.minimumMonthlyCompensation / 1000);
   const hi = Math.round(compensation.maximumMonthlyCompensation / 1000);
-  const fit =
-    match?.outcome === 'matched'
-      ? '· na faixa'
-      : match?.outcome === 'not_matched'
-        ? '· fora da faixa'
-        : '';
-
   return {
-    amount: `R$ ${lo}–${hi} mil/mês`,
-    meta: `est. · conf. ${CONFIDENCE_LABEL[compensation.confidence]} ${fit}`.trimEnd(),
+    amount: `${lo}–${hi} mil`,
+    confidence: CONFIDENCE_LABEL[compensation.confidence],
   };
+}
+
+/** "5 cargos", "1 curso" — the count plus its noun, pluralized with an "s". */
+function countTag(count: number, noun: string): string {
+  return `${String(count)} ${noun}${count === 1 ? '' : 's'}`;
+}
+
+/** "1 mês" / "7 meses" — the one plural in this file that is not a suffix. */
+function monthsTag(count: number): string {
+  return `${String(count)} ${count === 1 ? 'mês' : 'meses'}`;
+}
+
+/** Whether a role is still open: no end date, or the provider's "Present". */
+function isCurrentRole(role: ProfileExperience): boolean {
+  if (!role.endDate) return true;
+  return role.endDate.text?.trim().toLowerCase() === 'present';
+}
+
+/** Earliest year across every listed role, used for the years-of-work count. */
+function firstWorkingYear(experience: readonly ProfileExperience[]): number | undefined {
+  const years = experience
+    .map((role) => role.startDate?.year ?? role.endDate?.year)
+    .filter((year): year is number => year !== undefined);
+  return years.length > 0 ? Math.min(...years) : undefined;
+}
+
+/**
+ * The block's summary pill: how many roles, and either how long the person has
+ * been working or how long they have been out of work.
+ *
+ * The gap is the more decision-relevant of the two when it applies, since a
+ * profile with no current role is the one case where the reviewer needs a
+ * number before opening anything.
+ */
+function experienceTag(experience: readonly ProfileExperience[], jobless: boolean): string {
+  const roles = countTag(experience.length, 'cargo');
+  if (experience.length === 0) return roles;
+
+  if (jobless) {
+    const months = monthsSinceLastRole(experience);
+    return months === undefined
+      ? `${roles} · sem vínculo atual`
+      : `${roles} · lacuna de ${monthsTag(months)}`;
+  }
+
+  const since = firstWorkingYear(experience);
+  if (since === undefined) return roles;
+  const years = new Date().getFullYear() - since;
+  return years > 0 ? `${roles} · ${countTag(years, 'ano')}` : roles;
+}
+
+/** Whole months between the most recent role's end and today. */
+function monthsSinceLastRole(experience: readonly ProfileExperience[]): number | undefined {
+  const ends = experience
+    .map((role) => role.endDate)
+    .filter((date): date is ProfileDate => date?.year !== undefined);
+  if (ends.length === 0) return undefined;
+
+  const latest = ends.reduce((best, date) =>
+    monthIndex(date) > monthIndex(best) ? date : best,
+  );
+  const now = new Date();
+  const months = (now.getFullYear() - latest.year!) * MONTHS_IN_YEAR
+    + (now.getMonth() + 1 - (latest.month ?? 1));
+  return months > 0 ? months : undefined;
+}
+
+/** Months since year zero, so two partial dates can be compared directly. */
+function monthIndex(date: ProfileDate): number {
+  return (date.year ?? 0) * MONTHS_IN_YEAR + (date.month ?? 1);
+}
+
+/** Roles as the block paints them, newest first — the provider's own order. */
+function presentJobs(
+  experience: readonly ProfileExperience[],
+  jobless: boolean,
+): PresentedEntry[] {
+  const entries = experience.map((role, index) => ({
+    key: `job-${String(index)}`,
+    text: [role.position, role.companyName].filter(Boolean).join(' · '),
+    when: formatPeriod(role.startDate, role.endDate),
+  }));
+
+  if (!jobless) return entries;
+
+  // Lead with the gap itself, so "what is this person doing now" is answered
+  // by the first line rather than by inference from the newest end date.
+  const months = monthsSinceLastRole(experience);
+  return [
+    {
+      key: 'job-none',
+      text: 'Sem vínculo atual',
+      when: months === undefined ? '' : `há ${monthsTag(months)}`,
+      alert: true,
+    },
+    ...entries,
+  ];
+}
+
+/**
+ * Courses as the block paints them, oldest first.
+ *
+ * Providers return education newest-first, which puts a later MBA in the two
+ * always-visible lines and hides the original degree — the one entry that
+ * anchors the age estimate. Sorting oldest-first keeps that anchor visible
+ * without the reviewer opening anything.
+ */
+function presentEducation(education: readonly ProfileEducation[]): PresentedEntry[] {
+  return [...education]
+    .map((course, index) => ({ course, index }))
+    .sort((a, b) => (courseYear(a.course) ?? Infinity) - (courseYear(b.course) ?? Infinity))
+    .map(({ course, index }) => ({
+      key: `edu-${String(index)}`,
+      text: [
+        [course.degree, course.fieldOfStudy].filter(Boolean).join(' em '),
+        course.schoolName,
+      ]
+        .filter(Boolean)
+        .join(' · '),
+      when: courseYear(course) === undefined ? '' : String(courseYear(course)),
+    }));
+}
+
+/** The year a course is filed under: when it started, else when it ended. */
+function courseYear(course: ProfileEducation): number | undefined {
+  return course.startDate?.year ?? course.endDate?.year;
+}
+
+/** Formats a start/end pair without pretending missing dates are known. */
+function formatPeriod(start: ProfileDate | undefined, end: ProfileDate | undefined): string {
+  const from = formatDate(start);
+  const to = end === undefined || isPresentDate(end) ? 'atual' : formatDate(end);
+  if (from && to) return `${from} – ${to}`;
+  return from || to || '';
+}
+
+/** Formats one partial LinkedIn date in pt-BR. */
+function formatDate(date: ProfileDate | undefined): string {
+  if (!date) return '';
+  if (date.month && date.year) {
+    return `${MONTH_LABELS[date.month - 1] ?? ''} ${String(date.year)}`.trim();
+  }
+  if (date.year) return String(date.year);
+  return date.text ?? '';
+}
+
+/** Recognizes the provider's current-role marker. */
+function isPresentDate(date: ProfileDate): boolean {
+  return date.text?.trim().toLowerCase() === 'present';
 }
 
 /** Paints the score green / amber / red using the campaign's decision bands. */
@@ -420,17 +603,18 @@ function scoreColor(score: number, bands: ScoreBands): string {
 }
 
 /**
- * Formats estimated age from either the mock's range string or the model's
- * `{ minimumAge, maximumAge }` range.
+ * The estimated age as a bare range, with no unit — the row supplies the
+ * "anos" and the "est." qualifier around it so it can weight them separately.
+ *
+ * Accepts the mock's plain string as well as the model's `{ minimumAge,
+ * maximumAge }` object, and strips a unit the mock may already carry.
  */
-function formatAge(value: unknown): string {
+function formatAgeRange(value: unknown): string {
   if (value == null) return '—';
-  if (typeof value === 'string') {
-    return value.includes('anos') ? value : `${value} anos`;
-  }
+  if (typeof value === 'string') return value.replace(/\s*anos\s*/i, '').trim() || '—';
   if (typeof value === 'object' && 'minimumAge' in value && 'maximumAge' in value) {
     const { minimumAge, maximumAge } = value as { minimumAge: number; maximumAge: number };
-    return `${minimumAge}–${maximumAge} anos`;
+    return `${String(minimumAge)}–${String(maximumAge)}`;
   }
   return '—';
 }

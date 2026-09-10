@@ -125,6 +125,9 @@ const NO_PHOTO_EVERY = 6;
 /** Cadence for the uncertain-location warning chip. */
 const UNCERTAIN_LOCATION_EVERY = 5;
 
+/** How often a fabricated profile is left with no current role. */
+const MOCK_JOBLESS_EVERY = 7;
+
 /** Cadence for a compensation estimate the campaign would reject. */
 const COMP_MISMATCH_EVERY = 5;
 
@@ -225,6 +228,11 @@ function mockDetails(
   const degree = MOCK_DEGREES[index % MOCK_DEGREES.length]!;
   const firstName = name.split(' ')[0] ?? name;
 
+  const graduationYear = previousStartYear - MOCK_PREVIOUS_ROLE_YEARS;
+  // Every few profiles has no current role, so the "Desempregado" chip and the
+  // gap notice in the experience block are both exercised by the mock.
+  const jobless = index % MOCK_JOBLESS_EVERY === 0;
+
   return {
     about: `${firstName} atua na construção de operações comerciais e de relacionamento com clientes, com experiência em ambientes B2B e foco em crescimento sustentável.`,
     openToWork: index % UNCERTAIN_LOCATION_EVERY === 0,
@@ -234,7 +242,11 @@ function mockDetails(
         companyName: company,
         location,
         startDate: { month: 2 + (index % 8), year: currentStartYear },
-        endDate: { text: 'Present' },
+        // A closed end date on the newest role is what makes a profile read as
+        // out of work; every other profile is still in this one.
+        endDate: jobless
+          ? { month: 1 + (index % 6), year: MOCK_CURRENT_YEAR }
+          : { text: 'Present' },
         description:
           'Responsável por estratégia da área, acompanhamento de indicadores e desenvolvimento do time.',
       },
@@ -247,13 +259,41 @@ function mockDetails(
         description:
           'Atuação em carteira B2B, negociação consultiva e melhoria dos processos de aquisição e retenção.',
       },
+      {
+        position: 'Analista comercial',
+        companyName: MOCK_PRIOR_COMPANIES[(index + 1) % MOCK_PRIOR_COMPANIES.length]!,
+        location,
+        startDate: { month: 3, year: graduationYear + 2 },
+        endDate: { month: 12, year: previousStartYear - 1 },
+      },
+      {
+        position: 'Assistente comercial',
+        companyName: MOCK_PRIOR_COMPANIES[(index + 2) % MOCK_PRIOR_COMPANIES.length]!,
+        location,
+        startDate: { month: 8, year: graduationYear },
+        endDate: { month: 2, year: graduationYear + 2 },
+      },
     ],
+    // Newest first, as the providers return it — the list sorts it oldest-first
+    // so the degree that anchors the age estimate stays visible.
     education: [
+      {
+        schoolName: 'FGV - Fundação Getulio Vargas',
+        degree: 'MBA',
+        fieldOfStudy: 'Gestão Comercial',
+        startDate: { year: currentStartYear - 1 },
+      },
+      {
+        schoolName: MOCK_SCHOOLS[(index + 1) % MOCK_SCHOOLS.length]!,
+        degree: 'Especialização',
+        fieldOfStudy: 'Negociação',
+        startDate: { year: previousStartYear },
+      },
       {
         schoolName: school,
         degree: 'Bacharelado',
         fieldOfStudy: degree,
-        startDate: { year: previousStartYear - MOCK_PREVIOUS_ROLE_YEARS },
+        startDate: { year: graduationYear },
         endDate: { year: previousStartYear },
       },
     ],

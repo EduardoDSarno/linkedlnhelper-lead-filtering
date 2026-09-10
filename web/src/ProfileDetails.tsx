@@ -1,28 +1,5 @@
-import type { ReactNode } from 'react';
-
-import type {
-  ProfileDate,
-  ProfileEducation,
-  ProfileExperience,
-  ProfileResult,
-} from './code/api';
+import type { ProfileResult } from './code/api';
 import type { PresentedRow } from './code/listView';
-
-/** Portuguese month abbreviations used by LinkedIn-style career periods. */
-const MONTH_LABELS = [
-  'jan',
-  'fev',
-  'mar',
-  'abr',
-  'mai',
-  'jun',
-  'jul',
-  'ago',
-  'set',
-  'out',
-  'nov',
-  'dez',
-] as const;
 
 /** Props for the inline profile expansion. */
 interface ProfileDetailsProps {
@@ -32,247 +9,77 @@ interface ProfileDetailsProps {
 }
 
 /**
- * Expands one result into the career evidence and AI explanation a reviewer
- * needs before changing its decision.
+ * The model's reasoning about one profile, opened below its row.
+ *
+ * Deliberately does not repeat the identity, career or education already on
+ * the row: the row's blocks show the full history on hover, so restating it
+ * here only pushed the reasoning — the one thing that is not on the row —
+ * further down the page.
  */
 export function ProfileDetails({ profile, row, onClose }: ProfileDetailsProps) {
-  const details = profile.details;
+  const about = profile.details?.about;
 
   return (
-    <section className="profile-details" aria-label={`Detalhes de ${row.name}`}>
-      <header className="profile-details-head">
-        <ProfilePhoto profile={profile} row={row} />
-
-        <div className="profile-details-identity">
-          <div className="profile-details-name-line">
-            <h2>{row.name}</h2>
-            {profile.headline && <span className="profile-details-headline">{profile.headline}</span>}
-            {details?.openToWork && <Pill>Open to work</Pill>}
-          </div>
-          <div className="profile-details-meta">
-            {profile.location && <span>{profile.location}</span>}
-            <a href={row.url} target="_blank" rel="noreferrer">
-              Ver perfil no LinkedIn ↗
-            </a>
-          </div>
-          <CompactEducation items={details?.education} />
+    <section className="profile-details" aria-label={`Análise de ${row.name}`}>
+      {about && (
+        <div className="profile-about">
+          <span className="profile-about-label">Sobre</span>
+          <p>{about}</p>
         </div>
+      )}
 
-        <button type="button" className="profile-details-close" onClick={onClose}>
+      <div className="profile-analysis-head">
+        <span className="profile-analysis-title">Análise da IA</span>
+        <span className="profile-analysis-meta">{analysisMeta(profile, row)}</span>
+        <button type="button" className="profile-analysis-close" onClick={onClose}>
           Recolher ↑
         </button>
-      </header>
-
-      {details?.about && (
-        <div className="profile-details-about">
-          <strong>Sobre</strong>
-          <p>{details.about}</p>
-        </div>
-      )}
-
-      <div className="profile-details-grid">
-        <DetailBlock title="Experiência profissional">
-          {details?.experience.length ? (
-            <ExperienceTimeline items={details.experience} />
-          ) : (
-            <Unavailable>Histórico profissional detalhado ainda não disponível.</Unavailable>
-          )}
-        </DetailBlock>
-
-        <DetailBlock title="Análise da IA" tone="blue">
-          <AnalysisContent profile={profile} />
-        </DetailBlock>
       </div>
-    </section>
-  );
-}
 
-/** Profile photo with a large hover preview and an original-image link. */
-function ProfilePhoto({ profile, row }: { profile: ProfileResult; row: PresentedRow }) {
-  if (!profile.photo) {
-    return (
-      <span
-        className="profile-details-photo profile-details-initials"
-        style={{ background: row.avBg, color: row.avFg }}
-      >
-        {row.initials}
-      </span>
-    );
-  }
-
-  return (
-    <a
-      className="profile-photo-link"
-      href={profile.photo}
-      target="_blank"
-      rel="noreferrer"
-      title="Clique para abrir a imagem original"
-    >
-      <img className="profile-details-photo" src={profile.photo} alt={`Foto de ${row.name}`} />
-      <span className="profile-photo-preview" aria-hidden="true">
-        <img src={profile.photo} alt="" />
-        <span>Clique para abrir em tamanho original</span>
-      </span>
-    </a>
-  );
-}
-
-/** Secondary and technical study, which says nothing about graduate age. */
-const NON_HIGHER_EDUCATION =
-  /ensino m[eé]dio|ensino fundamental|t[eé]cnic|col[eé]gio|high school|secondary school/i;
-
-/** Reads the year a course started, falling back to the year it ended. */
-function educationYear(education: ProfileEducation): number | undefined {
-  return education.startDate?.year ?? education.endDate?.year;
-}
-
-/**
- * Lists every course, oldest first, so the original degree is visible.
- *
- * The provider returns education newest-first, so showing only the first entry
- * usually showed a later MBA and hid the degree that actually indicates age —
- * which meant opening LinkedIn to check. Higher education is listed before
- * secondary and technical study, and the oldest higher-education year is
- * marked, because that is the year a reviewer is looking for.
- */
-function CompactEducation({ items }: { items: ProfileEducation[] | undefined }) {
-  if (!items || items.length === 0) {
-    return <span className="profile-details-education">Formação não informada</span>;
-  }
-
-  const higher = items.filter(
-    (item) =>
-      !NON_HIGHER_EDUCATION.test(
-        [item.degree, item.fieldOfStudy, item.schoolName].filter(Boolean).join(' '),
-      ),
-  );
-  const others = items.filter((item) => !higher.includes(item));
-  const byYear = [...higher].sort(
-    (a, b) => (educationYear(a) ?? 0) - (educationYear(b) ?? 0),
-  );
-  const firstAcademic = byYear.find((item) => educationYear(item) !== undefined);
-
-  return (
-    <div className="profile-details-education">
-      <b>Formação:</b>
-      <ul className="profile-details-education-list">
-        {[...byYear, ...others].map((education, index) => {
-          const course = [education.degree, education.fieldOfStudy]
-            .filter(Boolean)
-            .join(' em ');
-          const period = formatPeriod(education.startDate, education.endDate);
-          return (
-            <li key={`${education.schoolName}-${String(index)}`}>
-              {education === firstAcademic && (
-                <span className="profile-details-education-anchor" title="Formação superior mais antiga">
-                  1ª
-                </span>
-              )}
-              {[course, education.schoolName, period].filter(Boolean).join(' · ')}
-            </li>
-          );
-        })}
-      </ul>
-    </div>
-  );
-}
-
-/** Small neutral tag in the expanded-profile header. */
-function Pill({ children }: { children: ReactNode }) {
-  return <span className="profile-details-pill">{children}</span>;
-}
-
-/** Consistent section heading used inside and outside cards. */
-function DetailTitle({ children }: { children: ReactNode }) {
-  return <h3 className="profile-details-title">{children}</h3>;
-}
-
-/** Card-like section for one category of detailed information. */
-function DetailBlock({
-  title,
-  tone,
-  children,
-}: {
-  title: string;
-  tone?: 'blue';
-  children: ReactNode;
-}) {
-  return (
-    <section className={`profile-details-block${tone ? ` is-${tone}` : ''}`}>
-      <DetailTitle>{title}</DetailTitle>
-      {children}
-    </section>
-  );
-}
-
-/** Low-emphasis copy for detail fields not supplied by the API. */
-function Unavailable({ children }: { children: ReactNode }) {
-  return <p className="profile-details-unavailable">{children}</p>;
-}
-
-/** Professional history rendered as a compact vertical timeline. */
-function ExperienceTimeline({ items }: { items: ProfileExperience[] }) {
-  return (
-    <div className="profile-timeline">
-      {items.map((item, index) => (
-        <article
-          className="profile-timeline-item"
-          key={`${item.companyName}-${item.position}-${index}`}
-        >
-          <span className="profile-timeline-dot" aria-hidden="true" />
-          <div>
-            <strong>{item.position}</strong>
-            <span className="profile-timeline-company">{item.companyName}</span>
-            <span className="profile-timeline-meta">
-              {formatPeriod(item.startDate, item.endDate)}
-              {item.location ? ` · ${item.location}` : ''}
-            </span>
-            {item.description && <p>{item.description}</p>}
+      {profile.modelDecision ? (
+        <>
+          <div className="profile-points">
+            <PointList
+              label="Pontos positivos"
+              tone="positive"
+              items={profile.positives}
+              emptyText="Nenhum ponto positivo destacado."
+            />
+            <PointList
+              label="Pontos de atenção"
+              tone="negative"
+              items={profile.negatives}
+              emptyText="Nenhum ponto de atenção destacado."
+            />
           </div>
-        </article>
-      ))}
-    </div>
-  );
-}
 
-/**
- * The model's fit assessment at a glance: positive points, points of
- * concern, and a one-line summary of why it landed on this score.
- */
-function AnalysisContent({ profile }: { profile: ProfileResult }) {
-  if (!profile.modelDecision) {
-    return (
-      <Unavailable>
-        Este perfil não recebeu análise da IA. Consulte o aviso exibido na linha.
-      </Unavailable>
-    );
-  }
-
-  return (
-    <div className="profile-analysis-content">
-      <PointList
-        label="Pontos positivos"
-        tone="positive"
-        items={profile.positives}
-        emptyText="Nenhum ponto positivo destacado."
-      />
-      <PointList
-        label="Pontos de atenção"
-        tone="negative"
-        items={profile.negatives}
-        emptyText="Nenhum ponto de atenção destacado."
-      />
-      {profile.summary && (
-        <div className="profile-analysis-summary">
-          <span className="profile-details-label">Por que essa nota</span>
-          <p>{profile.summary}</p>
-        </div>
+          {profile.summary && (
+            <div className="profile-why">
+              <span className="profile-why-label">Por que essa nota</span>
+              <span className="profile-why-text">{profile.summary}</span>
+            </div>
+          )}
+        </>
+      ) : (
+        <p className="profile-unavailable">
+          Este perfil não recebeu análise da IA. Consulte o aviso exibido na linha.
+        </p>
       )}
-    </div>
+    </section>
   );
 }
 
-/** A bullet list of short model points, colored by whether it helps or hurts the fit. */
+/** The one-line provenance of the score, shown beside the analysis heading. */
+function analysisMeta(profile: ProfileResult, row: PresentedRow): string {
+  const parts = [`nota ${row.score}/100`];
+  if (row.compensationConfidence !== '—') {
+    parts.push(`confiança ${row.compensationConfidence}`);
+  }
+  parts.push(profile.photo ? 'foto analisada' : 'sem foto');
+  return parts.join(' · ');
+}
+
+/** A list of short model points, coloured by whether it helps or hurts the fit. */
 function PointList({
   label,
   tone,
@@ -286,44 +93,21 @@ function PointList({
 }) {
   return (
     <div className={`profile-point-list is-${tone}`}>
-      <span className="profile-details-label">{label}</span>
+      <span className="profile-point-label">{label}</span>
       {items?.length ? (
-        <ul>
+        <div className="profile-point-items">
           {items.map((item, index) => (
-            <li key={`${tone}-${index}`}>
+            <div className="profile-point" key={`${tone}-${String(index)}`}>
               <span className="profile-point-icon" aria-hidden="true">
                 {tone === 'positive' ? '✓' : '!'}
               </span>
               <span>{item}</span>
-            </li>
+            </div>
           ))}
-        </ul>
+        </div>
       ) : (
-        <span className="profile-details-empty">{emptyText}</span>
+        <span className="profile-point-empty">{emptyText}</span>
       )}
     </div>
   );
-}
-
-/** Formats a start/end pair without pretending missing dates are known. */
-function formatPeriod(start: ProfileDate | undefined, end: ProfileDate | undefined): string {
-  const from = formatDate(start);
-  const to = isPresent(end) ? 'Atual' : formatDate(end);
-  if (from && to) return `${from} – ${to}`;
-  return from || to || 'Período não informado';
-}
-
-/** Formats one partial LinkedIn date in pt-BR. */
-function formatDate(date: ProfileDate | undefined): string {
-  if (!date) return '';
-  if (date.month && date.year) {
-    return `${MONTH_LABELS[date.month - 1] ?? ''} ${date.year}`.trim();
-  }
-  if (date.year) return String(date.year);
-  return date.text ?? '';
-}
-
-/** Recognizes the provider's current-role marker. */
-function isPresent(date: ProfileDate | undefined): boolean {
-  return date?.text?.toLowerCase() === 'present';
 }

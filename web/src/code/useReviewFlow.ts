@@ -251,6 +251,30 @@ export function useReviewFlow() {
   );
 
   /**
+   * Applies one decision to many profiles at once.
+   *
+   * Written as a single state update rather than a loop over `decide` so the
+   * whole selection lands in one render, and so a bulk "manual" clears those
+   * overrides outright instead of toggling each row against its own previous
+   * value the way the per-row action does.
+   */
+  const decideMany = useCallback(
+    (publicIds: readonly string[], action: ManualDecision | 'manual') => {
+      if (publicIds.length === 0) return;
+      setSavedApprovedCount(undefined);
+      setOverrides((current) => {
+        const next = { ...current };
+        for (const publicId of publicIds) {
+          if (action === 'manual') delete next[publicId];
+          else next[publicId] = action;
+        }
+        return next;
+      });
+    },
+    [],
+  );
+
+  /**
    * Saves the current decisions, which rebuilds the approved CSV and report on
    * the backend. Only explicit overrides are sent; the untouched profiles keep
    * their automatic decision.
@@ -339,6 +363,7 @@ export function useReviewFlow() {
     results,
     overrides,
     decide,
+    decideMany,
 
     save,
     saving,
