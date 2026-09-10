@@ -17,9 +17,6 @@ import {
 import type { ReviewFlow } from './code/useReviewFlow';
 import type { RunProgress } from './code/api';
 
-/** Keys that must not trigger row actions while a field is focused. */
-const TYPING_TAGS = new Set(['INPUT', 'TEXTAREA', 'SELECT']);
-
 /** The campaign name with inline rename, shown above the list title. */
 function CampaignName({ name, onRename }: { name: string; onRename: (name: string) => void }) {
   const [editing, setEditing] = useState(false);
@@ -85,14 +82,13 @@ function CampaignName({ name, onRename }: { name: string; onRename: (name: strin
 /**
  * The evaluated-profiles screen: search, sort, status tabs, and the designed
  * row layout. Decisions are stored on the flow; everything else (tab, query,
- * sort, which row is selected) stays local because it does not need to persist.
+ * sort, selection, which row is open) stays local because it does not persist.
  */
 export function ListScreen({ flow }: { flow: ReviewFlow }) {
   const { decide, decideMany, results, overrides, criteria, status, loading } = flow;
   const [tab, setTab] = useState<ListTab>(LIST_TAB.all);
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState<ListSort>(LIST_SORT.score);
-  const [selected, setSelected] = useState(0);
   const [expandedPublicId, setExpandedPublicId] = useState<string | undefined>(undefined);
   const [checked, setChecked] = useState<ReadonlySet<string>>(() => new Set());
   // Anchor for shift-click, which selects every row between it and the click.
@@ -104,9 +100,6 @@ export function ListScreen({ flow }: { flow: ReviewFlow }) {
     () => visibleProfiles(results, overrides, tab, query, sort),
     [results, overrides, tab, query, sort],
   );
-
-  const selectedIndex = visible.length === 0 ? 0 : Math.min(selected, visible.length - 1);
-  const selectedId = visible[selectedIndex]?.publicId;
 
   // Only rows the current tab and search actually show can be acted on, so a
   // selection left behind by a tab change never applies a decision off-screen.
@@ -145,41 +138,6 @@ export function ListScreen({ flow }: { flow: ReviewFlow }) {
     });
     setAnchor(publicId);
   };
-
-  useEffect(() => {
-    if (!selectedId) return;
-    document.querySelector(`[data-row="${CSS.escape(selectedId)}"]`)?.scrollIntoView({
-      block: 'nearest',
-    });
-  }, [selectedId]);
-
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (TYPING_TAGS.has((event.target as HTMLElement).tagName)) return;
-      if (visible.length === 0) return;
-
-      const key = event.key.toLowerCase();
-      const current = visible[selectedIndex];
-      if (!current) return;
-
-      if (key === 'j' || event.key === 'ArrowDown') {
-        event.preventDefault();
-        setSelected(Math.min(visible.length - 1, selectedIndex + 1));
-        return;
-      }
-      if (key === 'k' || event.key === 'ArrowUp') {
-        event.preventDefault();
-        setSelected(Math.max(0, selectedIndex - 1));
-        return;
-      }
-      if (key === 'a') decide(current.publicId, 'approved');
-      if (key === 'r') decide(current.publicId, 'rejected');
-      if (key === 'm') decide(current.publicId, 'manual');
-    };
-
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [decide, selectedIndex, visible]);
 
   if (loading) return <LoadingState progress={status?.progress} />;
 
@@ -224,7 +182,6 @@ export function ListScreen({ flow }: { flow: ReviewFlow }) {
                 value={query}
                 onChange={(event) => {
                   setQuery(event.target.value);
-                  setSelected(0);
                 }}
                 style={{
                   width: 250,
@@ -241,7 +198,6 @@ export function ListScreen({ flow }: { flow: ReviewFlow }) {
               value={sort}
               onChange={(event) => {
                 setSort(event.target.value as ListSort);
-                setSelected(0);
               }}
               style={{
                 fontSize: 13,
@@ -270,7 +226,6 @@ export function ListScreen({ flow }: { flow: ReviewFlow }) {
                 type="button"
                 onClick={() => {
                   setTab(label);
-                  setSelected(0);
                 }}
                 style={{
                   all: 'unset',
@@ -301,34 +256,10 @@ export function ListScreen({ flow }: { flow: ReviewFlow }) {
               </button>
             );
           })}
-          <span
-            style={{
-              marginLeft: 'auto',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-              fontSize: 11.5,
-              color: '#94a3b8',
-              paddingBottom: 8,
-            }}
-          >
-            <Kbd>J</Kbd>
-            <Kbd>K</Kbd>
-            navegar ·
-            <Kbd>A</Kbd>
-            aprovar ·
-            <Kbd>M</Kbd>
-            manual ·
-            <Kbd>R</Kbd>
-            reprovar
-          </span>
         </div>
       </div>
 
-      <div
-        className="sc"
-        style={{ flex: 1, minHeight: 0, overflow: 'auto', background: '#eef1f6', padding: '0 24px 70px' }}
-      >
+      <div className="sc" style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: '0 0 60px' }}>
         <SelectionBar
           checkedCount={checkedVisible.length}
           visibleCount={visible.length}
@@ -354,7 +285,7 @@ export function ListScreen({ flow }: { flow: ReviewFlow }) {
             </div>
           </div>
         ) : (
-          visible.map((profile, index) => {
+          visible.map((profile) => {
             const expanded = profile.publicId === expandedPublicId;
             const presented = presentRow(profile, overrides[profile.publicId], bands);
 
@@ -362,17 +293,14 @@ export function ListScreen({ flow }: { flow: ReviewFlow }) {
               <div key={profile.publicId}>
                 <ProfileRow
                   row={presented}
-                  selected={index === selectedIndex}
                   expanded={expanded}
                   checked={checked.has(profile.publicId)}
                   onSelect={() => {
-                    setSelected(index);
                     setExpandedPublicId((current) =>
                       current === profile.publicId ? undefined : profile.publicId,
                     );
                   }}
                   onCheck={(event) => {
-                    setSelected(index);
                     toggleChecked(profile.publicId, event.shiftKey);
                   }}
                   onApprove={() => decide(profile.publicId, 'approved')}
@@ -481,23 +409,6 @@ function SelectionBar({
   );
 }
 
-/** Small keycap used in the shortcut hint. */
-function Kbd({ children }: { children: string }) {
-  return (
-    <b
-      style={{
-        fontWeight: 600,
-        color: '#475569',
-        background: '#f1f5f9',
-        border: '1px solid #e2e8f0',
-        borderRadius: 5,
-        padding: '1px 5px',
-      }}
-    >
-      {children}
-    </b>
-  );
-}
 /** Portuguese label for each reported stage, in running order. */
 const PROGRESS_STAGES = [
   { key: 'collecting', label: 'Coletando perfis' },
