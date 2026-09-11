@@ -7,7 +7,10 @@ import {
   DEFAULT_IMAGE_RESOLUTION,
   DEFAULT_OPENROUTER_THINKING_EFFORT,
 } from './model_client.js';
-import { resolveOpenRouterMaxPrice } from './model_provider.js';
+import {
+  resolveOpenRouterMaxPrice,
+  resolveOpenRouterProviderSort,
+} from './model_provider.js';
 import type {
   ImageResolution,
   ModelClient,
@@ -19,9 +22,6 @@ import type {
 
 /** JSON Schema replies stay advisory so the eval compensation union is accepted. */
 const OPENROUTER_JSON_SCHEMA_STRICT = false;
-
-/** Picks the fastest backend among those left under the price ceiling. */
-const OPENROUTER_PROVIDER_SORT = 'throughput';
 
 /** Stable schema name required by OpenRouter's json_schema response format. */
 const OPENROUTER_JSON_SCHEMA_NAME = 'result';
@@ -157,15 +157,13 @@ function toChatRequest(request: ModelRequest): ChatRequest {
       },
     },
     // GLM-5.3-Flash alone is served by ~25 backend providers running the same
-    // weights, whose measured throughput spans roughly 10x and whose prices
-    // span roughly 6x. Throughput sorting alone weighed only the first of
-    // those, leaving nothing to stop a request landing on the dearest
-    // backend. The ceiling removes the expensive outliers, and the sort then
-    // picks the fastest of the ~15 that remain — so this buys a lower bill
-    // without giving up speed. See resolveOpenRouterMaxPrice for why it is a
-    // cap rather than a price sort.
+    // weights, whose prices span roughly 6x and whose throughput spans roughly
+    // 10x. The cap drops the expensive outliers; the sort then decides which
+    // of the rest wins, defaulting to the cheapest and falling back up the
+    // price ladder when one is unavailable. Both are configurable, because
+    // which way to trade cost against wall-clock is an operator's call.
     provider: {
-      sort: OPENROUTER_PROVIDER_SORT,
+      sort: resolveOpenRouterProviderSort(),
       maxPrice: resolveOpenRouterMaxPrice(),
     },
   };

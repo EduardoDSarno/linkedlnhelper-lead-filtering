@@ -42,11 +42,19 @@ export {
   OPENROUTER_MAX_COMPLETION_PRICE_ENVIRONMENT_KEY,
   OPENROUTER_MAX_PROMPT_PRICE_ENVIRONMENT_KEY,
   OPENROUTER_MODEL_ENVIRONMENT_KEY,
+  OPENROUTER_PROVIDER_SORTS,
+  OPENROUTER_PROVIDER_SORT_ENVIRONMENT_KEY,
   OPENROUTER_THINKING_EFFORT_ENVIRONMENT_KEY,
   THINKING_EFFORT_CHOICES,
+  DEFAULT_OPENROUTER_PROVIDER_SORT,
   resolveOpenRouterMaxPrice,
+  resolveOpenRouterProviderSort,
   resolveProviderModelId,
   resolveThinkingEffort,
   resolveThinkingEffortChoice,
 } from './model_provider.js';
-export type { OpenRouterMaxPrice, ThinkingEffortChoice } from './model_provider.js';
+export type {
+  OpenRouterMaxPrice,
+  OpenRouterProviderSort,
+  ThinkingEffortChoice,
+} from './model_provider.js';

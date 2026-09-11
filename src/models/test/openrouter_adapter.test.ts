@@ -81,10 +81,11 @@ test('forwards text, system, schema, thinking, and timeout to OpenRouter', async
       strict: false,
     },
   });
-  // Fastest backend, but only among those at or under the price ceiling:
-  // this model's backends run the same weights at prices spanning ~6x.
+  // Cheapest backend under the price ceiling: this model's backends run the
+  // same weights at prices spanning ~6x, so the choice is about cost, not
+  // capability.
   assert.deepEqual(chatRequest?.provider, {
-    sort: 'throughput',
+    sort: 'price',
     maxPrice: { prompt: '0.15', completion: '0.50' },
   });
 });

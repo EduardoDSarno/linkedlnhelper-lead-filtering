@@ -17,19 +17,58 @@ export const OPENROUTER_MAX_PROMPT_PRICE_ENVIRONMENT_KEY =
 export const OPENROUTER_MAX_COMPLETION_PRICE_ENVIRONMENT_KEY =
   'OPENROUTER_MAX_COMPLETION_PRICE';
 
+/** Environment variable choosing which backend wins inside the price cap. */
+export const OPENROUTER_PROVIDER_SORT_ENVIRONMENT_KEY =
+  'OPENROUTER_PROVIDER_SORT';
+
+/** How OpenRouter picks among the backends left under the price ceiling. */
+export const OPENROUTER_PROVIDER_SORTS = ['price', 'throughput', 'latency'] as const;
+
+/** One backend-selection strategy. */
+export type OpenRouterProviderSort = (typeof OPENROUTER_PROVIDER_SORTS)[number];
+
+/**
+ * Cheapest backend first, falling back up the price ladder when one is down.
+ *
+ * The same weights are served at prices spanning roughly 6x, and the cheapest
+ * are also the slowest, so this trades wall-clock for spend. Sorting rather
+ * than capping at the lowest price is deliberate: a hard cap at the cheapest
+ * rate leaves nothing eligible when that one backend is unavailable, while a
+ * sort just moves to the next cheapest.
+ */
+export const DEFAULT_OPENROUTER_PROVIDER_SORT: OpenRouterProviderSort = 'price';
+
+/**
+ * Reads the backend-selection strategy applied to every OpenRouter request.
+ *
+ * An unrecognized value falls back to the default rather than being passed
+ * through, since OpenRouter would reject it and fail the whole request.
+ */
+export function resolveOpenRouterProviderSort(
+  environment: NodeJS.ProcessEnv = process.env,
+): OpenRouterProviderSort {
+  const raw = environment[OPENROUTER_PROVIDER_SORT_ENVIRONMENT_KEY]
+    ?.trim()
+    .toLowerCase();
+  if (!raw) return DEFAULT_OPENROUTER_PROVIDER_SORT;
+
+  return (OPENROUTER_PROVIDER_SORTS as readonly string[]).includes(raw)
+    ? (raw as OpenRouterProviderSort)
+    : DEFAULT_OPENROUTER_PROVIDER_SORT;
+}
+
 /**
  * Most a backend provider may charge, in USD per million tokens.
  *
  * One model is served by roughly 25 backends running the same weights at
- * prices spanning about 6x, and routing considered only speed, so nothing
- * stopped a request landing on the dearest of them. These defaults sit on the
- * price the large majority charge: the few outliers above it drop out, and
- * around fifteen candidates remain for the throughput sort to choose between.
+ * prices spanning about 6x. These defaults sit on the price the large majority
+ * charge, so the few expensive outliers drop out entirely and the sort above
+ * only ever chooses among the rest.
  *
- * Deliberately a ceiling rather than a price sort. Sorting by price pins every
- * request to the single cheapest backend, and the cheapest here are also the
- * slowest and least available — and a set `sort` turns off load balancing, so
- * a whole batch would ride one budget backend's uptime.
+ * The cap still matters even while the sort prefers the cheapest: it bounds
+ * how far the fallback can climb when the cheap backends are unavailable, so
+ * an outage cannot quietly route a whole batch to a backend charging several
+ * times the going rate.
  *
  * Strings because that is the shape OpenRouter's `max_price` takes.
  */
