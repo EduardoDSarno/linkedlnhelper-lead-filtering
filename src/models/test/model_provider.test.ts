@@ -9,6 +9,7 @@ import {
   THINKING_EFFORT_CHOICES,
   openRouterModelClient,
   resolveModelClient,
+  resolveOpenRouterMaxPrice,
   resolveProviderModelId,
   resolveThinkingEffort,
   resolveThinkingEffortChoice,
@@ -92,5 +93,38 @@ test('rejects an unknown UI thinking choice', () => {
   assert.throws(
     () => resolveThinkingEffortChoice('turbo'),
     /thinkingEffort must be "default" or "max"/,
+  );
+});
+
+test('caps provider price at the default when the environment is silent', () => {
+  assert.deepEqual(resolveOpenRouterMaxPrice({}), {
+    prompt: '0.15',
+    completion: '0.50',
+  });
+});
+
+test('takes a configured ceiling, so routing can be narrowed to cheaper backends', () => {
+  assert.deepEqual(
+    resolveOpenRouterMaxPrice({
+      OPENROUTER_MAX_PROMPT_PRICE: '0.10',
+      OPENROUTER_MAX_COMPLETION_PRICE: '0.35',
+    }),
+    { prompt: '0.10', completion: '0.35' },
+  );
+});
+
+test('keeps the cap when a configured price is blank or not a number', () => {
+  // A typo must not silently reopen routing to any price, which is what
+  // dropping the ceiling entirely would do.
+  assert.deepEqual(
+    resolveOpenRouterMaxPrice({
+      OPENROUTER_MAX_PROMPT_PRICE: '   ',
+      OPENROUTER_MAX_COMPLETION_PRICE: 'cheap',
+    }),
+    { prompt: '0.15', completion: '0.50' },
+  );
+  assert.deepEqual(
+    resolveOpenRouterMaxPrice({ OPENROUTER_MAX_PROMPT_PRICE: '-1' }),
+    { prompt: '0.15', completion: '0.50' },
   );
 });

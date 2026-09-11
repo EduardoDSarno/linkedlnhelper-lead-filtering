@@ -7,6 +7,7 @@ import {
   DEFAULT_IMAGE_RESOLUTION,
   DEFAULT_OPENROUTER_THINKING_EFFORT,
 } from './model_client.js';
+import { resolveOpenRouterMaxPrice } from './model_provider.js';
 import type {
   ImageResolution,
   ModelClient,
@@ -19,7 +20,7 @@ import type {
 /** JSON Schema replies stay advisory so the eval compensation union is accepted. */
 const OPENROUTER_JSON_SCHEMA_STRICT = false;
 
-/** Routes every request to the fastest backend provider for the model. */
+/** Picks the fastest backend among those left under the price ceiling. */
 const OPENROUTER_PROVIDER_SORT = 'throughput';
 
 /** Stable schema name required by OpenRouter's json_schema response format. */
@@ -155,11 +156,18 @@ function toChatRequest(request: ModelRequest): ChatRequest {
         strict: OPENROUTER_JSON_SCHEMA_STRICT,
       },
     },
-    // GLM-5.3-Flash alone is served by ~20 backend providers whose measured
-    // throughput spans roughly 10x. Sorting by throughput keeps every request
-    // on the fastest available backend instead of OpenRouter's default
-    // (price-weighted) routing.
-    provider: { sort: OPENROUTER_PROVIDER_SORT },
+    // GLM-5.3-Flash alone is served by ~25 backend providers running the same
+    // weights, whose measured throughput spans roughly 10x and whose prices
+    // span roughly 6x. Throughput sorting alone weighed only the first of
+    // those, leaving nothing to stop a request landing on the dearest
+    // backend. The ceiling removes the expensive outliers, and the sort then
+    // picks the fastest of the ~15 that remain — so this buys a lower bill
+    // without giving up speed. See resolveOpenRouterMaxPrice for why it is a
+    // cap rather than a price sort.
+    provider: {
+      sort: OPENROUTER_PROVIDER_SORT,
+      maxPrice: resolveOpenRouterMaxPrice(),
+    },
   };
 }
 

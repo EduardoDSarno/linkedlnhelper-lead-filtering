@@ -11,6 +11,68 @@ export const OPENROUTER_MODEL_ENVIRONMENT_KEY = 'OPENROUTER_MODEL';
 export const OPENROUTER_THINKING_EFFORT_ENVIRONMENT_KEY =
   'OPENROUTER_MODEL_THINKING_EFFORT';
 
+/** Environment variables that cap what a backend provider may charge. */
+export const OPENROUTER_MAX_PROMPT_PRICE_ENVIRONMENT_KEY =
+  'OPENROUTER_MAX_PROMPT_PRICE';
+export const OPENROUTER_MAX_COMPLETION_PRICE_ENVIRONMENT_KEY =
+  'OPENROUTER_MAX_COMPLETION_PRICE';
+
+/**
+ * Most a backend provider may charge, in USD per million tokens.
+ *
+ * One model is served by roughly 25 backends running the same weights at
+ * prices spanning about 6x, and routing considered only speed, so nothing
+ * stopped a request landing on the dearest of them. These defaults sit on the
+ * price the large majority charge: the few outliers above it drop out, and
+ * around fifteen candidates remain for the throughput sort to choose between.
+ *
+ * Deliberately a ceiling rather than a price sort. Sorting by price pins every
+ * request to the single cheapest backend, and the cheapest here are also the
+ * slowest and least available — and a set `sort` turns off load balancing, so
+ * a whole batch would ride one budget backend's uptime.
+ *
+ * Strings because that is the shape OpenRouter's `max_price` takes.
+ */
+export const DEFAULT_OPENROUTER_MAX_PROMPT_PRICE = '0.15';
+export const DEFAULT_OPENROUTER_MAX_COMPLETION_PRICE = '0.50';
+
+/** A per-million-token price ceiling, as OpenRouter's `max_price` expects it. */
+export interface OpenRouterMaxPrice {
+  prompt: string;
+  completion: string;
+}
+
+/**
+ * Reads the per-million-token ceiling applied to every OpenRouter request.
+ *
+ * Lowering it narrows the field to cheaper backends; raising it widens the
+ * field. A blank or unparseable value falls back to the default rather than
+ * lifting the cap, so a typo cannot silently reopen routing to any price.
+ */
+export function resolveOpenRouterMaxPrice(
+  environment: NodeJS.ProcessEnv = process.env,
+): OpenRouterMaxPrice {
+  return {
+    prompt: priceOrDefault(
+      environment[OPENROUTER_MAX_PROMPT_PRICE_ENVIRONMENT_KEY],
+      DEFAULT_OPENROUTER_MAX_PROMPT_PRICE,
+    ),
+    completion: priceOrDefault(
+      environment[OPENROUTER_MAX_COMPLETION_PRICE_ENVIRONMENT_KEY],
+      DEFAULT_OPENROUTER_MAX_COMPLETION_PRICE,
+    ),
+  };
+}
+
+/** Keeps a configured price only when it reads as a non-negative number. */
+function priceOrDefault(raw: string | undefined, fallback: string): string {
+  const trimmed = raw?.trim();
+  if (!trimmed) return fallback;
+
+  const parsed = Number(trimmed);
+  return Number.isFinite(parsed) && parsed >= 0 ? trimmed : fallback;
+}
+
 /**
  * Thinking depths the review UI may send. Default follows the provider env;
  * max forces the deepest supported effort.
