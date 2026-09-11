@@ -42,6 +42,8 @@ interface LinkedHelperIdentity {
   profileUrl: string;
   /** The name Linked Helper recorded; empty when the export had none. */
   fullName: string;
+  /** The avatar Linked Helper captured, used when the scraper saw none. */
+  avatarUrl?: string;
 }
 
 /** Reads the URL the provider was asked to scrape, echoed back on the record. */
@@ -84,9 +86,24 @@ async function normalizeProfiles(
 
       // Keep the Linked Helper URL as the profile's link: it is the one the
       // operator exported and re-imports, so it must stay usable downstream.
+      //
+      // Fall back to Linked Helper's avatar when the scraper reported no
+      // photo. A scraper reads the profile anonymously, so a photo restricted
+      // to members or connections is invisible to it, while Linked Helper
+      // exported as the operator's own account and saw it. Verified live: both
+      // scrapers reported no photo for a profile whose picture was current and
+      // present. The source is recorded rather than blended in, because a
+      // Linked Helper URL can also outlive a photo that has since been removed.
+      const photoFallback =
+        !profile.photo && identity.avatarUrl
+          ? { photo: identity.avatarUrl, photoSource: 'linkedHelper' as const }
+          : profile.photo
+            ? { photoSource: 'provider' as const }
+            : {};
+
       profiles.push(
         attachLinkedHelperPublicId(
-          { ...profile, linkedinUrl: identity.profileUrl },
+          { ...profile, ...photoFallback, linkedinUrl: identity.profileUrl },
           identity.publicId,
         ),
       );
@@ -110,11 +127,16 @@ function linkedHelperIdentitiesByProfileKey(
   const identities = new Map<string, LinkedHelperIdentity>();
 
   for (const importedProfile of Object.values(importedData.records)) {
-    const { publicId, profileUrl, fullName } = importedProfile.summary;
+    const { publicId, profileUrl, fullName, avatarUrl } = importedProfile.summary;
     const profileKey = linkedinProfileKey(profileUrl);
     if (!profileKey || identities.has(profileKey)) continue;
 
-    identities.set(profileKey, { publicId, profileUrl, fullName });
+    identities.set(profileKey, {
+      publicId,
+      profileUrl,
+      fullName,
+      ...(avatarUrl ? { avatarUrl } : {}),
+    });
   }
 
   return identities;

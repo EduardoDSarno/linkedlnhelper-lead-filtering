@@ -96,13 +96,28 @@ function profilePipelineDependencies(
   };
 }
 
-/** Builds a valid structured model response for the profile that reaches AI. */
-function successfulModelResponse() {
+/** Reads the profile ID out of a request so a stub can answer about it. */
+function requestedProfileId(request: unknown): string {
+  const parts = (request as { parts?: { text?: string }[] })?.parts ?? [];
+  for (const part of parts) {
+    const found = /--- PROFILE ([^\s]+) ---/.exec(part.text ?? '');
+    if (found) return found[1]!;
+  }
+  return PROFILE_WITH_PHOTO_ID;
+}
+
+/**
+ * Builds a valid structured response for whichever profile was sent.
+ *
+ * Answers per request rather than naming one fixed profile, because every
+ * profile now reaches the model — a missing photo is ranked, not excluded.
+ */
+function successfulModelResponse(profileId: string = PROFILE_WITH_PHOTO_ID) {
   return {
     text: JSON.stringify({
       evaluations: [
         {
-          profileId: PROFILE_WITH_PHOTO_ID,
+          profileId,
           matchPercent: REVIEW_MODEL_MATCH_PERCENT,
           estimatedTotalMonthlyCompensation: {
             status: 'estimated',
@@ -164,9 +179,9 @@ test('connects stable full profiles to broad filtering, the model, and SQLite', 
     }),
     {
       modelEvaluation: {
-        generateContent: async () => {
+        generateContent: async (request: unknown) => {
           modelCalls += 1;
-          return successfulModelResponse();
+          return successfulModelResponse(requestedProfileId(request));
         },
       },
     },
@@ -182,7 +197,8 @@ test('connects stable full profiles to broad filtering, the model, and SQLite', 
     ),
     ['imported-0', 'imported-1'],
   );
-  assert.equal(modelCalls, 1);
+  // Both profiles now reach the model: a missing photo is ranked, not cut.
+  assert.equal(modelCalls, 2);
   assert.equal(result.evaluationRun.id, REVIEW_RUN_ID);
   assert.equal(result.evaluationRun.createdAt, REVIEW_RUN_TIME);
   assert.equal(result.evaluationRun.evaluation.broadFilter.evaluations.length, 2);
@@ -196,7 +212,7 @@ test('connects stable full profiles to broad filtering, the model, and SQLite', 
     result.evaluationRun.evaluation.broadFilter.profilesForAi.map(
       (profile) => profile.profileId,
     ),
-    [PROFILE_WITH_PHOTO_ID],
+    [PROFILE_WITH_PHOTO_ID, PROFILE_WITHOUT_PHOTO_ID],
   );
   assert.equal(
     result.evaluationRun.evaluation.modelEvaluation.evaluations[0]
@@ -236,11 +252,10 @@ test('connects stable full profiles to broad filtering, the model, and SQLite', 
   assert.equal(broadLogs.length, 2);
   assert.equal(broadLogs[1]?.['profileId'], PROFILE_WITHOUT_PHOTO_ID);
   assert.equal(broadLogs[1]?.['linkedinUrl'], urls[1]);
-  assert.equal(broadLogs[1]?.['decision'], 'Failed');
-  assert.match(String(broadLogs[1]?.['reason']), /No profile photo/);
+  assert.equal(broadLogs[1]?.['decision'], 'NextPhase');
 
   const modelLogs = payloadsFor(logger, 'Model profile decision.');
-  assert.equal(modelLogs.length, 1);
+  assert.equal(modelLogs.length, 2);
   assert.equal(modelLogs[0]?.['profileId'], PROFILE_WITH_PHOTO_ID);
   assert.equal(modelLogs[0]?.['linkedinUrl'], urls[0]);
   assert.equal(modelLogs[0]?.['decision'], 'approved');
@@ -294,7 +309,9 @@ test('persists isolated model failures as a completed review run', async () => {
     },
   );
 
-  assert.equal(result.evaluationRun.evaluation.modelEvaluation.failedProfiles, 1);
+  // Both profiles reach the model now, so an unparseable reply fails both —
+  // reported as one failure per request group rather than one per profile.
+  assert.equal(result.evaluationRun.evaluation.modelEvaluation.failedProfiles, 2);
   assert.equal(result.evaluationRun.evaluation.modelEvaluation.failures.length, 1);
   assert.deepEqual(storedRun, result.evaluationRun);
 
@@ -302,7 +319,7 @@ test('persists isolated model failures as a completed review run', async () => {
     logger,
     'Model profile evaluation failed.',
   );
-  assert.equal(failureLogs.length, 1);
+  assert.equal(failureLogs.length, 2);
   assert.equal(failureLogs[0]?.['profileId'], PROFILE_WITH_PHOTO_ID);
   assert.equal(
     failureLogs[0]?.['linkedinUrl'],
@@ -365,9 +382,9 @@ test('scores cached profiles without calling the collection provider', async () 
         },
       ],
       modelEvaluation: {
-        generateContent: async () => {
+        generateContent: async (request: unknown) => {
           modelCalls += 1;
-          return successfulModelResponse();
+          return successfulModelResponse(requestedProfileId(request));
         },
       },
     },
@@ -375,7 +392,7 @@ test('scores cached profiles without calling the collection provider', async () 
 
   assert.equal(collectionCalls, 0);
   assert.equal(readCacheCalls, 0);
-  assert.equal(modelCalls, 1);
+  assert.equal(modelCalls, 2);
   assert.equal(result.profilePipeline.summary.providerCollection.actorRuns, 0);
   assert.equal(result.evaluationRun.evaluation.broadFilter.evaluations.length, 2);
   assert.deepEqual(storedRun, result.evaluationRun);

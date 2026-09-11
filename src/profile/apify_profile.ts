@@ -60,6 +60,17 @@ export interface Profile {
 
   headline?: string;
   photo?: string;
+  /**
+   * Where {@link photo} came from.
+   *
+   * "provider" means the scraper saw it on the live profile. "linkedHelper"
+   * means the scraper reported none and the URL came from the Linked Helper
+   * export instead — which sees the profile as the operator's own logged-in
+   * account, so it catches photos restricted to members or connections that a
+   * scraper cannot see. Those two cases are not equally certain, so anything
+   * gating on a photo needs to be able to tell them apart.
+   */
+  photoSource?: 'provider' | 'linkedHelper';
   openToWork?: boolean;
 
   location?: ProfileLocation;

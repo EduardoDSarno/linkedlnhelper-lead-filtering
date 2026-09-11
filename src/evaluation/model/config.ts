@@ -140,6 +140,22 @@ ${MODEL_EVALUATION_PROMPT_SLOTS.systemPrompt}
   Apply the primary campaign instructions; when they say nothing about
   employment, let it alone and do not move the score for it.
 
+=== PROFILE PHOTO ===
+- "hasPhoto" says whether a photo was found at all, and
+  "photoConfirmedByProvider" whether the scraper saw it on the live profile.
+  False there means the scraper reported none and the photo came from the
+  operator's own export instead; that happens when a photo is restricted to
+  members or connections, and it can also happen when a photo was removed
+  after the export. Treat such a photo as real but unconfirmed, and say so as
+  an uncertainty rather than silently trusting or discarding it.
+- When the campaign sets "requirePhoto" and no photo was found at all, rank the
+  profile below otherwise-comparable profiles that have one, and name the
+  missing photo as a "negatives" point. It is a ranking signal here, not an
+  exclusion: application code no longer cuts these profiles, so the ordering is
+  where the campaign's preference takes effect.
+- When "requirePhoto" is absent or false, a missing photo is not a mark against
+  the profile; note it only as a limit on what could be assessed.
+
 === IMAGE AND AGE RULES ===
 - Each image belongs to the profile ID named immediately before it. Never
   describe or score one profile using another profile's photo. If you cannot

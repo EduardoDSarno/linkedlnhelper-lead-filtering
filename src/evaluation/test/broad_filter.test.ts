@@ -52,7 +52,10 @@ function profile(
   };
 }
 
-test('removes profiles without photos when that exclusion is configured', () => {
+test('keeps profiles without photos, recording the gap instead of cutting them', () => {
+  // A scraper reads a profile anonymously, so a photo restricted to members or
+  // connections is indistinguishable from no photo. Excluding here threw away
+  // real candidates; the model ranks them instead.
   const criteria: FullEvaluationCriteria = {
     requirePhoto: true,
     ...prompts(),
@@ -67,12 +70,12 @@ test('removes profiles without photos when that exclusion is configured', () => 
 
   assert.deepEqual(
     result.evaluations.map((evaluation) => evaluation.decision),
-    [BROAD_DECISION.Failed, BROAD_DECISION.NextPhase],
+    [BROAD_DECISION.NextPhase, BROAD_DECISION.NextPhase],
   );
-  assert.match(result.evaluations[0]?.decisionMessage ?? '', /No profile photo/);
+  assert.match(result.evaluations[0]?.results[0]?.evidence[0] ?? '', /No profile photo/);
   assert.deepEqual(
     result.profilesForAi.map((candidate) => candidate.profileId),
-    ['with-photo'],
+    ['without-photo', 'with-photo'],
   );
 });
 
@@ -119,7 +122,7 @@ test('no longer excludes on location, age, keyword, or open-to-work', () => {
   assert.equal(evaluation.results.length, 0);
 });
 
-test('still applies the photo cut when the retired criteria are also configured', () => {
+test('reports only the photo criterion when the retired criteria are also configured', () => {
   const criteria: FullEvaluationCriteria = {
     location: {
       locations: ['São Paulo, SP'],
@@ -136,7 +139,8 @@ test('still applies the photo cut when the retired criteria are also configured'
     criteria,
   );
 
-  assert.equal(evaluation.decision, BROAD_DECISION.Failed);
+  assert.equal(evaluation.decision, BROAD_DECISION.NextPhase);
   assert.equal(evaluation.results.length, 1);
   assert.equal(evaluation.results[0]?.criterion, 'requirePhoto');
+  assert.equal(evaluation.results[0]?.excludes, false);
 });

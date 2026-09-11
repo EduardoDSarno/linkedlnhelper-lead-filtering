@@ -50,6 +50,11 @@ export interface EvaluationProfileData {
   readonly openToWork?: boolean;
   readonly hasPhoto: boolean;
   /**
+   * Whether the scraper itself saw the photo on the live profile, or it came
+   * from the Linked Helper export instead. Absent when there is no photo.
+   */
+  readonly photoConfirmedByProvider?: boolean;
+  /**
    * Dated age anchors extracted from experience and education, so the model
    * judges a timeline instead of reconstructing one from a messy array.
    */
@@ -135,6 +140,9 @@ export function mapEvaluationProfileData(
       ? { linkedHelperPublicId: fullProfile.linkedHelperPublicId }
       : {}),
     hasPhoto: hasProfilePhoto(fullProfile.photo),
+    ...(hasProfilePhoto(fullProfile.photo)
+      ? { photoConfirmedByProvider: fullProfile.photoSource !== 'linkedHelper' }
+      : {}),
     careerTimeline: buildCareerTimeline(
       fullProfile.experience,
       fullProfile.education,
