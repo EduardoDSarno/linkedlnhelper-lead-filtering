@@ -20,7 +20,7 @@ const API_PATHS = [
 
 /** Current ngrok hostname allowed through Vite's development host check. */
 const NGROK_ALLOWED_HOST =
-  '37e0-2001-569-71ae-f500-4d58-fce0-782f-bb88.ngrok-free.app'
+  '368b-2001-569-71ae-f500-6504-68b3-d0fc-70af.ngrok-free.app'
 
 // https://vite.dev/config/
 export default defineConfig({

@@ -70,6 +70,7 @@ test('builds a compact AI evaluation payload without exposing the raw profile', 
       firstAcademicYear: 2017,
       firstProfessionalYear: 2024,
       yearsOfExperience: new Date().getFullYear() - 2024,
+      isCurrentlyEmployed: true,
       academicEntries: [
         {
           schoolName: 'Example University',

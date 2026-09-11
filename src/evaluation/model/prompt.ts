@@ -110,16 +110,29 @@ function profileParts(profile: EvaluationProfileData): ModelPart[] {
   return parts;
 }
 
+/**
+ * The date the model reads every profile date against.
+ *
+ * Without it a model has no way to tell whether a role that ended in "Sep
+ * 2024" finished last month or years ago, which is the difference a campaign
+ * rule about time out of work turns on.
+ */
+function evaluationDate(now: Date): string {
+  return now.toISOString().slice(0, 10);
+}
+
 /** Builds the header, per-profile blocks with photos, and the closing line. */
 function requestParts(
   criteria: FullEvaluationCriteria,
   profiles: readonly EvaluationProfileData[],
+  now: Date = new Date(),
 ): ModelPart[] {
   const campaign = campaignCriteriaForModel(criteria);
 
   return [
     {
       text: fillPromptTemplate(MODEL_EVALUATION_REQUEST_HEADER, {
+        [MODEL_EVALUATION_PROMPT_SLOTS.evaluationDate]: evaluationDate(now),
         [MODEL_EVALUATION_PROMPT_SLOTS.additionalGuidance]:
           criteria.userPrompt?.trim() || MODEL_EVALUATION_EMPTY_USER_PROMPT,
         [MODEL_EVALUATION_PROMPT_SLOTS.campaignCriteria]: campaign

@@ -78,6 +78,7 @@ export const MODEL_EVALUATION_PROMPT_SLOTS = {
   campaignCriteria: '{{campaignCriteria}}',
   profileId: '{{profileId}}',
   profileJson: '{{profileJson}}',
+  evaluationDate: '{{evaluationDate}}',
 } as const;
 
 /** Fallback text when the campaign did not supply extra user guidance. */
@@ -122,25 +123,22 @@ ${MODEL_EVALUATION_PROMPT_SLOTS.systemPrompt}
   make it ambiguous, say so as a "negatives" point instead of cutting.
 
 === EMPLOYMENT STATUS ===
-- Decide from the primary campaign instructions whether this campaign wants
-  people who are currently employed, people who are between roles, or neither.
-  Nothing in the structured criteria states this; read the campaign's own words
-  for it. Phrases about poaching, hiring away, or targeting someone at a named
-  employer mean it wants people in a job. Phrases about availability, being
-  open to a move, or looking for work mean it wants people who are not.
-- When the campaign expresses no preference either way, ignore employment
-  status entirely and do not let it move the score.
-- Read the person's actual status from the experience list, not from any badge:
-  a role whose end date reads "Present", or which has a start date and no end
-  date, is a current job. When every listed role has ended, the person is
-  probably between roles. When the most recent role ended over a year ago and
-  nothing replaced it, say so as a "negatives" point — a stale profile and an
-  unemployed person look identical here.
-- When the campaign does express a preference, weight it heavily: a profile on
-  the wrong side of it should fall well down the ranking even when the rest of
-  the career fits, and a profile on the right side should be rewarded. State
-  which side you placed the person on and the role you read it from in the
-  "summary", and add a matching "positives" or "negatives" point.
+- "careerTimeline.isCurrentlyEmployed" already states whether any listed role
+  is still open, and is computed from the role dates rather than any badge: a
+  role with no end date, or one reading "Present", is a current job. Read this
+  field instead of deriving the answer from the experience list yourself. It is
+  absent when the profile lists no roles at all, which is not the same as being
+  out of work — say so as an uncertainty rather than assuming either way.
+- When it is false, "careerTimeline.monthsSinceLastRole" gives the whole months
+  since the most recent role ended, measured against today's date above. It is
+  absent when no ended role carries a dated end, in which case the length of
+  the gap is unknown and should be reported as an uncertainty, not estimated.
+- A gap does not by itself mean the person is out of work: an abandoned profile
+  and an unemployed person look identical here. Say which of the two the
+  evidence supports, or that it cannot be told.
+- Whether any of this counts for or against a profile is the campaign's call.
+  Apply the primary campaign instructions; when they say nothing about
+  employment, let it alone and do not move the score for it.
 
 === IMAGE AND AGE RULES ===
 - Each image belongs to the profile ID named immediately before it. Never
@@ -224,6 +222,11 @@ ${MODEL_EVALUATION_PROMPT_SLOTS.systemPrompt}
  * profile's image) per profile, then {@link MODEL_EVALUATION_CLOSING}.
  */
 export const MODEL_EVALUATION_REQUEST_HEADER = `
+=== TODAY'S DATE ===
+${MODEL_EVALUATION_PROMPT_SLOTS.evaluationDate}
+Every date in a profile is historical. Read "how long ago" against this date;
+it is the only reference point available, so do not assume any other.
+
 === ADDITIONAL USER GUIDANCE ===
 ${MODEL_EVALUATION_PROMPT_SLOTS.additionalGuidance}
 

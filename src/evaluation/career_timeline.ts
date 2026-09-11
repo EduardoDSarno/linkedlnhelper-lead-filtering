@@ -22,6 +22,17 @@ export interface CareerTimeline {
   readonly firstProfessionalYear?: number;
   /** Whole years between the first listed role and now. */
   readonly yearsOfExperience?: number;
+  /**
+   * Whether any listed role is still open — no end date, or one reading
+   * "Present". Absent when the profile lists no roles at all, which is not the
+   * same as being out of work.
+   */
+  readonly isCurrentlyEmployed?: boolean;
+  /**
+   * Whole months between the most recently ended role and now, present only
+   * when no role is open and at least one carries a dated end.
+   */
+  readonly monthsSinceLastRole?: number;
   /** The higher-education entries behind `firstAcademicYear`, oldest first. */
   readonly academicEntries: readonly CareerTimelineEducation[];
 }
@@ -52,6 +63,41 @@ function isHigherEducation(education: ProfileEducation): boolean {
 /** Returns the smallest year in a list, or undefined when the list is empty. */
 function earliestYear(years: readonly number[]): number | undefined {
   return years.length > 0 ? Math.min(...years) : undefined;
+}
+
+/** Puts two partial dates on one axis so they can be compared directly. */
+const MONTHS_IN_YEAR = 12;
+
+/** Whether a role is still open: no end date, or the provider's "Present". */
+function isCurrentRole(role: ProfileExperience): boolean {
+  if (!role.endDate) return true;
+  return role.endDate.text?.trim().toLowerCase() === 'present';
+}
+
+/** Months since year zero, so two partial dates compare on one axis. */
+function monthIndex(date: { year: number; month?: number }): number {
+  return date.year * MONTHS_IN_YEAR + (date.month ?? 1);
+}
+
+/**
+ * Whole months between the most recently ended role and now.
+ *
+ * Undefined when no ended role carries a year, since an undated end says
+ * nothing about how long ago it was. Negative gaps become zero: LinkedIn lets
+ * a role be post-dated, and "ends next month" is not time out of work.
+ */
+function monthsSinceLastRole(
+  experience: readonly ProfileExperience[],
+  now: Date,
+): number | undefined {
+  const endings = experience
+    .map((role) => role.endDate)
+    .filter((date): date is { year: number; month?: number } => date?.year !== undefined);
+  if (endings.length === 0) return undefined;
+
+  const latest = Math.max(...endings.map(monthIndex));
+  const today = now.getFullYear() * MONTHS_IN_YEAR + (now.getMonth() + 1);
+  return Math.max(0, today - latest);
 }
 
 /**
@@ -93,12 +139,20 @@ export function buildCareerTimeline(
       .filter((year): year is number => year !== undefined),
   );
 
+  // Employment status is reported, never judged: whether a gap disqualifies
+  // anyone is the campaign's call, so this states the fact and its size and
+  // stops there.
+  const employed = experience.length > 0 ? experience.some(isCurrentRole) : undefined;
+  const gapMonths = employed === false ? monthsSinceLastRole(experience, now) : undefined;
+
   return {
     ...(firstAcademicYear !== undefined ? { firstAcademicYear } : {}),
     ...(firstProfessionalYear !== undefined ? { firstProfessionalYear } : {}),
     ...(firstProfessionalYear !== undefined
       ? { yearsOfExperience: Math.max(0, now.getFullYear() - firstProfessionalYear) }
       : {}),
+    ...(employed !== undefined ? { isCurrentlyEmployed: employed } : {}),
+    ...(gapMonths !== undefined ? { monthsSinceLastRole: gapMonths } : {}),
     academicEntries,
   };
 }

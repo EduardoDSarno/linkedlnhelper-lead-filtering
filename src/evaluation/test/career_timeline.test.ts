@@ -81,3 +81,72 @@ test('leaves anchors absent rather than guessing when no dates exist', () => {
   assert.equal(timeline.yearsOfExperience, undefined);
   assert.equal(timeline.academicEntries.length, 1);
 });
+
+test('reports an open role as currently employed, with no gap to measure', () => {
+  const timeline = buildCareerTimeline(
+    [
+      { position: 'Gerente', companyName: 'A', startDate: { year: 2023, month: 6 }, endDate: { text: 'Present' } },
+      { position: 'Analista', companyName: 'B', startDate: { year: 2019 }, endDate: { year: 2023, month: 5 } },
+    ],
+    [],
+    new Date('2026-09-11T00:00:00Z'),
+  );
+
+  assert.equal(timeline.isCurrentlyEmployed, true);
+  assert.equal(timeline.monthsSinceLastRole, undefined);
+});
+
+test('treats a role with no end date as still open', () => {
+  const timeline = buildCareerTimeline(
+    [{ position: 'Sócio', companyName: 'A', startDate: { year: 2021 } }],
+    [],
+    new Date('2026-09-11T00:00:00Z'),
+  );
+
+  assert.equal(timeline.isCurrentlyEmployed, true);
+});
+
+test('measures the gap from the most recent ending, not the last listed role', () => {
+  // Providers do not always return roles newest-first, so the gap has to come
+  // from the maximum end date rather than from position in the array.
+  const timeline = buildCareerTimeline(
+    [
+      { position: 'Antigo', companyName: 'A', startDate: { year: 2009 }, endDate: { year: 2012, month: 3 } },
+      { position: 'Recente', companyName: 'B', startDate: { year: 2024, month: 4 }, endDate: { year: 2024, month: 9 } },
+    ],
+    [],
+    new Date('2026-09-11T00:00:00Z'),
+  );
+
+  assert.equal(timeline.isCurrentlyEmployed, false);
+  assert.equal(timeline.monthsSinceLastRole, 24);
+});
+
+test('leaves the gap unknown when no ended role carries a year', () => {
+  const timeline = buildCareerTimeline(
+    [{ position: 'Consultor', companyName: 'A', endDate: { text: 'alguns anos' } }],
+    [],
+    new Date('2026-09-11T00:00:00Z'),
+  );
+
+  assert.equal(timeline.isCurrentlyEmployed, false);
+  assert.equal(timeline.monthsSinceLastRole, undefined);
+});
+
+test('says nothing about employment when no roles are listed', () => {
+  // An empty history is not evidence of being out of work.
+  const timeline = buildCareerTimeline([], [], new Date('2026-09-11T00:00:00Z'));
+
+  assert.equal(timeline.isCurrentlyEmployed, undefined);
+  assert.equal(timeline.monthsSinceLastRole, undefined);
+});
+
+test('does not read a post-dated role as time out of work', () => {
+  const timeline = buildCareerTimeline(
+    [{ position: 'Gerente', companyName: 'A', startDate: { year: 2024 }, endDate: { year: 2027, month: 4 } }],
+    [],
+    new Date('2026-09-11T00:00:00Z'),
+  );
+
+  assert.equal(timeline.monthsSinceLastRole, 0);
+});
