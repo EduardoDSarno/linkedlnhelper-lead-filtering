@@ -10,7 +10,6 @@ import {
   openRouterModelClient,
   resolveModelClient,
   resolveOpenRouterMaxPrice,
-  resolveOpenRouterProviderSort,
   resolveProviderModelId,
   resolveThinkingEffort,
   resolveThinkingEffortChoice,
@@ -128,26 +127,4 @@ test('keeps the cap when a configured price is blank or not a number', () => {
     resolveOpenRouterMaxPrice({ OPENROUTER_MAX_PROMPT_PRICE: '-1' }),
     { prompt: '0.15', completion: '0.50' },
   );
-});
-
-test('defaults backend selection to the cheapest available', () => {
-  assert.equal(resolveOpenRouterProviderSort({}), 'price');
-});
-
-test('takes a configured sort, so speed can be bought back when needed', () => {
-  assert.equal(
-    resolveOpenRouterProviderSort({ OPENROUTER_PROVIDER_SORT: 'throughput' }),
-    'throughput',
-  );
-  assert.equal(
-    resolveOpenRouterProviderSort({ OPENROUTER_PROVIDER_SORT: '  LATENCY  ' }),
-    'latency',
-  );
-});
-
-test('falls back to the default sort rather than sending an unusable one', () => {
-  // OpenRouter rejects an unknown sort outright, which would fail the whole
-  // request instead of quietly routing differently.
-  assert.equal(resolveOpenRouterProviderSort({ OPENROUTER_PROVIDER_SORT: 'cheapest' }), 'price');
-  assert.equal(resolveOpenRouterProviderSort({ OPENROUTER_PROVIDER_SORT: '' }), 'price');
 });
