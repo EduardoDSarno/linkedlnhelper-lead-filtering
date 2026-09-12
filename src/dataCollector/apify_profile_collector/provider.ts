@@ -8,7 +8,7 @@ import type {
 import type { Logger } from '../../logging/index.js';
 
 /** Environment variable selecting which Apify Actor collects full profiles. */
-export const PROFILE_COLLECTOR_ENVIRONMENT_KEY = 'APIFY_PROFILE_COLLECTOR';
+const PROFILE_COLLECTOR_ENVIRONMENT_KEY = 'APIFY_PROFILE_COLLECTOR';
 
 /**
  * `hybrid` is Bebity with Harvest as a fallback for what Bebity can't handle
@@ -16,13 +16,13 @@ export const PROFILE_COLLECTOR_ENVIRONMENT_KEY = 'APIFY_PROFILE_COLLECTOR';
  * remain available as explicit single-provider overrides, for cost
  * benchmarking or isolating which provider produced a given result.
  */
-export const PROFILE_COLLECTOR_PROVIDERS = ['hybrid', 'bebity', 'harvest'] as const;
+const PROFILE_COLLECTOR_PROVIDERS = ['hybrid', 'bebity', 'harvest'] as const;
 
-export type ProfileCollectorProvider =
+type ProfileCollectorProvider =
   (typeof PROFILE_COLLECTOR_PROVIDERS)[number];
 
 /** Provider used when the environment does not select one. */
-export const DEFAULT_PROFILE_COLLECTOR_PROVIDER: ProfileCollectorProvider =
+const DEFAULT_PROFILE_COLLECTOR_PROVIDER: ProfileCollectorProvider =
   'hybrid';
 
 /**
@@ -51,7 +51,7 @@ const COLLECTORS: Readonly<Record<ProfileCollectorProvider, ProfileCollector>> =
  * silently falling back. A typo would otherwise route a paid production run to
  * the wrong Actor, which differs in cost, schema, and coverage.
  */
-export function resolveProfileCollectorProvider(
+function resolveProfileCollectorProvider(
   environment: NodeJS.ProcessEnv = process.env,
 ): ProfileCollectorProvider {
   const configured = environment[PROFILE_COLLECTOR_ENVIRONMENT_KEY]

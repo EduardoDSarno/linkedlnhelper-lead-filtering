@@ -38,14 +38,14 @@ export interface FailureDescriptor {
 /**
  * Reads an HTTP status out of a provider record, when the Actor put one there.
  */
-export function providerStatus(record: RawApifyProfile): number | undefined {
+function providerStatus(record: RawApifyProfile): number | undefined {
   return asHttpStatus(record['status']);
 }
 
 /**
  * Reads an error message out of a provider record, when the Actor put one there.
  */
-export function providerError(record: RawApifyProfile): string | undefined {
+function providerError(record: RawApifyProfile): string | undefined {
   return asString(record['error']);
 }
 
@@ -53,7 +53,7 @@ export function providerError(record: RawApifyProfile): string | undefined {
  * Digs an HTTP status out of a thrown value. The Apify client is not consistent
  * about where it puts one, so the three known shapes are tried in order.
  */
-export function statusFromThrownError(error: unknown): number | undefined {
+function statusFromThrownError(error: unknown): number | undefined {
   const errorRecord = asRecord(error);
   if (!errorRecord) return undefined;
 
@@ -72,7 +72,7 @@ export function statusFromThrownError(error: unknown): number | undefined {
  * a rate limit, or a 5xx usually will not. Everything else is assumed retryable,
  * so an unrecognized fault costs an extra attempt instead of a lost profile.
  */
-export function classifyFailure(
+function classifyFailure(
   error: string,
   status?: number,
   raw?: RawApifyProfile,
@@ -199,7 +199,7 @@ export function classifyThrownError(error: unknown): FailureDescriptor {
  * fields are spread in only when present, because exactOptionalPropertyTypes
  * distinguishes an absent property from one explicitly set to undefined.
  */
-export function finalFailure(
+function finalFailure(
   profile: PendingProfile,
   descriptor: FailureDescriptor,
   attempts: number,
@@ -224,7 +224,7 @@ export function finalFailure(
  * than one shape with optional fields) is what lets the collector switch on
  * `kind` and have every branch's fields fully known.
  */
-export type FailureOutcome =
+type FailureOutcome =
   | { kind: 'abort'; message: string }
   | { kind: 'retry'; profile: PendingProfile }
   | { kind: 'final'; failure: ApifyProfileFailure };
