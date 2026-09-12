@@ -4,7 +4,7 @@ import type { FullProfile } from '../profile/index.js';
 import type { ProfileImageAnalysisOutcome } from './types.js';
 
 /** Stable status labels used by per-profile image-analysis log entries. */
-export const PROFILE_IMAGE_LOG_STATUS = {
+const PROFILE_IMAGE_LOG_STATUS = {
   succeeded: 'succeeded',
   failed: 'failed',
   skippedMissingPhoto: 'skipped_missing_photo',

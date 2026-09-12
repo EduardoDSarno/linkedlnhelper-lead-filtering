@@ -12,7 +12,7 @@ import { writeEvaluationReport } from './evaluation_report.js';
 import type { ProcessingPaths } from './processing.js';
 
 /** The approved set after human overrides, plus ids that matched no profile. */
-export interface OverrideApplication {
+interface OverrideApplication {
   approvedPublicIds: Set<string>;
   unknownPublicIds: string[];
 }

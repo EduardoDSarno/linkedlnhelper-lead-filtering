@@ -7,7 +7,7 @@ import { writeEvaluationReport } from './evaluation_report.js';
 import type { ProcessingPaths } from './processing.js';
 
 /** The artifact paths a completed review run produced on disk. */
-export interface ReviewArtifacts {
+interface ReviewArtifacts {
   approvedCsvPath: string;
   evaluationReportPath: string;
 }

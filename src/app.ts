@@ -46,7 +46,7 @@ export async function prepRun(
 }
 
 /** Optional review-pipeline flags that the API can pass without changing the UI. */
-export interface RunPipelineOptions {
+interface RunPipelineOptions {
   skipCollection?: boolean;
   modelEvaluation?: ModelEvaluationOptions;
 }

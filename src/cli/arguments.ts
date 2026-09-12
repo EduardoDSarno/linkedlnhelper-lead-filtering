@@ -9,40 +9,40 @@ export const APPLICATION_MODE = {
 } as const;
 
 /** Command flags selecting work beyond a CSV-only import. */
-export const APPLICATION_MODE_FLAG = {
+const APPLICATION_MODE_FLAG = {
   collect: '--collect',
   collectApify: '--collect-apify',
   review: '--review',
 } as const;
 
 /** Human-readable invocation examples reported for invalid arguments. */
-export const APPLICATION_USAGE = {
+const APPLICATION_USAGE = {
   importCsv: 'npm start -- <path-to-csv>',
   collectProfiles: 'npm run collect -- <path-to-csv>',
   reviewProfiles: 'npm run review -- <path-to-csv> <path-to-criteria-json>',
 } as const;
 
 /** Parsed arguments for a CSV-only import. */
-export interface CsvImportArguments {
+interface CsvImportArguments {
   mode: typeof APPLICATION_MODE.importCsv;
   csvPath: string;
 }
 
 /** Parsed arguments for provider collection without profile evaluation. */
-export interface ProfileCollectionArguments {
+interface ProfileCollectionArguments {
   mode: typeof APPLICATION_MODE.collectProfiles;
   csvPath: string;
 }
 
 /** Parsed arguments for the complete acquisition and evaluation workflow. */
-export interface ReviewInputArguments {
+interface ReviewInputArguments {
   mode: typeof APPLICATION_MODE.reviewProfiles;
   csvPath: string;
   criteriaPath: string;
 }
 
 /** Every valid argument shape accepted by the application. */
-export type ApplicationArguments =
+type ApplicationArguments =
   | CsvImportArguments
   | ProfileCollectionArguments
   | ReviewInputArguments;

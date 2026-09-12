@@ -5,7 +5,7 @@ import { deduplicateBy } from '../../helpers/index.js';
 import { toImportedCsvProfile } from '../../profile/index.js';
 import type { ImportedCsvProfile } from '../../profile/index.js';
 
-export const TEXT_ENCODING = 'utf-8';
+const TEXT_ENCODING = 'utf-8';
 
 /** Field separator Linked Helper writes between CSV columns. */
 const LINKED_HELPER_DELIMITER = ';';

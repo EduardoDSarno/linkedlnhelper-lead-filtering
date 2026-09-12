@@ -12,12 +12,13 @@ import type {
   StoredEvaluationRun,
 } from './types.js';
 
-export { MANUAL_DECISION, PROCESSING_STATUS } from './types.js';
+export {
+  MANUAL_DECISION,
+  PROCESSING_STATUS,
+} from './types.js';
 export type {
-  ManualDecision,
   ManualOverride,
   ProcessingRun,
-  ProcessingStatus,
   StoredEvaluationRun,
 } from './types.js';
 

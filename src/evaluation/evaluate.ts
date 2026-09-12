@@ -29,7 +29,7 @@ export interface EvaluationRunResult {
 }
 
 /** Options controlling how profile photos reach the evaluation request. */
-export interface EvaluationPhotoOptions {
+interface EvaluationPhotoOptions {
   /** Skips downloading photos entirely; the model then sees text only. */
   skipPhotos?: boolean;
   /** Structured logger, used to report download progress. */

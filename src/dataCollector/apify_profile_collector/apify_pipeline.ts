@@ -13,7 +13,7 @@ import type {
  * Injectable so tests can supply fake collectors instead of calling either
  * real Actor. Both real collectors already match this shape.
  */
-export interface HybridProfileCollectors {
+interface HybridProfileCollectors {
   collectBebity: ProfileCollector;
   collectHarvest: ProfileCollector;
 }
@@ -30,7 +30,7 @@ const DEFAULT_HYBRID_COLLECTORS: HybridProfileCollectors = {
  * fell back to the expensive one — the entire point of building Bebity
  * support was that split, so it can't be allowed to disappear at the merge.
  */
-export interface HybridProfileCollectionBreakdown {
+interface HybridProfileCollectionBreakdown {
   bebity: ApifyCollectionStats;
   harvest: ApifyCollectionStats;
 }
@@ -39,7 +39,7 @@ export interface HybridProfileCollectionBreakdown {
  * A regular `ApifyCollectionResult` — assignable anywhere one is expected,
  * including as a `ProfileCollector` — plus the per-provider breakdown above.
  */
-export interface HybridCollectionResult extends ApifyCollectionResult {
+interface HybridCollectionResult extends ApifyCollectionResult {
   providerBreakdown: HybridProfileCollectionBreakdown;
 }
 

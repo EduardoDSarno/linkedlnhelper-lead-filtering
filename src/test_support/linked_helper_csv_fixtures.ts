@@ -7,7 +7,7 @@
  */
 
 /** The Linked Helper columns the importer reads, in export order. */
-export const LINKED_HELPER_COLUMNS = [
+const LINKED_HELPER_COLUMNS = [
   'public_id',
   'profile_url',
   'lh_id',

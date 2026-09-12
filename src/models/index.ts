@@ -17,16 +17,9 @@ export {
   createOpenRouterModelClient,
   openRouterModelClient,
 } from './openrouter_adapter.js';
-export type { OpenRouterChatSender } from './openrouter_adapter.js';
 
-export {
-  DEFAULT_IMAGE_RESOLUTION,
-  DEFAULT_OPENROUTER_THINKING_EFFORT,
-  MODEL_RETRY_HTTP_STATUS_CODES,
-  THINKING_EFFORTS,
-} from './model_client.js';
+export { DEFAULT_OPENROUTER_THINKING_EFFORT } from './model_client.js';
 export type {
-  ImageResolution,
   ThinkingEffort,
   ModelPart,
   ModelTokenUsage,
@@ -37,7 +30,6 @@ export type {
 
 export {
   DEFAULT_OPENROUTER_MAX_COMPLETION_PRICE,
-  DEFAULT_OPENROUTER_MAX_PROMPT_PRICE,
   DEFAULT_OPENROUTER_MODEL,
   OPENROUTER_MAX_COMPLETION_PRICE_ENVIRONMENT_KEY,
   OPENROUTER_MAX_PROMPT_PRICE_ENVIRONMENT_KEY,
@@ -49,4 +41,4 @@ export {
   resolveThinkingEffort,
   resolveThinkingEffortChoice,
 } from './model_provider.js';
-export type { OpenRouterMaxPrice, ThinkingEffortChoice } from './model_provider.js';
+

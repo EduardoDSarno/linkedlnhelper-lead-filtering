@@ -6,7 +6,7 @@
  * finds the state by testing every comma-separated segment against this table
  * rather than trusting the segment's position.
  */
-export const BRAZIL_STATE_BY_UF = {
+const BRAZIL_STATE_BY_UF = {
   AC: 'Acre',
   AL: 'Alagoas',
   AP: 'Amapá',

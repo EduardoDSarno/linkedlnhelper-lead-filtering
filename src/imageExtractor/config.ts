@@ -31,13 +31,6 @@ export const PROFILE_IMAGE_LIMITS = {
   observationCount: 5,
 } as const;
 
-/** Retry policy for image model requests. */
-export const IMAGE_MODEL_RETRY_POLICY = {
-  initialDelaySeconds: 0.25,
-  maximumDelaySeconds: 4,
-  httpStatusCodes: [408, 429, 500, 502, 503, 504],
-} as const;
-
 /** Fully validated options used for one image extraction. */
 export interface ResolvedProfileImageExtractionOptions {
   model: string;

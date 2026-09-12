@@ -3,13 +3,13 @@ import type { Logger } from '../logging/index.js';
 import { asRecord } from '../helpers/index.js';
 
 /** The stage a run is currently working through. */
-export const RUN_PROGRESS_STAGE = {
+const RUN_PROGRESS_STAGE = {
   collecting: 'collecting',
   loadingPhotos: 'loading_photos',
   evaluating: 'evaluating',
 } as const;
 
-export type RunProgressStage =
+type RunProgressStage =
   (typeof RUN_PROGRESS_STAGE)[keyof typeof RUN_PROGRESS_STAGE];
 
 /**

@@ -82,7 +82,7 @@ function uniqueProfileLinks(profileLinks: readonly string[]): string[] {
  * @returns The persisted plan and the exact URLs that a paid run would submit.
  * @throws When selection produces no profiles.
  */
-export function prepareApifyBenchmark(
+function prepareApifyBenchmark(
   request: ApifyBenchmarkRequest,
   environment: NodeJS.ProcessEnv = process.env,
 ): PreparedApifyBenchmark {
@@ -215,7 +215,7 @@ function expectedNamesByUrl(
  * @param profiles - Successful untouched Apify profile records.
  * @returns Comparison totals and mismatches, or undefined when names are absent.
  */
-export function compareApifyBenchmarkIdentities(
+function compareApifyBenchmarkIdentities(
   expectedIdentities: readonly ApifyBenchmarkExpectedIdentity[],
   profiles: readonly RawApifyProfile[],
 ): ApifyBenchmarkIdentityComparison | undefined {
