@@ -48,6 +48,20 @@ export const CSV_CONTENT_TYPE = 'text/csv';
 /** Fastify body-parser mode that yields the upload as raw, undecoded bytes. */
 export const PARSE_AS_BUFFER = 'buffer';
 
+/**
+ * Largest Linked Helper CSV the import route accepts, in bytes.
+ *
+ * Applied to the CSV parser alone rather than to the whole server, so the JSON
+ * routes keep Fastify's 1 MiB default and a malformed request cannot ask the
+ * process to buffer tens of megabytes.
+ *
+ * Observed exports run about 1.2 KB per row, so a campaign reaches Fastify's
+ * default limit at roughly 870 leads — already close to the 741-row exports
+ * being imported today. This carries around 28,000 rows, which leaves room for
+ * campaigns well beyond the current scale.
+ */
+export const CSV_UPLOAD_BODY_LIMIT_BYTES = 32 * 1024 * 1024;
+
 /** Default port the API listens on. */
 export const DEFAULT_PORT = 3000;
 

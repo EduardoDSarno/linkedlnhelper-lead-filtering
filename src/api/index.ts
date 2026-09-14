@@ -29,6 +29,7 @@ import {
     API_ROUTES,
     ARTIFACT_TYPE,
     CSV_CONTENT_TYPE,
+    CSV_UPLOAD_BODY_LIMIT_BYTES,
     HTTP_STATUS,
     PARSE_AS_BUFFER,
     API_FIELD,
@@ -534,9 +535,10 @@ async function registerCsvParser(server: FastifyInstance)
 {
     server.addContentTypeParser(CSV_CONTENT_TYPE,
         {
-            parseAs: PARSE_AS_BUFFER
+            parseAs: PARSE_AS_BUFFER,
+            bodyLimit: CSV_UPLOAD_BODY_LIMIT_BYTES
         },
-        (_request, payload, done) => 
+        (_request, payload, done) =>
         {
             done(null, payload);
         },
