@@ -44,6 +44,32 @@ interface EvaluationPhotoOptions {
 const DEFAULT_PHOTO_LOAD_CONCURRENCY = 25;
 
 /**
+ * Restates a profile whose photo could not be fetched as one without a photo.
+ *
+ * `hasPhoto` is derived when the profile is mapped, from a URL recorded at
+ * collection time. LinkedIn signs those URLs with an expiry roughly two weeks
+ * out, so by evaluation the address can be dead while the field still reads
+ * true. The model would then be told a photo exists and handed no image, and
+ * `requirePhoto` would rank the profile as though it had one.
+ *
+ * Dropping the photo fields here keeps the description the model reads in
+ * agreement with what it was actually sent. The profile itself is still
+ * evaluated: an unreachable photo is a gap in the evidence, not grounds to
+ * discard the candidate.
+ */
+function withoutUnreachablePhoto(
+  profile: EvaluationProfileData,
+): EvaluationProfileData {
+  const {
+    photoConfirmedByProvider: _confirmed,
+    photoUrl: _photoUrl,
+    ...rest
+  } = profile;
+
+  return { ...rest, hasPhoto: false };
+}
+
+/**
  * Downloads each profile's photo and attaches the bytes for the model request.
  *
  * Runs after the broad filter so an excluded profile never costs a download.
@@ -101,6 +127,7 @@ async function attachProfilePhotos(
           profileId: profile.profileId,
           error: errorMessage(error),
         });
+        results[index] = withoutUnreachablePhoto(profile);
       }
 
       // Reported as it goes rather than only at the end: a few hundred
