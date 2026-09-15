@@ -209,12 +209,14 @@ function mapOpenRouterTokenUsage(
   if (!usage) return undefined;
 
   const thinkingTokens = usage.completionTokensDetails?.reasoningTokens;
+  const cachedPromptTokens = usage.promptTokensDetails?.cachedTokens;
 
   return {
     promptTokens: usage.promptTokens,
     outputTokens: usage.completionTokens,
     totalTokens: usage.totalTokens,
     ...(thinkingTokens != null ? { thinkingTokens } : {}),
+    ...(cachedPromptTokens != null ? { cachedPromptTokens } : {}),
   };
 }
 

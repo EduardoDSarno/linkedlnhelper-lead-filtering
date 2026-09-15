@@ -103,12 +103,26 @@ export async function runReviewPipelineWithDependencies(
     db.close();
   }
 
+  const usage = evaluation.modelEvaluation.tokenUsage;
+
   logger.info(
     {
       evaluationRunId: evaluationRun.id,
       evaluatedProfiles: evaluation.broadFilter.evaluations.length,
       profilesSentToModel: evaluation.modelEvaluation.requestedProfiles,
       failedModelProfiles: evaluation.modelEvaluation.failedProfiles,
+      promptTokens: usage.promptTokens,
+      outputTokens: usage.outputTokens,
+      // Every request repeats the same instruction layer and campaign prompt.
+      // A backend that recognizes that prefix bills it at a fraction of the
+      // usual rate, but routing spreads requests across backends that differ
+      // in whether they cache at all. Reported so the share is measured rather
+      // than assumed; a flat zero means no backend served this run from cache.
+      cachedPromptTokens: usage.cachedPromptTokens,
+      cachedPromptPercent:
+        usage.promptTokens > 0
+          ? Math.round((100 * usage.cachedPromptTokens) / usage.promptTokens)
+          : 0,
     },
     'Completed profile review pipeline.',
   );

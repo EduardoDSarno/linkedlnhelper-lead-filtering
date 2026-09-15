@@ -17,6 +17,7 @@ const NO_IMAGE_TOKEN_USAGE = {
   outputTokens: 0,
   thinkingTokens: 0,
   totalTokens: 0,
+  cachedPromptTokens: 0,
 } as const;
 
 /**

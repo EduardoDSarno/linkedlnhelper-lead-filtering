@@ -42,6 +42,20 @@ export interface ModelTokenUsage {
   outputTokens?: number;
   thinkingTokens?: number;
   totalTokens?: number;
+
+  /**
+   * Prompt tokens the backend served from its cache, when it reports any.
+   *
+   * Every request repeats the same instruction layer and campaign prompt
+   * before the profiles, so a backend that recognizes that prefix can charge a
+   * fraction of the usual rate for it. Whether any given backend does is not
+   * something the request can state, and routing spreads requests across
+   * several of them, so this is recorded to find out rather than assumed.
+   *
+   * Absent when the backend says nothing about caching, which is not the same
+   * as a reported zero.
+   */
+  cachedPromptTokens?: number;
 }
 
 /** Parameters passed to the model. */

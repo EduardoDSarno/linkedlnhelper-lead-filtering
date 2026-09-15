@@ -63,6 +63,7 @@ export function emptyModelEvaluationTokenUsage(): ModelEvaluationTokenUsage {
     outputTokens: 0,
     thinkingTokens: 0,
     totalTokens: 0,
+    cachedPromptTokens: 0,
   };
 }
 
@@ -77,6 +78,7 @@ function addTokenUsage(
   target.outputTokens += usage.outputTokens ?? 0;
   target.thinkingTokens += usage.thinkingTokens ?? 0;
   target.totalTokens += usage.totalTokens ?? 0;
+  target.cachedPromptTokens += usage.cachedPromptTokens ?? 0;
 }
 
 /** Reports whether a token total contains any billable model activity. */

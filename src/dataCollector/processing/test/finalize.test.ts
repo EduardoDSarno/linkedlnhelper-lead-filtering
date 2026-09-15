@@ -62,6 +62,7 @@ function runWith(evaluations: ProfileModelEvaluation[]): StoredEvaluationRun {
           outputTokens: 0,
           thinkingTokens: 0,
           totalTokens: 0,
+          cachedPromptTokens: 0,
         },
       },
     },

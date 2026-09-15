@@ -88,6 +88,7 @@ function run(
           outputTokens: 0,
           thinkingTokens: 0,
           totalTokens: 0,
+          cachedPromptTokens: 0,
         },
       },
     },

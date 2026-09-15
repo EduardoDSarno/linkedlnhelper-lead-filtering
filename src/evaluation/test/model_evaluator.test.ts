@@ -30,6 +30,7 @@ const TEST_TOKEN_USAGE = {
   outputTokens: 40,
   thinkingTokens: 20,
   totalTokens: 160,
+  cachedPromptTokens: 0,
 } as const;
 const PROFILE_BLOCK_PATTERN = /^--- PROFILE (\S+) ---$/m;
 
@@ -418,6 +419,9 @@ test('restores requested profile order and aggregates usage from every response'
     outputTokens: TEST_TOKEN_USAGE.outputTokens * 2,
     thinkingTokens: TEST_TOKEN_USAGE.thinkingTokens * 2,
     totalTokens: TEST_TOKEN_USAGE.totalTokens * 2,
+    // Neither response reported a cached prefix, which totals to zero rather
+    // than to an absent field.
+    cachedPromptTokens: 0,
   });
 });
 

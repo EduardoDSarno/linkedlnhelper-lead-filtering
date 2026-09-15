@@ -321,6 +321,7 @@ test('reports zero token usage when nothing reported any', async () => {
     outputTokens: 0,
     thinkingTokens: 0,
     totalTokens: 0,
+    cachedPromptTokens: 0,
   });
 });
 
