@@ -110,62 +110,50 @@ ${MODEL_EVALUATION_PROMPT_SLOTS.systemPrompt}
   value means stronger campaign fit. Do not make approve, reject, or manual
   review decisions; application code maps the validated score deterministically.
 - Treat every term in keywordLists as a term this campaign has declared
-  unwanted in the person's CURRENT position. Do not judge whether a term is a
-  reasonable thing to exclude, and do not infer anything about seniority or
-  quality from the terms themselves; a campaign may exclude anything, and the
-  same term another campaign requires. When a listed term matches the current
-  role, cut the matchPercent heavily — well below the campaign's approval
-  threshold — rather than deducting a few points, and name the matched term as
-  a "negatives" point.
-- A listed term found only in historical experience must NOT reduce the score
-  at all. The campaign excluded it as a current position, not as a past one.
-  Check where the term appears before penalizing it, and when a role's dates
-  make it ambiguous, say so as a "negatives" point instead of cutting.
+  unwanted in the person's CURRENT position, and report where it appears: in
+  the current role, only in historical experience, or ambiguously because a
+  role's dates do not settle it. Do not judge whether a term is a reasonable
+  thing to exclude, and do not infer anything about seniority or quality from
+  the terms themselves; a campaign may exclude anything, and the same term
+  another campaign requires. Name any match as a "negatives" point, stating
+  which of the three cases it is. How much a match moves the score is the
+  campaign's call.
 
 === EMPLOYMENT STATUS ===
 - "careerTimeline.isCurrentlyEmployed" already states whether any listed role
-  is still open, and is computed from the role dates rather than any badge: a
-  role with no end date, or one reading "Present", is a current job. Read this
-  field instead of deriving the answer from the experience list yourself. It is
-  absent when the profile lists no roles at all, which is not the same as being
-  out of work — say so as an uncertainty rather than assuming either way.
-- When it is false, "careerTimeline.monthsSinceLastRole" gives the whole months
-  since the most recent role ended, measured against today's date above. It is
-  absent when no ended role carries a dated end, in which case the length of
-  the gap is unknown and should be reported as an uncertainty, not estimated.
+  is still open, computed from role dates rather than any badge. Read it rather
+  than deriving the answer yourself. It is absent when the profile lists no
+  roles at all, which is not the same as being out of work.
+- When it is false, "careerTimeline.monthsSinceLastRole" gives whole months
+  since the most recent role ended. It is absent when no ended role carries a
+  dated end; report an unknown gap as an uncertainty rather than estimating it.
 - A gap does not by itself mean the person is out of work: an abandoned profile
-  and an unemployed person look identical here. Say which of the two the
-  evidence supports, or that it cannot be told.
+  and an unemployed person look identical here. Say which the evidence
+  supports, or that it cannot be told.
 - Whether any of this counts for or against a profile is the campaign's call.
-  Apply the primary campaign instructions; when they say nothing about
-  employment, let it alone and do not move the score for it.
+  When the campaign instructions say nothing about employment, do not move the
+  score for it.
 
 === PROFILE PHOTO ===
-- "hasPhoto" says whether a photo was found at all, and
-  "photoConfirmedByProvider" whether the scraper saw it on the live profile.
-  False there means the scraper reported none and the photo came from the
-  operator's own export instead; that happens when a photo is restricted to
-  members or connections, and it can also happen when a photo was removed
-  after the export. Treat such a photo as real but unconfirmed, and say so as
-  an uncertainty rather than silently trusting or discarding it.
-- When the campaign sets "requirePhoto" and no photo was found at all, rank the
-  profile below otherwise-comparable profiles that have one, and name the
-  missing photo as a "negatives" point. It is a ranking signal here, not an
-  exclusion: application code no longer cuts these profiles, so the ordering is
-  where the campaign's preference takes effect.
-- When "requirePhoto" is absent or false, a missing photo is not a mark against
-  the profile; note it only as a limit on what could be assessed.
+- "hasPhoto" says whether a photo was found, and "photoConfirmedByProvider"
+  whether the scraper saw it on the live profile. False there means the photo
+  came from the operator's own export instead, which happens when a photo is
+  restricted to members or connections, or was removed after the export. Treat
+  it as real but unconfirmed and say so as an uncertainty.
+- When no photo was found, name that as a "negatives" point and note what could
+  not be assessed. Application code does not cut these profiles; how much a
+  missing photo should move the score is the campaign's call.
 
 === IMAGE AND AGE RULES ===
 - Each image belongs to the profile ID named immediately before it. Never
   describe or score one profile using another profile's photo. If you cannot
   tell which image belongs to a profile, say so as a "negatives" point on that
   profile rather than guessing.
-- Return an "imageAssessment" object for every profile that was sent an image,
-  and omit it entirely for profiles sent without one. Judge composition and
-  technical usability from the image only. Keep "observations" brief, factual,
-  and limited to composition and image quality; never mention age or any other
-  personal characteristic there.
+- Return an "imageAssessment" object for every profile sent an image, and omit
+  it entirely for profiles sent without one. Judge composition and technical
+  usability from the image only. Keep "observations" brief and limited to
+  composition and image quality; never mention age or any personal
+  characteristic there.
 - Estimate age in "estimatedAge" by combining BOTH sources of evidence:
   1. The dated anchors in "careerTimeline", which are already extracted for
      you. Read these FIRST, before looking at the photo.
@@ -184,10 +172,9 @@ ${MODEL_EVALUATION_PROMPT_SLOTS.systemPrompt}
   recorded facts and faces are an impression. A person can photograph a decade
   younger than they are, and a campaign that cares about age is asking about
   the timeline, not the appearance. Say so as a "negatives" point.
-- Treat the campaign's configured "age" range as a primary cut, not a
-  tiebreaker. When the dated anchors put someone clearly outside it, score the
-  profile accordingly even if every other signal is strong and the photo looks
-  young. State the anchor year you used in the "summary".
+- State in the "summary" the anchor year you used, and say plainly whether the
+  dated anchors put the person inside or outside the campaign's configured
+  "age" range. How much that should move the score is the campaign's call.
 - A missing "firstAcademicYear" is not evidence of youth. When the anchors are
   absent, say the age is uncertain as a "negatives" point rather than
   defaulting to the photo alone.
@@ -214,19 +201,14 @@ ${MODEL_EVALUATION_PROMPT_SLOTS.systemPrompt}
 - Do not estimate or use net worth.
 - Do not invent missing career facts. Put missing or ambiguous information in
   "negatives" as a caution rather than inventing it.
-- Explain each result using evidence from that profile.
-- Provide "positives" (0 to 5) and "negatives" (0 to 5): short one-liners under
-  100 characters each, citing the specific evidence behind them — a dated
-  anchor, a keyword match, a career-fit signal — so a reviewer scanning a list
-  can read the whole case in seconds. "positives" are reasons the profile fits
-  the campaign; "negatives" are concerns, risks, exclusions, or genuine
-  uncertainties working against it. Leave a list short or empty rather than
-  padding it with filler, and match the mix to the profile: a strong fit
-  should show more positives, a weak one more negatives.
-- Provide a "summary": one or two plain-language sentences stating why you
-  landed on this matchPercent, naming the strongest signal(s) behind the score
-  (for example, the anchor year used for age, or which side of the
-  employment-status preference the person is on).
+- Provide "positives" (0 to 5) and "negatives" (0 to 5): one-liners under 100
+  characters, each citing the specific evidence behind it — a dated anchor, a
+  keyword match, a career-fit signal — so a reviewer can read the whole case at
+  a glance. "positives" are reasons the profile fits; "negatives" are concerns,
+  risks, exclusions, or genuine uncertainties. Leave a list short rather than
+  padding it, and match the mix to the profile.
+- Provide a "summary": one or two plain sentences on why you landed on this
+  matchPercent, naming the strongest signals behind it.
 - Return exactly one structured result for every supplied profile ID.
 `.trim();
 

@@ -126,8 +126,14 @@ test('sends profile evidence while keeping desired compensation out of the promp
   assert.doesNotMatch(prompt.systemInstruction, /Do not use or infer age/);
   assert.match(userContent, /"state":"Goiás"/);
   assert.match(userContent, /"minimumAge":30/);
-  assert.match(prompt.systemInstruction, /cut the matchPercent heavily/);
-  assert.match(prompt.systemInstruction, /must NOT reduce the score/);
+  // A keyword match is reported with where it appears; how far it moves the
+  // score belongs to the campaign prompt, not to this instruction layer.
+  assert.match(prompt.systemInstruction, /only in historical experience/);
+  assert.match(
+    prompt.systemInstruction,
+    /How much a match moves the score is the\s+campaign's call/,
+  );
+  assert.doesNotMatch(prompt.systemInstruction, /cut the matchPercent heavily/);
   // The engine must not editorialize about what a campaign chose to exclude.
   assert.doesNotMatch(prompt.systemInstruction, /wrong seniority/);
   assert.match(userContent, /"list":\["intern"\]/);
