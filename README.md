@@ -35,10 +35,11 @@ My goal was to create something that could filter a batch of profiles based on c
   ```mermaid
   flowchart LR
       A[Collect profiles<br/>Apify] --> B[Map / parse]
-      B --> C[Extract images]
-      C --> D[LLM evaluation]
-      D --> E[(Storage)]
-      E --> F[Web UI review]
+      B --> C[Broad filter]
+      C --> D[Load photos]
+      D --> E[LLM evaluation]
+      E --> F[(Storage)]
+      F --> G[Web UI review]
   ```
 
 ### Break Down
@@ -63,8 +64,11 @@ public_id from the original CSV so we never lose track of which LinkedHelper lea
 One malformed record from the provider doesn't take the rest of the batch down with it, it just gets
 logged as a failure and the pipeline keeps going.
 
-- 1.5: If the profile has a photo, we run it through an image analysis step (this part is optional, since
-it costs extra tokens and isn't always needed to make a decision).
+- 1.5: Photos are downloaded and sent with the evaluation request itself, so the model looks at the
+picture rather than at someone else's description of it. There used to be a separate vision call here
+whose written summary was passed along as text; that billed the same photo twice and threw away detail,
+so it's gone. A campaign can still opt out with `skipImageAnalysis`, and a photo whose URL has expired
+(LinkedIn signs them with a short life) simply drops out, with the profile evaluated on text alone.
 
 **Another implementation detail worth mentioning: before anything touches the LLM, a deterministic broad
 filter runs first and excludes profiles that obviously fail the criteria (wrong country, missing a required
@@ -74,6 +78,9 @@ on profiles that were never going to pass anyway.**
 - 1.6: The profiles that make it past the broad filter get evaluated by an LLM against the criteria the
 user defined for that campaign. Model calls go through a generic model layer instead of being hardcoded
 to one provider, so the model can be swapped through a single env var without touching the evaluation logic itself.
+Profiles go up in small groups rather than one request per person, and a group that fails is retried on
+its own: the rest of the run keeps its scores. Anyone still unscored after that is pooled into a single
+follow-up round, which is what the UI is reporting when the bar sits near full and says it is reprocessing.
 
 - 1.7: Everything (profiles, image assessments, evaluation results) gets persisted, and from there the
 web UI is where the actual review happens: upload a campaign, watch it run, and go through the profiles
@@ -98,7 +105,8 @@ _All shown with the app's built-in mock data (`?mock` in the URL) — no real ca
   built-in `node:sqlite` for storage.
 - **Frontend:** React 19 with Vite and TypeScript.
 - **External services:** Apify (running the Harvest API LinkedIn scraper) for profile collection, and
-  OpenRouter for evaluation and image analysis (any model it serves, selected through a single env var).
+  OpenRouter for evaluation, with the profile photo sent as part of the same request (any model it
+  serves, selected through a single env var).
 - **Tests:** Node's built-in test runner (`node --test`), no external test framework.
 
 ## Setup

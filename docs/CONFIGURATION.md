@@ -9,7 +9,16 @@ Every setting is read from the environment at startup (loaded from `.env` by
 | Variable | Purpose |
 | --- | --- |
 | `APIFY_API_KEY` | Apify / HarvestAPI token used to collect LinkedIn profile data. Collection throws at startup without it. |
-| `GEMINI_API_KEY` | Google Gemini token used for image analysis and profile evaluation. |
+| `OPENROUTER_API_KEY` | OpenRouter token used for profile evaluation. Evaluation throws without it. |
+
+## Model selection
+
+| Variable | Purpose |
+| --- | --- |
+| `MODEL_PROVIDER` | Which adapter serves model calls. OpenRouter is the one implemented. |
+| `OPENROUTER_MODEL` | Model id used for every stage, so a retired id is replaced without a code change. |
+| `OPENROUTER_MODEL_THINKING_EFFORT` | Reasoning depth: `low`, `high`, or `max`. The largest single lever on how long a run takes, since thinking tokens are generated tokens. |
+| `OPENROUTER_MAX_PROMPT_PRICE` / `OPENROUTER_MAX_COMPLETION_PRICE` | Per-million-token ceiling on what a backend may charge. A ceiling rather than a price sort: sorting by price pins every request to the single cheapest backend, which is also the slowest, and turns off load balancing. Lowering it narrows the field; a blank or unparseable value falls back to the default rather than lifting the cap. |
 
 ## Storage
 
@@ -41,12 +50,20 @@ Every setting is read from the environment at startup (loaded from `.env` by
 | `APIFY_BATCH_CONCURRENCY` | Actor runs in flight at once. |
 | `APIFY_MAX_ATTEMPTS` | Attempts per profile, initial try included. |
 | `APIFY_RETRY_BASE_DELAY_MS` | Base retry backoff before jitter. |
-| `IMAGE_ANALYSIS_CONCURRENCY` | Images analyzed at once. |
+| `IMAGE_ANALYSIS_CONCURRENCY` | Photos downloaded at once for the evaluation request. |
 | `IMAGE_ANALYSIS_RESOLUTION` | Image tokenization resolution: `low`, `medium`, or `high`. |
-| `GEMINI_MODEL` | Gemini model id for image assessment, replaceable without a code change. |
-| `GEMINI_REQUEST_TIMEOUT_MS` | One Gemini request's timeout. |
 
-Blank values use the defaults defined next to each consumer (`src/dataCollector/apify_profile_collector/config.ts`, `src/imageExtractor/config.ts`, `src/pipeline/config.ts`).
+## Evaluation tuning (optional)
+
+| Variable | Purpose |
+| --- | --- |
+| `EVALUATION_PROFILES_PER_REQUEST` | Profiles carried by one model request. Small on purpose: each request also carries that many photos, and the model's ability to bind an image to the right person degrades as the count grows. |
+| `EVALUATION_CONCURRENCY` | Requests in flight at once. This is where throughput comes from, not request size. |
+| `EVALUATION_REQUEST_TIMEOUT_MS` | Budget for a group's **first** attempt. Retries get a fraction of it, floored, because a retry that has not answered by then is nearly always one that never will — and the run cannot finish until its slowest chain does. |
+| `EVALUATION_MAXIMUM_ATTEMPTS` | Attempts per group, initial try included. |
+| `EVALUATION_RETRY_BASE_DELAY_MS` | Base retry backoff before the bounded exponential climb. |
+
+Blank values use the defaults defined next to each consumer (`src/dataCollector/apify_profile_collector/config.ts`, `src/imageExtractor/config.ts`, `src/pipeline/config.ts`, `src/evaluation/model/config.ts`).
 
 ## Fixed application behavior (code constants, not environment)
 
