@@ -203,10 +203,21 @@ export const MODEL_EVALUATION_JSON_SCHEMA = {
 
 /** Identifies a response that is valid JSON but unusable by the application. */
 export class ModelEvaluationResponseError extends Error {
-  /** Creates a permanent response-validation failure. */
-  constructor(message: string) {
+  /**
+   * Whether an identical request could still succeed.
+   *
+   * A reply that violates the response contract is a content problem and stays
+   * false. A reply the backend never finished — it errored or ran out of room
+   * — arrives through the same path but is infrastructure, and routing sends
+   * the next attempt somewhere else.
+   */
+  readonly retryable: boolean;
+
+  /** Creates a response-validation failure, permanent unless marked otherwise. */
+  constructor(message: string, retryable = false) {
     super(message);
     this.name = 'ModelEvaluationResponseError';
+    this.retryable = retryable;
   }
 }
 
@@ -243,6 +254,11 @@ function requiredString(value: unknown, field: string): string {
  * justification they have as `"basis": "..."` rather than wrapping it, and the
  * text is exactly what the list was asking for, so rejecting the shape would
  * discard a good evaluation over a pair of brackets.
+ *
+ * An absent field is read as an empty list, because the request schema marks
+ * these lists optional and a reply that takes us at our word must not cost the
+ * profile its whole evaluation. A caller that genuinely needs content says so
+ * with `minimumItems`, and only then does an omission fail.
  */
 function stringList(
   value: unknown,
@@ -250,7 +266,8 @@ function stringList(
   maximumItems: number,
   minimumItems: number,
 ): string[] {
-  const items = asString(value) ? [value as string] : value;
+  const items =
+    value == null ? [] : asString(value) ? [value as string] : value;
 
   if (!Array.isArray(items)) {
     throw new ModelEvaluationResponseError(
@@ -267,6 +284,31 @@ function stringList(
   return items.map((item, index) =>
     requiredString(item, `${field}[${String(index)}]`),
   );
+}
+
+/**
+ * Reads an advisory list, keeping what is usable instead of failing the parse.
+ *
+ * The image assessment annotates the review UI and never moves a score, so an
+ * overlong or partly malformed list is trimmed to the entries that read
+ * correctly. Throwing here would contradict that: the error escapes the
+ * assessment and costs the profile its whole evaluation.
+ */
+function advisoryStringList(value: unknown, maximumItems: number): string[] {
+  const items =
+    value == null ? [] : asString(value) ? [value as string] : value;
+  if (!Array.isArray(items)) return [];
+
+  const parsed: string[] = [];
+  for (const item of items) {
+    const text = asString(item)?.trim();
+    if (!text) continue;
+
+    parsed.push(text);
+    if (parsed.length >= maximumItems) break;
+  }
+
+  return parsed;
 }
 
 /** Parses a percentage while rejecting fake precision and out-of-range values. */
@@ -337,11 +379,14 @@ function estimatedTotalMonthlyCompensation(
         : record['basis'];
     return {
       status,
+      // The request schema requires only "status", so a reply may carry the
+      // status alone. Losing the explanation costs a line of review context;
+      // rejecting the reply would cost the profile its whole evaluation.
       reasons: stringList(
         explanation,
         'estimatedTotalMonthlyCompensation.reasons',
         MODEL_EVALUATION_LIMITS.compensationReasonItems,
-        1,
+        0,
       ),
     };
   }
@@ -379,7 +424,7 @@ function estimatedTotalMonthlyCompensation(
       record['basis'],
       'estimatedTotalMonthlyCompensation.basis',
       MODEL_EVALUATION_LIMITS.compensationBasisItems,
-      1,
+      0,
     ),
   };
 }
@@ -545,11 +590,12 @@ function estimatedAge(value: unknown): EstimatedAge | undefined {
     minimumAge,
     maximumAge,
     confidence: confidence as EstimatedAgeConfidence,
-    basis: stringList(
+    // Every other unusable field here drops the estimate and keeps the person.
+    // The basis is explanation for a reviewer, so it degrades the same way
+    // rather than throwing past that contract.
+    basis: advisoryStringList(
       record['basis'],
-      'estimatedAge.basis',
       MODEL_EVALUATION_LIMITS.ageBasisItems,
-      0,
     ),
   };
 }
@@ -608,11 +654,9 @@ function imageAssessment(value: unknown): ModelImageAssessment | undefined {
     background: record['background'] as ModelImageAssessment['background'],
     attire: record['attire'] as ModelImageAssessment['attire'],
     reviewRequired: record['reviewRequired'] as boolean,
-    observations: stringList(
+    observations: advisoryStringList(
       record['observations'],
-      'imageAssessment.observations',
       MODEL_EVALUATION_LIMITS.imageObservationItems,
-      0,
     ),
   };
 }
