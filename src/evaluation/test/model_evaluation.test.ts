@@ -7,6 +7,7 @@ import type { EvaluationProfileData } from '../context.js';
 import { buildModelEvaluationPrompt } from '../model/prompt.js';
 import {
   MODEL_EVALUATION_JSON_SCHEMA,
+  MODEL_EVALUATION_LIMITS,
   parseModelEvaluationResponse,
   ModelEvaluationResponseError,
 } from '../model/index.js';
@@ -126,14 +127,11 @@ test('sends profile evidence while keeping desired compensation out of the promp
   assert.doesNotMatch(prompt.systemInstruction, /Do not use or infer age/);
   assert.match(userContent, /"state":"Goiás"/);
   assert.match(userContent, /"minimumAge":30/);
-  // A keyword match is reported with where it appears; how far it moves the
-  // score belongs to the campaign prompt, not to this instruction layer.
-  assert.match(prompt.systemInstruction, /only in historical experience/);
-  assert.match(
-    prompt.systemInstruction,
-    /How much a match moves the score is the\s+campaign's call/,
-  );
-  assert.doesNotMatch(prompt.systemInstruction, /cut the matchPercent heavily/);
+  // Campaigns are not edited per run, so the instruction layer carries the
+  // weighting itself: a current-role match cuts hard, a past-only match does
+  // not cut at all.
+  assert.match(prompt.systemInstruction, /cut the matchPercent heavily/);
+  assert.match(prompt.systemInstruction, /must NOT reduce the score/);
   // The engine must not editorialize about what a campaign chose to exclude.
   assert.doesNotMatch(prompt.systemInstruction, /wrong seniority/);
   assert.match(userContent, /"list":\["intern"\]/);
@@ -215,6 +213,93 @@ test('parses a supported total monthly compensation range', () => {
     confidence: 'medium',
     basis: ['Senior customer-success role in the supplied profile.'],
   });
+});
+
+test('keeps a profile whose optional explanation lists are absent', () => {
+  // The request schema requires only "status" on the compensation object and
+  // the reply may omit either list. Failing the parse would cost the profile
+  // its whole evaluation over prose nothing scores on.
+  const { assessments, failures } = parseModelEvaluationResponse(
+    JSON.stringify({
+      evaluations: [
+        {
+          profileId: 'profile-1',
+          matchPercent: 71,
+          estimatedTotalMonthlyCompensation: {
+            status: 'estimated',
+            currency: 'BRL',
+            minimumMonthlyCompensation: 9_000,
+            maximumMonthlyCompensation: 14_000,
+            confidence: 'medium',
+          },
+          estimatedAge: {
+            minimumAge: 30,
+            maximumAge: 36,
+            confidence: 'medium',
+          },
+          positives: [],
+          negatives: [],
+          summary: 'Scored without either explanation list.',
+        },
+      ],
+    }),
+    ['profile-1'],
+  );
+
+  assert.deepEqual(failures, []);
+  assert.equal(assessments[0]?.matchPercent, 71);
+  const compensation = assessments[0]?.estimatedTotalMonthlyCompensation;
+  assert.equal(compensation?.status, 'estimated');
+  assert.deepEqual(
+    compensation?.status === 'estimated' ? compensation.basis : undefined,
+    [],
+  );
+  assert.deepEqual(assessments[0]?.estimatedAge?.basis, []);
+});
+
+test('trims an overlong image observation list instead of failing the profile', () => {
+  const { assessments, failures } = parseModelEvaluationResponse(
+    JSON.stringify({
+      evaluations: [
+        {
+          profileId: 'profile-1',
+          matchPercent: 64,
+          estimatedTotalMonthlyCompensation: {
+            status: 'insufficient_evidence',
+            reasons: ['n/a'],
+          },
+          positives: [],
+          negatives: [],
+          summary: 'Advisory image notes must never cost a score.',
+          imageAssessment: {
+            hasFace: true,
+            faceCount: 1,
+            faceVisibility: 'clear',
+            imageQuality: 'good',
+            isBlurry: false,
+            isPoorlyLit: false,
+            photoType: 'selfie',
+            framing: 'upper_body',
+            background: 'domestic',
+            attire: 'casual',
+            reviewRequired: false,
+            observations: Array.from(
+              { length: MODEL_EVALUATION_LIMITS.imageObservationItems + 3 },
+              (_item, index) => `Observation ${String(index)}`,
+            ),
+          },
+        },
+      ],
+    }),
+    ['profile-1'],
+  );
+
+  assert.deepEqual(failures, []);
+  assert.equal(assessments[0]?.matchPercent, 64);
+  assert.equal(
+    assessments[0]?.imageAssessment?.observations.length,
+    MODEL_EVALUATION_LIMITS.imageObservationItems,
+  );
 });
 
 test('parses positives and negatives, capping count at five and text at 100 characters', () => {

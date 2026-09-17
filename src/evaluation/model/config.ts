@@ -30,7 +30,12 @@ export const MODEL_EVALUATION_DEFAULTS = {
   profilesPerRequest: 3,
   concurrency: 100,
   requestTimeoutMs: 90_000,
-  maximumAttempts: 3,
+
+  // One initial try and one retry. A group that fails twice is nearly always
+  // failing for a reason a third identical request will not fix, and the run
+  // cannot finish until its slowest chain does, so further attempts buy little
+  // and cost the whole run the wait.
+  maximumAttempts: 2,
   retryBaseDelayMs: 250,
   retryMaximumDelayMs: 4_000,
 } as const;
@@ -69,6 +74,31 @@ export const MODEL_EVALUATION_RETRY_POLICY = {
     'ABORT_ERR',
   ],
   timeoutErrorNames: ['AbortError', 'TimeoutError'],
+
+  /**
+   * Share of the first attempt's timeout that each later attempt is given.
+   *
+   * The first attempt carries the full budget, which is sized for a healthy
+   * request that simply has a lot to generate. A retry is a different bet: the
+   * request already failed once, and one that has not answered within this
+   * share is overwhelmingly one that will not answer at all. Spending the full
+   * budget again turns a single straggling group into minutes of dead time at
+   * the end of a run, because every other group has already settled.
+   */
+  retryTimeoutFraction: 1 / 3,
+
+  /** Floor for a retry's budget, so a short configured timeout stays usable. */
+  retryMinimumTimeoutMs: 10_000,
+
+  /**
+   * Block reasons that describe the backend rather than the reply's content.
+   *
+   * These arrive on the same path as a contract violation but mean the model
+   * never finished: the backend errored, or it ran out of room mid-reply.
+   * Routing sends the next attempt to a different backend, so they are worth
+   * trying again; a safety filter or an explicit refusal is not.
+   */
+  transientBlockReasons: ['error', 'length'],
 } as const;
 
 /** Placeholder tokens interpolated into the model-evaluation prompt templates. */
@@ -110,14 +140,17 @@ ${MODEL_EVALUATION_PROMPT_SLOTS.systemPrompt}
   value means stronger campaign fit. Do not make approve, reject, or manual
   review decisions; application code maps the validated score deterministically.
 - Treat every term in keywordLists as a term this campaign has declared
-  unwanted in the person's CURRENT position, and report where it appears: in
-  the current role, only in historical experience, or ambiguously because a
-  role's dates do not settle it. Do not judge whether a term is a reasonable
-  thing to exclude, and do not infer anything about seniority or quality from
-  the terms themselves; a campaign may exclude anything, and the same term
-  another campaign requires. Name any match as a "negatives" point, stating
-  which of the three cases it is. How much a match moves the score is the
-  campaign's call.
+  unwanted in the person's CURRENT position. Do not judge whether a term is a
+  reasonable thing to exclude, and do not infer anything about seniority or
+  quality from the terms themselves; a campaign may exclude anything, and the
+  same term another campaign requires. When a listed term matches the current
+  role, cut the matchPercent heavily — well below the campaign's approval
+  threshold — rather than deducting a few points, and name the matched term as
+  a "negatives" point.
+- A listed term found only in historical experience must NOT reduce the score
+  at all. The campaign excluded it as a current position, not as a past one.
+  Check where the term appears before penalizing it, and when a role's dates
+  make it ambiguous, say so as a "negatives" point instead of cutting.
 
 === EMPLOYMENT STATUS ===
 - "careerTimeline.isCurrentlyEmployed" already states whether any listed role
@@ -140,9 +173,13 @@ ${MODEL_EVALUATION_PROMPT_SLOTS.systemPrompt}
   came from the operator's own export instead, which happens when a photo is
   restricted to members or connections, or was removed after the export. Treat
   it as real but unconfirmed and say so as an uncertainty.
-- When no photo was found, name that as a "negatives" point and note what could
-  not be assessed. Application code does not cut these profiles; how much a
-  missing photo should move the score is the campaign's call.
+- When the campaign sets "requirePhoto" and no photo was found at all, rank the
+  profile below otherwise-comparable profiles that have one, and name the
+  missing photo as a "negatives" point. It is a ranking signal here, not an
+  exclusion: application code no longer cuts these profiles, so the ordering is
+  where the campaign's preference takes effect.
+- When "requirePhoto" is absent or false, a missing photo is not a mark against
+  the profile; note it only as a limit on what could be assessed.
 
 === IMAGE AND AGE RULES ===
 - Each image belongs to the profile ID named immediately before it. Never
@@ -172,9 +209,10 @@ ${MODEL_EVALUATION_PROMPT_SLOTS.systemPrompt}
   recorded facts and faces are an impression. A person can photograph a decade
   younger than they are, and a campaign that cares about age is asking about
   the timeline, not the appearance. Say so as a "negatives" point.
-- State in the "summary" the anchor year you used, and say plainly whether the
-  dated anchors put the person inside or outside the campaign's configured
-  "age" range. How much that should move the score is the campaign's call.
+- Treat the campaign's configured "age" range as a primary cut, not a
+  tiebreaker. When the dated anchors put someone clearly outside it, score the
+  profile accordingly even if every other signal is strong and the photo looks
+  young. State the anchor year you used in the "summary".
 - A missing "firstAcademicYear" is not evidence of youth. When the anchors are
   absent, say the age is uncertain as a "negatives" point rather than
   defaulting to the photo alone.
