@@ -77,6 +77,8 @@ export interface RunProgress
     total: number;
     /** Position on the single overall bar, 0-1 across every stage. */
     overall: number;
+    /** Set while the follow-up round re-requests the profiles that did not score. */
+    retrying?: boolean;
 }
 
 export interface RunStatus

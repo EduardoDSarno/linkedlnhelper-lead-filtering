@@ -100,6 +100,28 @@ function retryDelayMs(baseDelayMs: number, failedAttempts: number): number {
   );
 }
 
+/**
+ * Budgets one attempt, giving every retry a fraction of the first attempt's
+ * time.
+ *
+ * Retries run after the group has already failed once, so they are capped by
+ * the configured retry share rather than the full request budget; see the
+ * retry policy for why a slow retry is not worth waiting out.
+ */
+function attemptTimeoutMs(requestTimeoutMs: number, attempt: number): number {
+  if (attempt <= 1) return requestTimeoutMs;
+
+  return Math.min(
+    requestTimeoutMs,
+    Math.max(
+      MODEL_EVALUATION_RETRY_POLICY.retryMinimumTimeoutMs,
+      Math.round(
+        requestTimeoutMs * MODEL_EVALUATION_RETRY_POLICY.retryTimeoutFraction,
+      ),
+    ),
+  );
+}
+
 /** Reads the HTTP status exposed by common SDK and fetch error shapes. */
 function errorHttpStatus(error: unknown): number | undefined {
   const record = asRecord(error);
@@ -115,7 +137,7 @@ function networkErrorCode(error: unknown): string | undefined {
 
 /** Decides whether another attempt could recover one model-call failure. */
 function isRetryableModelError(error: unknown): boolean {
-  if (error instanceof ModelEvaluationResponseError) return false;
+  if (error instanceof ModelEvaluationResponseError) return error.retryable;
 
   const status = errorHttpStatus(error);
   if (
@@ -164,6 +186,9 @@ function responseText(response: ModelResponse): string {
   if (response.blockReason) {
     throw new ModelEvaluationResponseError(
       `The model blocked the evaluation request: ${response.blockReason}.`,
+      MODEL_EVALUATION_RETRY_POLICY.transientBlockReasons.includes(
+        response.blockReason as (typeof MODEL_EVALUATION_RETRY_POLICY.transientBlockReasons)[number],
+      ),
     );
   }
 
@@ -211,7 +236,7 @@ async function evaluateProfileGroup(
         parts: [...prompt.parts],
         jsonSchema: MODEL_EVALUATION_JSON_SCHEMA,
         thinking: options.thinkingEffort,
-        timeoutMs: options.requestTimeoutMs,
+        timeoutMs: attemptTimeoutMs(options.requestTimeoutMs, attempts),
       });
       lastResponseText = response.text;
       addTokenUsage(tokenUsage, response.usage);

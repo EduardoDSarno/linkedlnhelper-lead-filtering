@@ -14,6 +14,7 @@ import {
   COMPENSATION_RANGE_OUTCOME,
   MODEL_EVALUATION_DECISION,
   MODEL_EVALUATION_DEFAULTS,
+  MODEL_EVALUATION_RETRY_POLICY,
   evaluateProfilesWithModel,
   parseModelEvaluationResponse,
 } from '../model/index.js';
@@ -315,6 +316,113 @@ test('retries a timed-out group and keeps the later success', async () => {
   assert.equal(calls, 2);
   assert.equal(result.successfulProfiles, candidates.length);
   assert.equal(result.failedProfiles, 0);
+});
+
+test('retries a group the backend never finished, but not a filtered one', async () => {
+  const profilesPerRequest = MODEL_EVALUATION_DEFAULTS.profilesPerRequest;
+  const candidates = profiles(profilesPerRequest);
+
+  // A backend that errors or runs out of room says nothing about the reply's
+  // content, and routing sends the next attempt elsewhere.
+  let transientCalls = 0;
+  const transient = await evaluateProfilesWithModel(candidates, criteria(), {
+    profilesPerRequest,
+    concurrency: 1,
+    maximumAttempts: 2,
+    retryBaseDelayMs: 0,
+    wait: async () => undefined,
+    generateContent: async (parameters) => {
+      transientCalls += 1;
+      if (transientCalls === 1) {
+        return { text: '', blockReason: 'error' };
+      }
+
+      return modelResponse(requestedProfileIds(parameters));
+    },
+  });
+
+  assert.equal(transientCalls, 2);
+  assert.equal(transient.successfulProfiles, candidates.length);
+
+  // A safety filter is deterministic: the same request earns the same block,
+  // so the group itself is never attempted twice. The run-level follow-up
+  // round still re-requests the profiles once, which is a separate pass.
+  const filtered = await evaluateProfilesWithModel(candidates, criteria(), {
+    profilesPerRequest,
+    concurrency: 1,
+    maximumAttempts: 2,
+    retryBaseDelayMs: 0,
+    wait: async () => undefined,
+    generateContent: async () => ({ text: '', blockReason: 'content_filter' }),
+  });
+
+  assert.equal(filtered.failedProfiles, candidates.length);
+  assert.equal(filtered.failures[0]?.attempts, 1);
+  assert.equal(filtered.failures[0]?.retryable, false);
+});
+
+test('gives a retry a fraction of the first attempt timeout', async () => {
+  const profilesPerRequest = MODEL_EVALUATION_DEFAULTS.profilesPerRequest;
+  const candidates = profiles(profilesPerRequest);
+  const requestTimeoutMs = MODEL_EVALUATION_DEFAULTS.requestTimeoutMs;
+  const budgets: (number | undefined)[] = [];
+
+  await evaluateProfilesWithModel(candidates, criteria(), {
+    profilesPerRequest,
+    concurrency: 1,
+    maximumAttempts: 2,
+    requestTimeoutMs,
+    retryBaseDelayMs: 0,
+    wait: async () => undefined,
+    generateContent: async (parameters) => {
+      budgets.push(parameters.timeoutMs);
+      if (budgets.length === 1) {
+        const timeout = new Error('The operation was aborted due to timeout');
+        timeout.name = 'AbortError';
+        throw timeout;
+      }
+
+      return modelResponse(requestedProfileIds(parameters));
+    },
+  });
+
+  assert.equal(budgets[0], requestTimeoutMs);
+  assert.equal(
+    budgets[1],
+    Math.round(
+      requestTimeoutMs * MODEL_EVALUATION_RETRY_POLICY.retryTimeoutFraction,
+    ),
+  );
+});
+
+test('never shortens a retry below the configured floor', async () => {
+  const profilesPerRequest = MODEL_EVALUATION_DEFAULTS.profilesPerRequest;
+  const candidates = profiles(profilesPerRequest);
+  const requestTimeoutMs = MODEL_EVALUATION_RETRY_POLICY.retryMinimumTimeoutMs;
+  const budgets: (number | undefined)[] = [];
+
+  await evaluateProfilesWithModel(candidates, criteria(), {
+    profilesPerRequest,
+    concurrency: 1,
+    maximumAttempts: 2,
+    requestTimeoutMs,
+    retryBaseDelayMs: 0,
+    wait: async () => undefined,
+    generateContent: async (parameters) => {
+      budgets.push(parameters.timeoutMs);
+      if (budgets.length === 1) {
+        const timeout = new Error('The operation was aborted due to timeout');
+        timeout.name = 'AbortError';
+        throw timeout;
+      }
+
+      return modelResponse(requestedProfileIds(parameters));
+    },
+  });
+
+  // The fraction would fall under the floor, and the floor itself may not
+  // exceed the caller's own budget.
+  assert.equal(budgets[1], requestTimeoutMs);
 });
 
 test('keeps sibling scores when one object in a group is malformed, then retries just that profile', async () => {

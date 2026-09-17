@@ -35,6 +35,15 @@ export interface RunProgress {
   total: number;
   /** Position on the single overall bar, 0-1 across every stage. */
   overall: number;
+
+  /**
+   * Whether the run is in the follow-up round for profiles that did not score.
+   *
+   * That round re-requests only the stragglers, so the bar barely moves while
+   * it runs and a finished-looking run appears to hang. The flag lets the
+   * screen say what is happening instead.
+   */
+  retrying?: boolean;
 }
 
 /**
@@ -66,6 +75,31 @@ function count(payload: Record<string, unknown>, field: string): number | undefi
     : undefined;
 }
 
+/**
+ * Moves the evaluating stage forward by profiles that just settled.
+ *
+ * Groups land out of order and in parallel, so the bar accumulates what each
+ * line reports rather than reading a position from it, and never runs past the
+ * stage total.
+ */
+function advancedBy(
+  current: RunProgress | undefined,
+  settledProfiles: number,
+): RunProgress {
+  const total = current?.total ?? 0;
+  const completed = Math.min(
+    total || Number.MAX_SAFE_INTEGER,
+    (current?.completed ?? 0) + settledProfiles,
+  );
+
+  return progressAt(
+    RUN_PROGRESS_STAGE.evaluating,
+    completed,
+    total,
+    current?.retrying ?? false,
+  );
+}
+
 /** Places a stage's own completed/total onto the single overall bar. */
 function overallFor(
   stage: RunProgressStage,
@@ -82,8 +116,15 @@ function progressAt(
   stage: RunProgressStage,
   completed: number,
   total: number,
+  retrying = false,
 ): RunProgress {
-  return { stage, completed, total, overall: overallFor(stage, completed, total) };
+  return {
+    stage,
+    completed,
+    total,
+    overall: overallFor(stage, completed, total),
+    ...(retrying ? { retrying: true } : {}),
+  };
 }
 
 /**
@@ -154,13 +195,27 @@ function progressFromLog(
     case PIPELINE_PROGRESS_MESSAGE.evalGroupCompleted: {
       const scored = count(payload, 'scoredProfiles') ?? 0;
       const failed = count(payload, 'failedProfiles') ?? 0;
-      const total = current?.total ?? 0;
-      const completed = Math.min(
-        total || Number.MAX_SAFE_INTEGER,
-        (current?.completed ?? 0) + scored + failed,
-      );
-      return progressAt(RUN_PROGRESS_STAGE.evaluating, completed, total);
+      return advancedBy(current, scored + failed);
     }
+
+    // A rejected group scores nobody, so it reports on the failure line
+    // instead. Its profiles are still settled, and leaving them uncounted
+    // would strand the bar short of full for the rest of the run.
+    case PIPELINE_PROGRESS_MESSAGE.evalGroupFailed: {
+      const ids = payload['profileIds'];
+      return advancedBy(current, Array.isArray(ids) ? ids.length : 0);
+    }
+
+    // The follow-up round re-requests only the profiles that never scored,
+    // which the primary pass already counted. Hold the bar where it is and
+    // mark the run as retrying so the screen can explain the pause.
+    case PIPELINE_PROGRESS_MESSAGE.evalRetryStarted:
+      return progressAt(
+        RUN_PROGRESS_STAGE.evaluating,
+        current?.completed ?? 0,
+        current?.total ?? 0,
+        true,
+      );
 
     default:
       return undefined;
@@ -178,28 +233,38 @@ export function progressReportingLogger(
   processingId: string,
   logger: Logger,
 ): Logger {
-  const info: Logger['info'] = (...args: Parameters<Logger['info']>) => {
+  const watch = (args: unknown[]): void => {
     const [first, second] = args;
     const payload = asRecord(first);
     const message = typeof second === 'string' ? second : undefined;
+    if (!payload || !message) return;
 
-    if (payload && message) {
-      const update = progressFromLog(
-        message,
-        payload,
-        progressByRun.get(processingId),
-      );
-      // Never let the bar move backwards: stages overlap slightly in the
-      // logs, and a late line from a finished stage would otherwise undo
-      // progress the next stage has already reported.
-      const existing = progressByRun.get(processingId);
-      if (update && (!existing || update.overall >= existing.overall)) {
-        progressByRun.set(processingId, update);
-      }
+    const update = progressFromLog(
+      message,
+      payload,
+      progressByRun.get(processingId),
+    );
+    // Never let the bar move backwards: stages overlap slightly in the
+    // logs, and a late line from a finished stage would otherwise undo
+    // progress the next stage has already reported.
+    const existing = progressByRun.get(processingId);
+    if (update && (!existing || update.overall >= existing.overall)) {
+      progressByRun.set(processingId, update);
     }
+  };
 
+  const info: Logger['info'] = (...args: Parameters<Logger['info']>) => {
+    watch(args);
     return logger.info(...args);
   };
 
-  return Object.assign(Object.create(logger) as Logger, { info });
+  // A whole group that never scored reports at warn level, and its profiles
+  // are as settled as any scored group's. Watching only info would leave them
+  // uncounted and strand the bar short of full.
+  const warn: Logger['warn'] = (...args: Parameters<Logger['warn']>) => {
+    watch(args);
+    return logger.warn(...args);
+  };
+
+  return Object.assign(Object.create(logger) as Logger, { info, warn });
 }

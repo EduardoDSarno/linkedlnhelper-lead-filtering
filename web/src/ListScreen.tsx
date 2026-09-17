@@ -419,6 +419,10 @@ const PROGRESS_STAGES = [
 /** The stage label, or a neutral one before the first stage reports. */
 function stageLabel(progress: RunProgress | undefined): string {
   if (!progress) return 'Preparando…';
+  // The follow-up round re-requests only the profiles that did not score, so
+  // the bar sits near full while it runs. Naming it keeps that pause legible.
+  if (progress.retrying) return 'Reprocessando perfis que falharam';
+
   return (
     PROGRESS_STAGES.find((stage) => stage.key === progress.stage)?.label ??
     'Processando'

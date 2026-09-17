@@ -135,6 +135,63 @@ test('ignores a late line from a stage that already finished', () => {
   clearRunProgress(runId);
 });
 
+test('counts a whole group that failed, which reports at warn level', () => {
+  // A rejected group scores nobody and never reaches the completed line, so
+  // watching info alone would strand the bar short of full for the rest of
+  // the run.
+  const runId = 'run-eval-failed';
+  const logger = progressReportingLogger(runId, recordingLogger());
+
+  logger.info({ requestedProfiles: 9 }, PIPELINE_PROGRESS_MESSAGE.evalStarted);
+  logger.info(
+    { scoredProfiles: 3, failedProfiles: 0 },
+    PIPELINE_PROGRESS_MESSAGE.evalGroupCompleted,
+  );
+  logger.warn(
+    { profileIds: ['a', 'b', 'c'], error: 'timeout' },
+    PIPELINE_PROGRESS_MESSAGE.evalGroupFailed,
+  );
+
+  assert.equal(runProgress(runId)?.completed, 6);
+  clearRunProgress(runId);
+});
+
+test('marks the follow-up round without rewinding or double counting', () => {
+  const runId = 'run-eval-retry';
+  const logger = progressReportingLogger(runId, recordingLogger());
+
+  logger.info({ requestedProfiles: 6 }, PIPELINE_PROGRESS_MESSAGE.evalStarted);
+  logger.info(
+    { scoredProfiles: 3, failedProfiles: 0 },
+    PIPELINE_PROGRESS_MESSAGE.evalGroupCompleted,
+  );
+  logger.warn(
+    { profileIds: ['d', 'e', 'f'], error: 'timeout' },
+    PIPELINE_PROGRESS_MESSAGE.evalGroupFailed,
+  );
+  const beforeRetry = runProgress(runId)?.overall;
+
+  logger.info(
+    { requestedProfiles: 3 },
+    PIPELINE_PROGRESS_MESSAGE.evalRetryStarted,
+  );
+
+  // The retried profiles were already counted as settled, so the bar holds
+  // its place and only the label changes.
+  assert.equal(runProgress(runId)?.retrying, true);
+  assert.equal(runProgress(runId)?.completed, 6);
+  assert.equal(runProgress(runId)?.overall, beforeRetry);
+
+  logger.info(
+    { scoredProfiles: 3, failedProfiles: 0 },
+    PIPELINE_PROGRESS_MESSAGE.evalGroupCompleted,
+  );
+
+  assert.equal(runProgress(runId)?.retrying, true);
+  assert.equal(runProgress(runId)?.completed, 6);
+  clearRunProgress(runId);
+});
+
 test('forgets a run once it is cleared', () => {
   const runId = 'run-cleared';
   const logger = progressReportingLogger(runId, recordingLogger());
