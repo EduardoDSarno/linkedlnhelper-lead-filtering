@@ -19,3 +19,6 @@ export const startDownload = client.startDownload;
 export const listRuns = client.listRuns;
 export const renameRun = client.renameRun;
 export const deleteRun = client.deleteRun;
+export const getCredentials = client.getCredentials;
+export const saveCredentials = client.saveCredentials;
+export const checkCredentials = client.checkCredentials;

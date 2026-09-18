@@ -1,6 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { CampaignsScreen } from './CampaignsScreen';
+import { SetupScreen } from './SetupScreen';
+import { checkCredentials, getCredentials } from './code/client';
+import type { CredentialsStatus } from './code/api';
 import { ConcludeDialog } from './ConcludeDialog';
 import { CriteriaModal } from './CriteriaModal';
 import { LeaveDialog } from './LeaveDialog';
@@ -42,10 +45,46 @@ function NavItem({ label, active, disabled, title, onClick }: {
   );
 }
 
-/** The application shell: top bar, error banner, the active screen, and the modal. */
+/**
+ * The application shell: top bar, error banner, the active screen, and the modal.
+ *
+ * Nothing renders until the backend has confirmed it holds both API keys. The
+ * pipeline cannot do anything without them, so a setup gate is a truer first
+ * screen than an upload form that would fail on submit.
+ */
 export default function App() {
   const flow = useReviewFlow();
   const [concludeOpen, setConcludeOpen] = useState(false);
+  const [credentials, setCredentials] = useState<CredentialsStatus | null>(null);
+
+  const [keyError, setKeyError] = useState<string | null>(null);
+
+  useEffect(() => {
+    /** Treats an unreadable status as "no keys yet". */
+    const blank = (): CredentialsStatus => ({
+      apify: { configured: false, remembered: false },
+      openRouter: { configured: false, remembered: false },
+      ready: false,
+    });
+
+    void getCredentials()
+      .then(async (status) => {
+        setCredentials(status);
+        if (!status.ready) return;
+
+        // Held keys are not necessarily working ones: a remembered key can be
+        // revoked or run dry between sessions. Confirming after the app is
+        // already on screen keeps the common case instant, and sends the
+        // operator back to setup with a reason when it is not.
+        const check = await checkCredentials().catch(() => null);
+        if (!check) return;
+        if (check.apify.valid && check.openRouter.valid) return;
+
+        setKeyError(check.apify.error ?? check.openRouter.error ?? null);
+        setCredentials({ ...status, ready: false });
+      })
+      .catch(() => setCredentials(blank()));
+  }, []);
 
   const counts = tabCounts(flow.results, flow.overrides);
 
@@ -79,6 +118,24 @@ export default function App() {
     setPendingLeave(null);
     if (saved) run?.();
   };
+
+  // Blank rather than a spinner: the status read is a local request and
+  // resolves in a frame or two, and a flash of loading chrome reads as slower
+  // than nothing at all.
+  if (!credentials) return null;
+
+  if (!credentials.ready) {
+    return (
+      <SetupScreen
+        status={credentials}
+        {...(keyError ? { notice: keyError } : {})}
+        onReady={(next) => {
+          setKeyError(null);
+          setCredentials(next);
+        }}
+      />
+    );
+  }
 
   return (
     <div

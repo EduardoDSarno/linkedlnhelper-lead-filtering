@@ -24,6 +24,11 @@ interface ListeningApp {
 
 /** Builds the app and starts listening, exiting the process on a failed bind. */
 async function startServer(): Promise<void> {
+    // Before the app is built, so a remembered key is already in the
+    // environment by the time anything reads one.
+    const { loadRememberedCredentials } = await import('./credentials.js');
+    loadRememberedCredentials();
+
     const { buildServer } = await import('./index.js');
     const app = await buildServer();
     const host = getHostFromEnv();

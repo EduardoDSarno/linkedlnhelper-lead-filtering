@@ -42,8 +42,14 @@ import { MODEL_EVALUATION_DECISION } from '../evaluation/model/types.js';
 import type { ThinkingEffort } from '../models/model_client.js';
 import { resolveThinkingEffortChoice } from '../models/model_provider.js';
 import type { Logger } from '../logging/index.js';
-import { createReadStream } from 'node:fs';
-import { basename } from 'node:path';
+import { createReadStream, existsSync } from 'node:fs';
+import { basename, join, resolve } from 'node:path';
+import {
+    applyCredentials,
+    checkCredentials,
+    credentialsStatus,
+} from './credentials.js';
+import { WEB_APP_DIRECTORY, WEB_APP_ENTRY } from './constants.js';
 
 export async function buildServer()
 {
@@ -59,7 +65,82 @@ export async function buildServer()
     registerRenameRunRoute(server);
     registerDeleteRunRoute(server);
     registerCriteriaPresetRoutes(server);
+    registerCredentialRoutes(server);
+    await registerWebApp(server);
     return server;
+}
+
+/**
+ * Serves the built web app from the API's own origin.
+ *
+ * One process and one URL is what makes this runnable by someone who will not
+ * open a terminal: there is no second dev server to start and no port to know.
+ * Registered last so every API route above keeps priority over the catch-all
+ * that hands unmatched paths to the single-page app.
+ */
+async function registerWebApp(server: FastifyInstance)
+{
+    const root = resolve(WEB_APP_DIRECTORY);
+    if (!existsSync(join(root, WEB_APP_ENTRY)))
+    {
+        server.log.warn(
+            { root },
+            'Web app bundle is missing; API routes are served without it.',
+        );
+        return;
+    }
+
+    const fastifyStatic = (await import('@fastify/static')).default;
+    await server.register(fastifyStatic, { root });
+
+    // Client-side routing means a deep link is a path the server has no file
+    // for. Anything that is not an API route and not a real asset is the app
+    // itself, so the entry document answers and the browser routes from there.
+    server.setNotFoundHandler((request, reply) =>
+    {
+        if (request.method !== 'GET')
+        {
+            return reply.status(HTTP_STATUS.notFound).send({ error: 'Not found' });
+        }
+
+        return reply.sendFile(WEB_APP_ENTRY);
+    });
+}
+
+/** Reads and updates the API keys the pipeline runs on. */
+function registerCredentialRoutes(server: FastifyInstance)
+{
+    server.get(API_ROUTES.credentials, async (_request, reply) =>
+        reply.status(HTTP_STATUS.ok).send(credentialsStatus()));
+
+    server.post(API_ROUTES.credentials, async (request, reply) =>
+    {
+        const body = asRecord(request.body);
+        if (!body) return reply.status(HTTP_STATUS.badRequest).send({ error: 'Invalid body' });
+
+        const apify = asString(body['apify'])?.trim();
+        const openRouter = asString(body['openRouter'])?.trim();
+        if (!apify && !openRouter)
+        {
+            return reply
+                .status(HTTP_STATUS.badRequest)
+                .send({ error: 'Provide at least one key' });
+        }
+
+        const status = applyCredentials(
+            { ...(apify ? { apify } : {}), ...(openRouter ? { openRouter } : {}) },
+            body['remember'] === true,
+        );
+
+        // Confirm against the services rather than trusting the paste, so a
+        // truncated key is caught here instead of part-way through a campaign.
+        return reply
+            .status(HTTP_STATUS.ok)
+            .send({ ...status, check: await checkCredentials() });
+    });
+
+    server.post(API_ROUTES.credentialsCheck, async (_request, reply) =>
+        reply.status(HTTP_STATUS.ok).send(await checkCredentials()));
 }
 
 function registerDownloadRoute(server: FastifyInstance)

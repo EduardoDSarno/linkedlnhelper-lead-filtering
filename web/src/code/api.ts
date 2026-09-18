@@ -378,3 +378,75 @@ export async function deleteCriteriaPreset(presetId: string): Promise<void> {
         throw new Error(`Request failed: ${response.status}`);
     }
 }
+
+/** One service's key state, as the setup screen reads it. */
+export interface CredentialState {
+    configured: boolean;
+    /** Last characters of the stored key, enough to recognise a wrong paste. */
+    tail?: string;
+    /** Whether the key is saved on this computer and survives a restart. */
+    remembered: boolean;
+}
+
+/** Which keys the backend currently holds. */
+export interface CredentialsStatus {
+    apify: CredentialState;
+    openRouter: CredentialState;
+    ready: boolean;
+}
+
+/** A live answer from one service about the key it was given. */
+export interface CredentialCheck {
+    valid: boolean;
+    error?: string;
+    /** Spend left on the key, when the service reports a limit. */
+    remainingCredit?: number;
+    label?: string;
+}
+
+/** Both services' answers, returned together. */
+export interface CredentialsCheck {
+    apify: CredentialCheck;
+    openRouter: CredentialCheck;
+}
+
+/** Reads which keys the backend already has. */
+export async function getCredentials(): Promise<CredentialsStatus> {
+    const response = await fetch('/credentials');
+    if (!response.ok) {
+        throw new Error(`Request failed: ${response.status}`);
+    }
+    return (await response.json()) as CredentialsStatus;
+}
+
+/**
+ * Sends the pasted keys and reports what each service said about them.
+ *
+ * The backend validates as part of saving, so one round trip both applies the
+ * keys and tells the operator whether they work.
+ */
+export async function saveCredentials(input: {
+    apify?: string;
+    openRouter?: string;
+    remember: boolean;
+}): Promise<CredentialsStatus & { check: CredentialsCheck }> {
+    const response = await fetch('/credentials', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(input),
+    });
+    if (!response.ok) {
+        const body = (await response.json().catch(() => ({}))) as { error?: string };
+        throw new Error(body.error ?? `Request failed: ${response.status}`);
+    }
+    return (await response.json()) as CredentialsStatus & { check: CredentialsCheck };
+}
+
+/** Re-checks the keys already held, without sending new ones. */
+export async function checkCredentials(): Promise<CredentialsCheck> {
+    const response = await fetch('/credentials/check', { method: 'POST' });
+    if (!response.ok) {
+        throw new Error(`Request failed: ${response.status}`);
+    }
+    return (await response.json()) as CredentialsCheck;
+}

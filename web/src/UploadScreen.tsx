@@ -1,5 +1,50 @@
+import { useEffect, useState } from 'react';
+
 import { criteriaSummary, pipelineTimeEstimateMessage } from './code/criteria';
+import { checkCredentials } from './code/client';
+import { creditCoversRun, estimatedRunCost } from './code/cost';
 import type { ReviewFlow } from './code/useReviewFlow';
+
+/**
+ * Warns when the OpenRouter balance looks too thin for the campaign ahead.
+ *
+ * Running out of credit mid-campaign is the single most common way a run
+ * fails, and it fails opaquely: the profiles simply come back unscored. One
+ * line before the run turns that into a decision the operator can make.
+ */
+function CreditWarning({ profiles }: { profiles: number }) {
+  const [remaining, setRemaining] = useState<number | undefined>(undefined);
+
+  useEffect(() => {
+    void checkCredentials()
+      .then((check) => setRemaining(check.openRouter.remainingCredit))
+      .catch(() => undefined);
+  }, []);
+
+  if (creditCoversRun(remaining, profiles)) return null;
+
+  return (
+    <div
+      style={{
+        margin: '14px 0 0',
+        padding: '10px 13px',
+        borderRadius: 10,
+        fontSize: 13,
+        lineHeight: 1.45,
+        color: '#92400e',
+        background: '#fef3c7',
+        border: '1px solid #fde68a',
+        maxWidth: 560,
+      }}
+    >
+      Seu saldo na OpenRouter é de cerca de{' '}
+      <strong>US$ {(remaining ?? 0).toFixed(2)}</strong>, e esta campanha deve
+      custar perto de <strong>US$ {estimatedRunCost(profiles).toFixed(2)}</strong>.
+      Adicione créditos antes de começar, senão parte dos perfis vai voltar sem
+      avaliação.
+    </div>
+  );
+}
 
 /** Circled "i" used to flag the run-time estimate chip. */
 function InfoIcon() {
@@ -266,6 +311,8 @@ export function UploadScreen({ flow }: { flow: ReviewFlow }) {
                 </span>
               </div>
             )}
+
+            {configured && <CreditWarning profiles={imported.validProfiles} />}
 
             <div style={{ marginTop: configured ? 12 : 22, display: 'flex', alignItems: 'center', gap: 14 }}>
               {configured ? (

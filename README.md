@@ -109,6 +109,15 @@ _All shown with the app's built-in mock data (`?mock` in the URL) — no real ca
   serves, selected through a single env var).
 - **Tests:** Node's built-in test runner (`node --test`), no external test framework.
 
+## Handing it to someone non-technical
+
+`COMO-USAR.md` is the guide for an operator who will never open a terminal, and
+`Instalar.bat` / `Leadscan.bat` are what they actually double-click on Windows.
+The installer checks for Node, installs both dependency trees, builds the app,
+and drops a Desktop shortcut; the launcher starts the server and opens the
+browser. API keys are pasted into a setup screen in the app rather than a
+`.env` file, so nothing below is required of them.
+
 ## Setup
 
 1. Clone the repo and install dependencies for both the backend and the web app:
@@ -124,24 +133,32 @@ _All shown with the app's built-in mock data (`?mock` in the URL) — no real ca
    cp .env.example .env
    ```
 
-   At minimum you need `APIFY_API_KEY` and `OPENROUTER_API_KEY`. Everything else in
-   `.env.example` has a sane default and can be left blank.
+   Everything in `.env.example` has a sane default and can be left blank —
+   including `APIFY_API_KEY` and `OPENROUTER_API_KEY`, which the app asks for
+   on its setup screen if they are absent. Setting them here is the override
+   for a development machine: a key in the environment wins over one saved
+   from the browser.
 
-3. Run the API server:
-
-   ```bash
-   npm run serve
-   ```
-
-4. In a separate terminal, run the web app:
+3. Run the whole app as one process:
 
    ```bash
-   cd web && npm run dev
+   npm run app
    ```
 
-   The web app proxies API requests to `localhost:3000`, so the server needs to already be running.
+   This builds the server and the web bundle, then serves both from
+   `localhost:3000`. Open it, paste the two API keys when asked, upload a
+   LinkedHelper campaign CSV, set your criteria, and run the pipeline.
 
-5. Open the local Vite URL, upload a LinkedHelper campaign CSV, set your criteria, and run the pipeline.
+   For frontend work you still want Vite's hot reload, which needs the two
+   processes:
+
+   ```bash
+   npm run serve            # terminal 1
+   cd web && npm run dev    # terminal 2
+   ```
+
+   The dev server proxies API requests to `localhost:3000`, so the API needs to
+   already be running.
 
 ### Running the pipeline without the UI
 

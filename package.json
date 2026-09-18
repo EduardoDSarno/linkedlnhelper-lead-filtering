@@ -15,7 +15,9 @@
     "typecheck": "tsc --noEmit --noUnusedLocals --noUnusedParameters",
     "typecheck:experiments": "tsc -p tsconfig.experiments.json --noEmit",
     "test:experiments": "node --import tsx --test 'scripts/**/test/*.test.ts'",
-    "test:unit": "node --import tsx --test 'src/**/test/*.test.ts'"
+    "test:unit": "node --import tsx --test 'src/**/test/*.test.ts'",
+    "app": "npm run build:app && node dist/api/server.js",
+    "build:app": "tsc -p tsconfig.serve.json && npm --prefix web run build"
   },
   "keywords": [],
   "author": "",
@@ -27,6 +29,7 @@
     "typescript": "^7.0.2"
   },
   "dependencies": {
+    "@fastify/static": "^10.1.4",
     "@openrouter/sdk": "^1.2.103",
     "apify-client": "^2.25.0",
     "csv-parse": "^7.0.2",

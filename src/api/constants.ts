@@ -21,7 +21,15 @@ export const API_ROUTES = {
   run: '/runs/:processingId',
   criteriaPresets: '/criteria_presets',
   criteriaPreset: '/criteria_presets/:presetId',
+  credentials: '/credentials',
+  credentialsCheck: '/credentials/check',
 } as const;
+
+/** Built web app the API serves, relative to the repository root. */
+export const WEB_APP_DIRECTORY = 'web/dist';
+
+/** Entry document handed to any path the single-page app routes itself. */
+export const WEB_APP_ENTRY = 'index.html';
 
 /** Field names shared by the API request and response bodies. */
 export const API_FIELD = {

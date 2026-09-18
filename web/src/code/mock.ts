@@ -11,6 +11,8 @@ import type {
   ArtifactKind,
   CampaignSummary,
   CompensationMatch,
+  CredentialsCheck,
+  CredentialsStatus,
   DecisionsResult,
   ImportResult,
   ManualOverride,
@@ -609,4 +611,50 @@ export function renameRun(processingId: string, name: string): Promise<void> {
 export function deleteRun(processingId: string): Promise<void> {
   mockRuns = mockRuns.filter((run) => run.processingId !== processingId);
   return delay(undefined, 150);
+}
+
+/**
+ * Mock of getCredentials: the demo never calls a paid service, so it reports
+ * both keys present and skips the setup gate entirely.
+ */
+export function getCredentials(): Promise<CredentialsStatus> {
+  return delay(
+    {
+      apify: { configured: true, remembered: false },
+      openRouter: { configured: true, remembered: false },
+      ready: true,
+    },
+    80,
+  );
+}
+
+/** Mock of saveCredentials: accepts anything and reports both keys valid. */
+export function saveCredentials(_input: {
+  apify?: string;
+  openRouter?: string;
+  remember: boolean;
+}): Promise<CredentialsStatus & { check: CredentialsCheck }> {
+  return delay(
+    {
+      apify: { configured: true, remembered: false },
+      openRouter: { configured: true, remembered: false },
+      ready: true,
+      check: {
+        apify: { valid: true, label: 'demo' },
+        openRouter: { valid: true, label: 'demo', remainingCredit: 25 },
+      },
+    },
+    150,
+  );
+}
+
+/** Mock of checkCredentials: always healthy. */
+export function checkCredentials(): Promise<CredentialsCheck> {
+  return delay(
+    {
+      apify: { valid: true, label: 'demo' },
+      openRouter: { valid: true, label: 'demo', remainingCredit: 25 },
+    },
+    80,
+  );
 }

@@ -8,8 +8,13 @@ Every setting is read from the environment at startup (loaded from `.env` by
 
 | Variable | Purpose |
 | --- | --- |
-| `APIFY_API_KEY` | Apify / HarvestAPI token used to collect LinkedIn profile data. Collection throws at startup without it. |
-| `OPENROUTER_API_KEY` | OpenRouter token used for profile evaluation. Evaluation throws without it. |
+| `APIFY_API_KEY` | Apify / HarvestAPI token used to collect LinkedIn profile data. |
+| `OPENROUTER_API_KEY` | OpenRouter token used for profile evaluation. |
+
+Both may be left blank: the app's setup screen collects them at runtime and
+writes them into the process environment, optionally remembering them in
+`src/dataStorage/credentials.json` (gitignored, owner-readable). A value set
+here wins over a remembered one, so a development machine keeps its own keys.
 
 ## Model selection
 
