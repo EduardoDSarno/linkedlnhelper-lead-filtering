@@ -9,7 +9,7 @@ import type {
 } from '../index.js';
 import { normalizeLinkedinUrl } from '../../../linkedin/index.js';
 import { PIPELINE_PROGRESS_MESSAGE } from '../../../logging/index.js';
-import { recordingLogger } from '../../../test_support/pipeline_fakes.js';
+import { recordingLogger } from '../../../test_support/recording_logger.js';
 
 /** Builds a minimal valid provider record for collector tests. */
 function successfulRecord(linkedinUrl: string): RawApifyProfile {

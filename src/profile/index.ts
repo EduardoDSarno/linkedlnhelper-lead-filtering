@@ -1,7 +1,3 @@
-export { toImportedCsvProfile } from './imported_csv_profile.js';
-
-export type { ImportedCsvProfile } from './imported_csv_profile.js';
-
 export type {
   Profile,
   ProfileDate,

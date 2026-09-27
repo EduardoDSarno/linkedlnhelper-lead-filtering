@@ -1,34 +1,14 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import test from 'node:test';
 
 import {
   EvaluationCriteriaFileError,
-  loadFullEvaluationCriteria,
   parseFullEvaluationCriteria,
 } from '../criterias/index.js';
 
 const MAXIMUM_DECISION_PERCENT = 100;
 const TEST_MINIMUM_MANUAL_REVIEW_PERCENT = 50;
 const TEST_MINIMUM_APPROVAL_PERCENT = 75;
-
-/** Runs one criteria-file assertion in an automatically removed directory. */
-async function withCriteriaFile(
-  contents: string,
-  assertion: (path: string) => Promise<void>,
-): Promise<void> {
-  const directory = await mkdtemp(join(tmpdir(), 'evaluation-criteria-'));
-  const path = join(directory, 'criteria.json');
-
-  try {
-    await writeFile(path, contents, 'utf8');
-    await assertion(path);
-  } finally {
-    await rm(directory, { recursive: true, force: true });
-  }
-}
 
 test('parses every currently supported evaluation criterion', () => {
   const parsed = parseFullEvaluationCriteria({
@@ -89,30 +69,6 @@ test('parses an explicit manual decision policy without score thresholds', () =>
   });
 
   assert.deepEqual(parsed.decisionPolicy, { mode: 'manual' });
-});
-
-test('loads valid criteria from JSON on disk', async () => {
-  await withCriteriaFile(
-    JSON.stringify({
-      systemPrompt: 'Evaluate a local commercial campaign.',
-      requirePhoto: true,
-    }),
-    async (path) => {
-      assert.deepEqual(await loadFullEvaluationCriteria(path), {
-        systemPrompt: 'Evaluate a local commercial campaign.',
-        requirePhoto: true,
-      });
-    },
-  );
-});
-
-test('rejects malformed criteria JSON with a stable validation error', async () => {
-  await withCriteriaFile('{invalid-json', async (path) => {
-    await assert.rejects(
-      () => loadFullEvaluationCriteria(path),
-      EvaluationCriteriaFileError,
-    );
-  });
 });
 
 test('rejects missing prompts, unknown fields, invalid types, and ranges', () => {

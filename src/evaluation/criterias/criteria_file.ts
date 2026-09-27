@@ -1,7 +1,5 @@
-import { readFile } from 'node:fs/promises';
-
 import { asRecord, asString } from '../../helpers/index.js';
-import { CRITERIA_MATCH } from '../filters/constants.js';
+import { CRITERIA_MATCH } from './user_criteria.js';
 import {
   DECISION_POLICY_MODE,
   DECISION_POLICY_PERCENT,
@@ -373,20 +371,4 @@ export function parseFullEvaluationCriteria(
     ...(openToWork === undefined ? {} : { openToWork }),
     ...(skipImageAnalysis === undefined ? {} : { skipImageAnalysis }),
   };
-}
-
-/** Reads and validates one criteria JSON file before any paid work begins. */
-export async function loadFullEvaluationCriteria(
-  path: string,
-): Promise<FullEvaluationCriteria> {
-  const text = await readFile(path, 'utf8');
-
-  try {
-    return parseFullEvaluationCriteria(JSON.parse(text) as unknown);
-  } catch (error: unknown) {
-    if (error instanceof EvaluationCriteriaFileError) throw error;
-    throw new EvaluationCriteriaFileError(
-      `Could not parse evaluation criteria JSON at ${path}.`,
-    );
-  }
 }

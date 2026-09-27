@@ -54,7 +54,6 @@ export const MODEL_EVALUATION_LIMITS = {
   pointTextMaxLength: 100,
   summaryMaxLength: 400,
   failedResponseLogMaxLength: 8_000,
-  imageObservationItems: 5,
   ageBasisItems: 4,
   ageMinimum: 0,
   ageMaximum: 120,
@@ -186,11 +185,6 @@ ${MODEL_EVALUATION_PROMPT_SLOTS.systemPrompt}
   describe or score one profile using another profile's photo. If you cannot
   tell which image belongs to a profile, say so as a "negatives" point on that
   profile rather than guessing.
-- Return an "imageAssessment" object for every profile sent an image, and omit
-  it entirely for profiles sent without one. Judge composition and technical
-  usability from the image only. Keep "observations" brief and limited to
-  composition and image quality; never mention age or any personal
-  characteristic there.
 - Estimate age in "estimatedAge" by combining BOTH sources of evidence:
   1. The dated anchors in "careerTimeline", which are already extracted for
      you. Read these FIRST, before looking at the photo.
@@ -282,7 +276,7 @@ ${MODEL_EVALUATION_PROMPT_SLOTS.profileJson}
 export const MODEL_EVALUATION_PROFILE_IMAGE_LABEL = `Profile photo for ${MODEL_EVALUATION_PROMPT_SLOTS.profileId}:`;
 
 /** Stands in for the photo when a profile has none or its download failed. */
-export const MODEL_EVALUATION_PROFILE_IMAGE_MISSING = `No profile photo is available for ${MODEL_EVALUATION_PROMPT_SLOTS.profileId}. Omit imageAssessment for this profile and estimate age from the career timeline alone.`;
+export const MODEL_EVALUATION_PROFILE_IMAGE_MISSING = `No profile photo is available for ${MODEL_EVALUATION_PROMPT_SLOTS.profileId}. Estimate age from the career timeline alone.`;
 
 /** Final text part of a request, after every profile. */
 export const MODEL_EVALUATION_CLOSING =

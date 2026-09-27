@@ -4,7 +4,13 @@ import type { ProfileLocation } from '../../profile/index.js';
 export type LocationField = keyof ProfileLocation;
 
 /** How a location or keyword list must match profile data. */
-export type CriteriaMatch = 'any' | 'all';
+export const CRITERIA_MATCH = {
+  any: 'any',
+  all: 'all',
+} as const;
+
+/** One match mode for a location or keyword list. */
+export type CriteriaMatch = (typeof CRITERIA_MATCH)[keyof typeof CRITERIA_MATCH];
 
 /**
  * Allowed current locations for the first pass.

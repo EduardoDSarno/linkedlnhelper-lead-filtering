@@ -1,5 +1,5 @@
 export { collectApifyProfilesWithExecutor } from './apify_profile_collector.js';
-export { resolveProfileCollector } from './provider.js';
+export { collectHarvestProfiles } from './harvest_profile_collector/index.js';
 
 export { resolveApifyCollectorConfig } from './config.js';
 

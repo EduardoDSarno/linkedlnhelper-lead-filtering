@@ -1,8 +1,7 @@
-export { DECISION_POLICY_MODE } from './user_criteria.js';
+export { CRITERIA_MATCH, DECISION_POLICY_MODE } from './user_criteria.js';
 
 export {
   EvaluationCriteriaFileError,
-  loadFullEvaluationCriteria,
   parseFullEvaluationCriteria,
 } from './criteria_file.js';
 

@@ -64,8 +64,6 @@ export interface ProfileModelAssessment {
   readonly summary: string;
   /** Age range inferred from the photo and the profile's career timeline. */
   readonly estimatedAge?: EstimatedAge;
-  /** Present only when the profile was sent with a photo. */
-  readonly imageAssessment?: ModelImageAssessment;
 }
 
 /** How much the model trusts its own age range. */
@@ -83,34 +81,6 @@ export interface EstimatedAge {
   readonly confidence: EstimatedAgeConfidence;
   /** The specific signals used, such as "first role 2004" or "graduated 2015". */
   readonly basis: readonly string[];
-}
-
-/** Composition and technical usability of one profile photo. */
-export interface ModelImageAssessment {
-  readonly hasFace: boolean;
-  readonly faceCount: number;
-  readonly faceVisibility: 'clear' | 'partial' | 'unclear' | 'not_applicable';
-  readonly imageQuality: 'good' | 'usable' | 'poor';
-  readonly isBlurry: boolean;
-  readonly isPoorlyLit: boolean;
-  readonly photoType:
-    | 'professional_portrait'
-    | 'selfie'
-    | 'mirror_selfie'
-    | 'group_photo'
-    | 'other';
-  readonly framing: 'headshot' | 'upper_body' | 'full_body' | 'unclear';
-  readonly background:
-    | 'plain'
-    | 'workplace'
-    | 'outdoor'
-    | 'domestic'
-    | 'other'
-    | 'unclear';
-  readonly attire: 'formal' | 'business_casual' | 'casual' | 'unclear';
-  readonly reviewRequired: boolean;
-  /** Neutral notes on composition and quality only, never personal traits. */
-  readonly observations: readonly string[];
 }
 
 /** A model assessment enriched with the application's deterministic decision. */

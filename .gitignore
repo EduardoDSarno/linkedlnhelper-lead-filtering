@@ -5,8 +5,6 @@ test_data/
 .env
 output/
 .vscode
-# Local experiments are checked separately through the :experiments commands.
-scripts/
 opencode.json
 .claude
 AGENTS.md
@@ -17,4 +15,3 @@ src/dataStorage/
 *.sqlite
 
 .cursor/
-src/outdated/

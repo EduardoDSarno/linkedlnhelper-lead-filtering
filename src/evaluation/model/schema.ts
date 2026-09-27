@@ -6,7 +6,6 @@ import {
   type EstimatedAge,
   type EstimatedAgeConfidence,
   type EstimatedTotalMonthlyCompensation,
-  type ModelImageAssessment,
   type ProfileModelAssessment,
 } from './types.js';
 
@@ -118,73 +117,6 @@ export const MODEL_EVALUATION_JSON_SCHEMA = {
             },
             required: ['minimumAge', 'maximumAge', 'confidence', 'basis'],
           },
-          imageAssessment: {
-            type: 'object',
-            additionalProperties: false,
-            properties: {
-              hasFace: { type: 'boolean' },
-              faceCount: { type: 'integer', minimum: 0 },
-              faceVisibility: {
-                type: 'string',
-                enum: ['clear', 'partial', 'unclear', 'not_applicable'],
-              },
-              imageQuality: {
-                type: 'string',
-                enum: ['good', 'usable', 'poor'],
-              },
-              isBlurry: { type: 'boolean' },
-              isPoorlyLit: { type: 'boolean' },
-              photoType: {
-                type: 'string',
-                enum: [
-                  'professional_portrait',
-                  'selfie',
-                  'mirror_selfie',
-                  'group_photo',
-                  'other',
-                ],
-              },
-              framing: {
-                type: 'string',
-                enum: ['headshot', 'upper_body', 'full_body', 'unclear'],
-              },
-              background: {
-                type: 'string',
-                enum: [
-                  'plain',
-                  'workplace',
-                  'outdoor',
-                  'domestic',
-                  'other',
-                  'unclear',
-                ],
-              },
-              attire: {
-                type: 'string',
-                enum: ['formal', 'business_casual', 'casual', 'unclear'],
-              },
-              reviewRequired: { type: 'boolean' },
-              observations: {
-                type: 'array',
-                maxItems: MODEL_EVALUATION_LIMITS.imageObservationItems,
-                items: { type: 'string' },
-              },
-            },
-            required: [
-              'hasFace',
-              'faceCount',
-              'faceVisibility',
-              'imageQuality',
-              'isBlurry',
-              'isPoorlyLit',
-              'photoType',
-              'framing',
-              'background',
-              'attire',
-              'reviewRequired',
-              'observations',
-            ],
-          },
         },
         required: [
           'profileId',
@@ -289,10 +221,9 @@ function stringList(
 /**
  * Reads an advisory list, keeping what is usable instead of failing the parse.
  *
- * The image assessment annotates the review UI and never moves a score, so an
- * overlong or partly malformed list is trimmed to the entries that read
- * correctly. Throwing here would contradict that: the error escapes the
- * assessment and costs the profile its whole evaluation.
+ * Explanation lists sit beside the score rather than deciding it, so an
+ * overlong or partly malformed one is trimmed to the entries that read
+ * correctly. Throwing would cost the profile its whole evaluation over prose.
  */
 function advisoryStringList(value: unknown, maximumItems: number): string[] {
   const items =
@@ -519,28 +450,18 @@ function profileEvaluation(value: unknown): ProfileModelAssessment {
     record['negatives'],
     MODEL_EVALUATION_LIMITS.negativesPerProfile,
   );
-  // Some replies file the age and compensation estimates inside
-  // `imageAssessment` instead of beside it, because the photo is what they
-  // reasoned from. The values are the profile-level ones that were asked for,
-  // so read them one level down when the top level omitted them.
-  const nested = asRecord(record['imageAssessment']);
-  const parsedAge = estimatedAge(
-    record['estimatedAge'] ?? nested?.['estimatedAge'],
-  );
-  const parsedImage = imageAssessment(record['imageAssessment']);
+  const parsedAge = estimatedAge(record['estimatedAge']);
 
   return {
     profileId: requiredString(record['profileId'], 'profileId'),
     matchPercent: matchPercent(record['matchPercent']),
     estimatedTotalMonthlyCompensation: estimatedTotalMonthlyCompensation(
-      record['estimatedTotalMonthlyCompensation'] ??
-        nested?.['estimatedTotalMonthlyCompensation'],
+      record['estimatedTotalMonthlyCompensation'],
     ),
     positives: parsedPositives,
     negatives: parsedNegatives,
     summary: summaryText(record, parsedPositives, parsedNegatives),
     ...(parsedAge ? { estimatedAge: parsedAge } : {}),
-    ...(parsedImage ? { imageAssessment: parsedImage } : {}),
   };
 }
 
@@ -596,67 +517,6 @@ function estimatedAge(value: unknown): EstimatedAge | undefined {
     basis: advisoryStringList(
       record['basis'],
       MODEL_EVALUATION_LIMITS.ageBasisItems,
-    ),
-  };
-}
-
-/**
- * Validates one image assessment, dropping it whole when a field is unusable.
- *
- * The assessment is advisory: it annotates the review UI and never changes a
- * score, so a malformed one is discarded instead of failing the whole profile.
- */
-function imageAssessment(value: unknown): ModelImageAssessment | undefined {
-  const record = asRecord(value);
-  if (!record) return undefined;
-
-  const booleans = ['hasFace', 'isBlurry', 'isPoorlyLit', 'reviewRequired'] as const;
-  for (const field of booleans) {
-    if (typeof record[field] !== 'boolean') return undefined;
-  }
-
-  const faceCount = record['faceCount'];
-  if (typeof faceCount !== 'number' || !Number.isInteger(faceCount) || faceCount < 0) {
-    return undefined;
-  }
-
-  const enums = {
-    faceVisibility: ['clear', 'partial', 'unclear', 'not_applicable'],
-    imageQuality: ['good', 'usable', 'poor'],
-    photoType: [
-      'professional_portrait',
-      'selfie',
-      'mirror_selfie',
-      'group_photo',
-      'other',
-    ],
-    framing: ['headshot', 'upper_body', 'full_body', 'unclear'],
-    background: ['plain', 'workplace', 'outdoor', 'domestic', 'other', 'unclear'],
-    attire: ['formal', 'business_casual', 'casual', 'unclear'],
-  } as const;
-
-  for (const [field, accepted] of Object.entries(enums)) {
-    const parsed = asString(record[field]);
-    if (!parsed || !(accepted as readonly string[]).includes(parsed)) {
-      return undefined;
-    }
-  }
-
-  return {
-    hasFace: record['hasFace'] as boolean,
-    faceCount,
-    faceVisibility: record['faceVisibility'] as ModelImageAssessment['faceVisibility'],
-    imageQuality: record['imageQuality'] as ModelImageAssessment['imageQuality'],
-    isBlurry: record['isBlurry'] as boolean,
-    isPoorlyLit: record['isPoorlyLit'] as boolean,
-    photoType: record['photoType'] as ModelImageAssessment['photoType'],
-    framing: record['framing'] as ModelImageAssessment['framing'],
-    background: record['background'] as ModelImageAssessment['background'],
-    attire: record['attire'] as ModelImageAssessment['attire'],
-    reviewRequired: record['reviewRequired'] as boolean,
-    observations: advisoryStringList(
-      record['observations'],
-      MODEL_EVALUATION_LIMITS.imageObservationItems,
     ),
   };
 }

@@ -41,10 +41,10 @@ What we found in its data:
   `education_1..3`, `skills`, `summary`), but they were **0% filled** in every
   export we checked. Only headline, location, photo, and mutual-connection
   count were present, because the campaigns only collect search results.
-- **A Bright Data test (`output/bright-data-profiles.json`) returned 210 of
-  217 profiles, but 0 with work experience.** Education, about, and current
-  company came through. LinkedIn hides experience on the logged-out public
-  page for these profiles.
+- **A Bright Data test returned 210 of 217 profiles, but 0 with work
+  experience.** Education, about, and current company came through. LinkedIn
+  hides experience on the logged-out public page for these profiles. (The raw
+  output was deleted with the v1 working files; this result is the record.)
 
 ### What forced a change
 

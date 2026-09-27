@@ -1,13 +1,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { CRITERIA_MATCH } from '../filters/constants.js';
+import { CRITERIA_MATCH } from '../criterias/index.js';
 import type { FullEvaluationCriteria } from '../criterias/index.js';
 import type { EvaluationProfileData } from '../context.js';
 import { buildModelEvaluationPrompt } from '../model/prompt.js';
 import {
   MODEL_EVALUATION_JSON_SCHEMA,
-  MODEL_EVALUATION_LIMITS,
   parseModelEvaluationResponse,
   ModelEvaluationResponseError,
 } from '../model/index.js';
@@ -255,51 +254,6 @@ test('keeps a profile whose optional explanation lists are absent', () => {
     [],
   );
   assert.deepEqual(assessments[0]?.estimatedAge?.basis, []);
-});
-
-test('trims an overlong image observation list instead of failing the profile', () => {
-  const { assessments, failures } = parseModelEvaluationResponse(
-    JSON.stringify({
-      evaluations: [
-        {
-          profileId: 'profile-1',
-          matchPercent: 64,
-          estimatedTotalMonthlyCompensation: {
-            status: 'insufficient_evidence',
-            reasons: ['n/a'],
-          },
-          positives: [],
-          negatives: [],
-          summary: 'Advisory image notes must never cost a score.',
-          imageAssessment: {
-            hasFace: true,
-            faceCount: 1,
-            faceVisibility: 'clear',
-            imageQuality: 'good',
-            isBlurry: false,
-            isPoorlyLit: false,
-            photoType: 'selfie',
-            framing: 'upper_body',
-            background: 'domestic',
-            attire: 'casual',
-            reviewRequired: false,
-            observations: Array.from(
-              { length: MODEL_EVALUATION_LIMITS.imageObservationItems + 3 },
-              (_item, index) => `Observation ${String(index)}`,
-            ),
-          },
-        },
-      ],
-    }),
-    ['profile-1'],
-  );
-
-  assert.deepEqual(failures, []);
-  assert.equal(assessments[0]?.matchPercent, 64);
-  assert.equal(
-    assessments[0]?.imageAssessment?.observations.length,
-    MODEL_EVALUATION_LIMITS.imageObservationItems,
-  );
 });
 
 test('parses positives and negatives, capping count at five and text at 100 characters', () => {
@@ -657,66 +611,4 @@ test('keeps the profile when compensation basis arrives as a single string', () 
     compensation?.status === 'estimated' ? compensation.basis : undefined,
     ['Cargo sênior na região.'],
   );
-});
-
-test('reads age and compensation misnested inside imageAssessment', () => {
-  // Observed in the 578-profile run: the reply reasoned from the photo and
-  // filed both profile-level estimates under the image block.
-  const item = validEvaluation('p1');
-  delete item['estimatedTotalMonthlyCompensation'];
-  item['imageAssessment'] = {
-    observations: 'Retrato individual, rosto nítido.',
-    estimatedAge: {
-      minimumAge: 37,
-      maximumAge: 45,
-      confidence: 'medium',
-      basis: ['Primeira função registrada em nov/2010.'],
-    },
-    estimatedTotalMonthlyCompensation: {
-      status: 'estimated',
-      currency: 'BRL',
-      minimumMonthlyCompensation: 8_000,
-      maximumMonthlyCompensation: 18_000,
-      confidence: 'low',
-      basis: ['15 anos em vendas B2B.'],
-    },
-  };
-
-  const { assessments, failures } = parseModelEvaluationResponse(
-    JSON.stringify({ evaluations: [item] }),
-    ['p1'],
-  );
-
-  assert.equal(failures.length, 0);
-  assert.equal(assessments[0]?.estimatedAge?.minimumAge, 37);
-  assert.equal(
-    assessments[0]?.estimatedTotalMonthlyCompensation.status,
-    'estimated',
-  );
-});
-
-test('prefers the top-level estimates over misnested duplicates', () => {
-  const item = validEvaluation('p1');
-  item['estimatedAge'] = {
-    minimumAge: 30,
-    maximumAge: 36,
-    confidence: 'high',
-    basis: ['Ano acadêmico datado.'],
-  };
-  item['imageAssessment'] = {
-    observations: 'Retrato individual.',
-    estimatedAge: {
-      minimumAge: 50,
-      maximumAge: 58,
-      confidence: 'low',
-      basis: ['Apenas a foto.'],
-    },
-  };
-
-  const { assessments } = parseModelEvaluationResponse(
-    JSON.stringify({ evaluations: [item] }),
-    ['p1'],
-  );
-
-  assert.equal(assessments[0]?.estimatedAge?.minimumAge, 30);
 });

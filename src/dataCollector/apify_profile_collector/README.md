@@ -1,8 +1,9 @@
 # Apify profile collector
 
-This module is the fault-tolerant provider boundary between a list of LinkedIn
-URLs and the rest of the full-profile pipeline. It preserves successful Apify
-records untouched and reports unsuccessful URLs separately.
+This module is the fault-tolerant boundary between a list of LinkedIn URLs and
+the Harvest profile scraper on Apify. In the funnel it fills the gaps Unipile
+profile fetches leave. It preserves successful Apify records untouched and
+reports unsuccessful URLs separately.
 
 ## Processing flow
 
@@ -72,15 +73,14 @@ evidence and change policy behind the production baseline.
 - `failures`: permanent and retry-exhausted failures, ordered like the input;
 - `stats`: rounds, Actor runs, attempts, successes, and failure totals.
 
-The full-profile pipeline writes successes to
-`output/apify-profiles.json` and failures to
-`output/apify-profile-failures.json`. Only successful profiles continue to the
-normalization and image-analysis stages.
+The caller decides what to keep; only successful profiles should continue to
+mapping and evaluation.
 
 ## Files
 
 - `apify_profile_collector.ts`: scheduling, classification, retry logic, and
   the production Apify executor.
+- `harvest_profile_collector/`: the Harvest Actor's input and entry point.
 - `config.ts`: defaults, safety limits, environment parsing, and API-key access.
 - `constants.ts`: provider identifiers and HTTP status constants.
 - `error_handling.ts`: provider error classification and failure construction.

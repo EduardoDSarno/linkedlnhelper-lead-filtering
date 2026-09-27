@@ -1,6 +1,4 @@
 import type { EvaluationBatchContext, EvaluationProfileData } from './context.js';
-import { filterEvaluationBatch } from './filters/broad_filter.js';
-import type { BroadFilterBatchResult } from './filters/types.js';
 import { evaluateProfilesWithModel } from './model/index.js';
 import type {
   ModelEvaluationOptions,
@@ -8,7 +6,7 @@ import type {
 } from './model/index.js';
 import {
   loadProfileImage,
-  resolveProfileImageExtractionOptions,
+  PROFILE_IMAGE_DOWNLOAD,
 } from '../imageExtractor/index.js';
 import { errorMessage } from '../helpers/index.js';
 import { PIPELINE_PROGRESS_MESSAGE } from '../logging/index.js';
@@ -20,9 +18,8 @@ export interface ProfilePhotoLoadFailure {
   readonly error: string;
 }
 
-/** The deterministic and model-assisted results of one evaluation run. */
+/** The model's results for one evaluation run. */
 export interface EvaluationRunResult {
-  readonly broadFilter: BroadFilterBatchResult;
   readonly modelEvaluation: ModelEvaluationOutcome;
   /** Profiles evaluated on text alone because their photo would not load. */
   readonly photoLoadFailures: readonly ProfilePhotoLoadFailure[];
@@ -72,7 +69,6 @@ function withoutUnreachablePhoto(
 /**
  * Downloads each profile's photo and attaches the bytes for the model request.
  *
- * Runs after the broad filter so an excluded profile never costs a download.
  * A failed download is never fatal: that profile keeps its text and is
  * evaluated without an image, because losing one photo is a far smaller loss
  * than dropping the profile from a paid request.
@@ -95,7 +91,6 @@ async function attachProfilePhotos(
   );
 
   const load = options.loadPhoto ?? loadProfileImage;
-  const loadingOptions = resolveProfileImageExtractionOptions();
   const results = [...profiles];
   const failures: ProfilePhotoLoadFailure[] = [];
   const concurrency = Math.max(
@@ -115,10 +110,10 @@ async function attachProfilePhotos(
 
       try {
         const photo = await load(
-          { kind: 'url', url: profile.photoUrl },
+          profile.photoUrl,
           {
-            downloadTimeoutMs: loadingOptions.imageDownloadTimeoutMs,
-            maximumBytes: loadingOptions.maxImageBytes,
+            downloadTimeoutMs: PROFILE_IMAGE_DOWNLOAD.timeoutMs,
+            maximumBytes: PROFILE_IMAGE_DOWNLOAD.maximumBytes,
           },
         );
         results[index] = { ...profile, photo };
@@ -154,22 +149,18 @@ async function attachProfilePhotos(
 }
 
 /**
- * Runs deterministic exclusions, loads photos, then requests fit evaluations.
+ * Loads photos, then requests a fit evaluation for every profile.
  *
- * Profiles already excluded by the photo cut never consume model tokens or a
- * photo download. The model stage isolates request-group failures and
- * preserves every broad result regardless of downstream availability.
+ * Every campaign criterion is judged by the model from the customer's own
+ * description, so no profile is dropped before it. The model stage isolates
+ * request-group failures, so one bad group never costs the others.
  */
 export async function evaluateProfiles(
   context: EvaluationBatchContext,
   options: ModelEvaluationOptions = {},
   photoOptions: EvaluationPhotoOptions = {},
 ): Promise<EvaluationRunResult> {
-  const broadFilter = filterEvaluationBatch(context);
-  const withPhotos = await attachProfilePhotos(
-    broadFilter.profilesForAi,
-    photoOptions,
-  );
+  const withPhotos = await attachProfilePhotos(context.profiles, photoOptions);
   const modelEvaluation = await evaluateProfilesWithModel(
     withPhotos.profiles,
     context.criteria,
@@ -177,7 +168,6 @@ export async function evaluateProfiles(
   );
 
   return {
-    broadFilter,
     modelEvaluation,
     photoLoadFailures: withPhotos.failures,
   };

@@ -1,161 +1,50 @@
-<!-- Local development: keep experimental scripts out of application checks. -->
+# LinkedIn lead funnel
 
-Development checks: `npm test` checks and tests application code. Local scripts
-are checked separately with `npm run typecheck:experiments` and
-`npm run test:experiments`; they may require local data and credentials.
-The `scripts/` directory remains ignored. Promote reusable tooling into tracked
-source before making it a dependency of application commands.
+A system that takes a LinkedIn search and runs the funnel up to a phone number
+and a booked meeting, per client LinkedIn account: find people, fetch their
+profiles, judge each one against criteria the client describes in plain
+language, send the connection request, run the follow-up messages, and pull
+the phone number out of the reply.
 
-<div align="center">
+**Status: being rebuilt.** v1 screened LinkedHelper CSV exports and was used
+in production until 2026-09-29. This branch keeps only the parts the funnel
+reuses and grows the rest from one account up.
 
-<pre>
- **       **          **                  ** **                              **
-/**      //          /**                 /**/**                             /**
-/**       ** ******* /**  **  *****      /**/**        *****   ******       /**
-/**      /**//**///**/** **  **///**  ******/**       **///** //////**   ******
-/**      /** /**  /**/****  /******* **///**/**      /*******  *******  **///**
-/**      /** /**  /**/**/** /**//// /**  /**/**      /**////  **////** /**  /**
-/********/** ***  /**/**//**//******//******/********//******//********//******
-//////// // ///   // //  //  //////  ////// ////////  //////  ////////  //////
-</pre>
+- Goals: [`docs/VISION.md`](docs/VISION.md)
+- Research and decisions behind them: [`docs/DECISIONS.md`](docs/DECISIONS.md)
+- v1's measured baseline: [`docs/SNAPSHOT.md`](docs/SNAPSHOT.md)
 
-**Filter LinkedIn lead lists against custom criteria using an LLM pipeline, with a review UI for campaigns.**
+## What is here now
 
-</div>
-
-This project was created with the intent to help a business that ran campaigns through a platform called
-LinkedHelper and then manually had to filter them (one by one) through their requirements.
-
-My goal was to create something that could filter a batch of profiles based on criteria set by the user.
-
-## Architecture
-
-- The current pipeline follows this flow:
-
-  ```mermaid
-  flowchart LR
-      A[Collect profiles<br/>Apify] --> B[Map / parse]
-      B --> C[Broad filter]
-      C --> D[Load photos]
-      D --> E[LLM evaluation]
-      E --> F[(Storage)]
-      F --> G[Web UI review]
-  ```
-
-### Break Down
-
-
-**A good implementation detail to mention is that I designed most of this to work as an intermediary between
-LinkedHelper (third-party software) and the user. My application, for now, just exists to simplify an
-outside job that LinkedHelper lacks having.**
-
-- 1.1: The process starts with an input of a CSV formatted file (since LinkedHelper exports the campaign as a CSV).
-
-- 1.2: Then we import the CSV through an HTTP request (which will be covered in another documentation) and
-extract the profile links from the document.
-
-- 1.3: We then run it through a third-party API, currently called Harvest API, that given the profile links
-returns the full profile data (experience, education, location, headline, photo, etc). This runs through
-Apify, in batches with bounded concurrency, so a run of hundreds of profiles doesn't get sent as one giant
-request.
-
-- 1.4: Each raw profile then gets mapped into the app's own profile model, and correlated back to the
-public_id from the original CSV so we never lose track of which LinkedHelper lead a profile belongs to.
-One malformed record from the provider doesn't take the rest of the batch down with it, it just gets
-logged as a failure and the pipeline keeps going.
-
-- 1.5: Photos are downloaded and sent with the evaluation request itself, so the model looks at the
-picture rather than at someone else's description of it. There used to be a separate vision call here
-whose written summary was passed along as text; that billed the same photo twice and threw away detail,
-so it's gone. A campaign can still opt out with `skipImageAnalysis`, and a photo whose URL has expired
-(LinkedIn signs them with a short life) simply drops out, with the profile evaluated on text alone.
-
-**Another implementation detail worth mentioning: before anything touches the LLM, a deterministic broad
-filter runs first and excludes profiles that obviously fail the criteria (wrong country, missing a required
-field, etc). Only the profiles that survive that filter get sent to the model, so we're not spending tokens
-on profiles that were never going to pass anyway.**
-
-- 1.6: The profiles that make it past the broad filter get evaluated by an LLM against the criteria the
-user defined for that campaign. Model calls go through a generic model layer instead of being hardcoded
-to one provider, so the model can be swapped through a single env var without touching the evaluation logic itself.
-Profiles go up in small groups rather than one request per person, and a group that fails is retried on
-its own: the rest of the run keeps its scores. Anyone still unscored after that is pooled into a single
-follow-up round, which is what the UI is reporting when the bar sits near full and says it is reprocessing.
-
-- 1.7: Everything (profiles, image assessments, evaluation results) gets persisted, and from there the
-web UI is where the actual review happens: upload a campaign, watch it run, and go through the profiles
-one by one (or bulk-approve/reject) with the model's reasoning and the extracted photo right next to each
-decision.
-
-## Screenshots
-
-_All shown with the app's built-in mock data (`?mock` in the URL) — no real campaigns or profiles._
-
-| Upload a campaign | Set the criteria |
+| Module | Role |
 | --- | --- |
-| ![Upload screen](ui/upload.png) | ![Criteria modal](ui/criteria.png) |
+| `src/evaluation/` | Judges a profile against the client's criteria with an LLM: prompt, response schema, retries, decision policy. |
+| `src/models/` | Provider-neutral model client, with the OpenRouter adapter. |
+| `src/dataCollector/apify_profile_collector/` | Harvest profile scraper on Apify, used to fill gaps in profile data. |
+| `src/mapper/`, `src/profile/` | The app's own profile model and the mapping into it. |
+| `src/imageExtractor/` | Downloads profile photos for the evaluation request. |
+| `src/linkedin/`, `src/helpers/`, `src/logging/` | Shared utilities. |
 
-| Review profiles | Campaign list |
-| --- | --- |
-| ![Profile review list](ui/review.png) | ![Campaigns screen](ui/campaigns.png) |
+Still to build: the Unipile client, webhooks, the scheduler that owns
+per-account limits, and the lead pipeline that ties them together.
 
-## Tech Stack
+## Where v1 went
 
-- **Backend:** TypeScript, Node.js (22+), Fastify for the API server, Pino for logging, and Node's
-  built-in `node:sqlite` for storage.
-- **Frontend:** React 19 with Vite and TypeScript.
-- **External services:** Apify (running the Harvest API LinkedIn scraper) for profile collection, and
-  OpenRouter for evaluation, with the profile photo sent as part of the same request (any model it
-  serves, selected through a single env var).
-- **Tests:** Node's built-in test runner (`node --test`), no external test framework.
+Nothing was deleted from history.
 
-## Setup
+- `handoff-local-app` branch: every v1 commit plus the Windows package.
+- Tag `v1.0-windows`: the Windows build handed to the operator.
+- Tag `linked_leadv1.0-no_downloaed_package`: v1's final state without it.
+- Tag `v1.0.0-mvp`: the baseline `docs/SNAPSHOT.md` describes.
 
-1. Clone the repo and install dependencies for both the backend and the web app:
+## Development
 
-   ```bash
-   npm install
-   cd web && npm install && cd ..
-   ```
-
-2. Copy `.env.example` to `.env` and fill in the required secrets:
-
-   ```bash
-   cp .env.example .env
-   ```
-
-   At minimum you need `APIFY_API_KEY` and `OPENROUTER_API_KEY`. Everything else in
-   `.env.example` has a sane default and can be left blank.
-
-3. Run the API server:
-
-   ```bash
-   npm run serve
-   ```
-
-4. In a separate terminal, run the web app:
-
-   ```bash
-   cd web && npm run dev
-   ```
-
-   The web app proxies API requests to `localhost:3000`, so the server needs to already be running.
-
-5. Open the local Vite URL, upload a LinkedHelper campaign CSV, set your criteria, and run the pipeline.
-
-### Running the pipeline without the UI
-
-The same pipeline is also reachable straight from the CLI, which is what the `npm run serve` API wraps:
+Requires Node 22 or newer.
 
 ```bash
-npm run collect        # import a CSV and collect full profiles
-npm run review         # run evaluation against a set of criteria
+npm install
+cp .env.example .env   # fill in APIFY_API_KEY and OPENROUTER_API_KEY
+npm test               # type-check and unit tests
 ```
 
-### Tests
-
-```bash
-npm test
-```
-
-Runs the TypeScript type-check and the full unit test suite.
+Tests never call a paid service; model and Apify calls are injected.

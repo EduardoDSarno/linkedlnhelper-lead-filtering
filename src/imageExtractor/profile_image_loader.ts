@@ -1,11 +1,15 @@
-import { readFile } from 'node:fs/promises';
-import { extname } from 'node:path';
+/** Image types the model request accepts, matched against Content-Type. */
+const PROFILE_IMAGE_MIME_TYPES = [
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/heic',
+  'image/heif',
+  'image/gif',
+  'image/avif',
+] as const;
 
-import { PROFILE_IMAGE_MIME_TYPES } from './profile_image_types.js';
-import type {
-  ProfileImageMimeType,
-  ProfileImageSource,
-} from './profile_image_types.js';
+type ProfileImageMimeType = (typeof PROFILE_IMAGE_MIME_TYPES)[number];
 
 export interface LoadedProfileImage {
   data: Uint8Array;
@@ -23,48 +27,17 @@ export interface ProfileImageLoadingOptions {
   fetchImage?: typeof fetch;
 }
 
-const MIME_TYPE_BY_EXTENSION: Readonly<Record<string, ProfileImageMimeType>> = {
-  '.avif': 'image/avif',
-  '.gif': 'image/gif',
-  '.heic': 'image/heic',
-  '.heif': 'image/heif',
-  '.jpeg': 'image/jpeg',
-  '.jpg': 'image/jpeg',
-  '.png': 'image/png',
-  '.webp': 'image/webp',
-};
-
-/** Returns whether a provider MIME value is supported for image extraction. */
-function isProfileImageMimeType(value: string): value is ProfileImageMimeType {
-  return PROFILE_IMAGE_MIME_TYPES.some((mimeType) => mimeType === value);
-}
-
-/** Extracts a normalized supported MIME type from an HTTP Content-Type header. */
-function parseContentType(value: string | null): ProfileImageMimeType | undefined {
-  const mimeType = value?.split(';', 1)[0]?.trim().toLowerCase();
-  return mimeType && isProfileImageMimeType(mimeType) ? mimeType : undefined;
-}
-
-/** Infers a supported image MIME type from a local filename extension. */
-function mimeTypeFromPath(path: string): ProfileImageMimeType | undefined {
-  return MIME_TYPE_BY_EXTENSION[extname(path).toLowerCase()];
-}
-
-/** Rejects image data that is empty or exceeds the caller's accepted size. */
-function validateImageSize(data: Uint8Array, maximumBytes: number): void {
-  if (data.byteLength === 0) {
-    throw new Error('The profile image is empty.');
-  }
-
-  if (data.byteLength > maximumBytes) {
-    throw new Error(
-      `The profile image is ${data.byteLength} bytes; the configured limit is ${maximumBytes} bytes.`,
-    );
-  }
-}
-
-/** Downloads and validates one remote profile image. */
-async function loadRemoteImage(
+/**
+ * Downloads one profile photo and returns its bytes with a supported type.
+ *
+ * Size is checked after reading, not only from a declared `Content-Length`:
+ * that header is optional on a chunked response, so the post-read check is the
+ * only thing that bounds an undeclared download.
+ *
+ * @throws When the URL is not HTTP(S), the download fails or times out, or the
+ * image is empty, too large, or of an unsupported type.
+ */
+export async function loadProfileImage(
   urlValue: string,
   options: ProfileImageLoadingOptions,
 ): Promise<LoadedProfileImage> {
@@ -106,41 +79,21 @@ async function loadRemoteImage(
   return { data, mimeType };
 }
 
-/**
- * Resolves any profile image source into bytes with a supported MIME type.
- *
- * Size is validated after reading in every case, not only from a declared
- * `Content-Length`: that header is optional on a chunked response, so the
- * post-read check is the only thing that bounds an undeclared download.
- *
- * @param source - In-memory bytes, a local file, or an HTTP(S) URL.
- * @param options - Download timeout, size limit, and an optional fetch.
- * @returns The image bytes and the MIME type to send to the model.
- * @throws When the image is empty, too large, unreadable, or of an
- * unsupported type.
- */
-export async function loadProfileImage(
-  source: ProfileImageSource,
-  options: ProfileImageLoadingOptions,
-): Promise<LoadedProfileImage> {
-  if (source.kind === 'url') {
-    return loadRemoteImage(source.url, options);
+/** Extracts a normalized supported MIME type from an HTTP Content-Type header. */
+function parseContentType(value: string | null): ProfileImageMimeType | undefined {
+  const mimeType = value?.split(';', 1)[0]?.trim().toLowerCase();
+  return PROFILE_IMAGE_MIME_TYPES.find((supported) => supported === mimeType);
+}
+
+/** Rejects image data that is empty or exceeds the caller's accepted size. */
+function validateImageSize(data: Uint8Array, maximumBytes: number): void {
+  if (data.byteLength === 0) {
+    throw new Error('The profile image is empty.');
   }
 
-  if (source.kind === 'bytes') {
-    validateImageSize(source.data, options.maximumBytes);
-    return { data: source.data, mimeType: source.mimeType };
-  }
-
-  const data = new Uint8Array(await readFile(source.path));
-  validateImageSize(data, options.maximumBytes);
-
-  const mimeType = source.mimeType ?? mimeTypeFromPath(source.path);
-  if (!mimeType) {
+  if (data.byteLength > maximumBytes) {
     throw new Error(
-      'Could not determine the local profile image MIME type. Supply mimeType explicitly.',
+      `The profile image is ${data.byteLength} bytes; the configured limit is ${maximumBytes} bytes.`,
     );
   }
-
-  return { data, mimeType };
 }
