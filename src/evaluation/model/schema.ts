@@ -1,5 +1,5 @@
-import { asRecord, asString } from '../../helpers/index.js';
-import { errorMessage as parseErrorMessage } from '../../helpers/error_message.js';
+import { asRecord, asString } from '../../shared/helpers/index.js';
+import { errorMessage as parseErrorMessage } from '../../shared/helpers/error_message.js';
 import { MODEL_EVALUATION_LIMITS } from './config.js';
 import {
   type CompensationEstimateConfidence,

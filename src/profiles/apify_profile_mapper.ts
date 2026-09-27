@@ -1,14 +1,14 @@
 import { randomUUID } from 'node:crypto';
 
-import type { RawApifyProfile } from '../dataCollector/apify_profile_collector/index.js';
-import { asRecord, asString, deduplicateBy } from '../helpers/index.js';
+import type { RawApifyProfile } from './sources/harvest/index.js';
+import { asRecord, asString, deduplicateBy } from '../shared/helpers/index.js';
 import type {
   Profile,
   ProfileDate,
   ProfileEducation,
   ProfileExperience,
   ProfileLocation,
-} from '../profile/index.js';
+} from './index.js';
 
 type UnknownRecord = Record<string, unknown>;
 

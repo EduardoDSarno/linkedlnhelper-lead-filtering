@@ -1,5 +1,5 @@
-import type { Logger } from '../../logging/index.js';
-import type { ModelClient, ModelTokenUsage, ThinkingEffort } from '../../models/index.js';
+import type { Logger } from '../../shared/logging/index.js';
+import type { ModelClient, ModelTokenUsage, ThinkingEffort } from '../../llm/index.js';
 
 /** Final decisions the model stage may return for professional fit. */
 export const MODEL_EVALUATION_DECISION = {

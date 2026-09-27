@@ -1,4 +1,4 @@
-# Image Extractor
+# Profile photos
 
 Downloads a profile photo so it can be sent to the model inside the
 evaluation request. It does not assess the photo itself: the model sees the
@@ -8,7 +8,7 @@ written summary would lose.
 ## Use
 
 ```ts
-import { loadProfileImage, PROFILE_IMAGE_DOWNLOAD } from '../imageExtractor/index.js';
+import { loadProfileImage, PROFILE_IMAGE_DOWNLOAD } from './photos/index.js';
 
 const photo = await loadProfileImage(profile.photoUrl, {
   downloadTimeoutMs: PROFILE_IMAGE_DOWNLOAD.timeoutMs,

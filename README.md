@@ -16,14 +16,16 @@ reuses and grows the rest from one account up.
 
 ## What is here now
 
-| Module | Role |
+`src/` is grouped by role, so each part of the funnel gets its own folder
+beside these as it is built.
+
+| Folder | Role |
 | --- | --- |
-| `src/evaluation/` | Judges a profile against the client's criteria with an LLM: prompt, response schema, retries, decision policy. |
-| `src/models/` | Provider-neutral model client, with the OpenRouter adapter. |
-| `src/dataCollector/apify_profile_collector/` | Harvest profile scraper on Apify, used to fill gaps in profile data. |
-| `src/mapper/`, `src/profile/` | The app's own profile model and the mapping into it. |
-| `src/imageExtractor/` | Downloads profile photos for the evaluation request. |
-| `src/linkedin/`, `src/helpers/`, `src/logging/` | Shared utilities. |
+| `src/evaluation/` | Judges a profile against the client's criteria with an LLM: prompt, response schema, retries, decision policy. `photos/` downloads the profile photo sent with the request. |
+| `src/llm/` | Provider-neutral model client with the OpenRouter adapter. Shared: evaluation uses it now; writing messages and reading replies will too. |
+| `src/profiles/` | The profile model every stage passes around, and the mapping into it. `sources/harvest/` fetches full profiles from Harvest on Apify to fill gaps. |
+| `src/linkedin/` | LinkedIn URL handling; the Unipile client belongs here. |
+| `src/shared/` | Helpers, logging, and test support used across the codebase. |
 
 Still to build: the Unipile client, webhooks, the scheduler that owns
 per-account limits, and the lead pipeline that ties them together.

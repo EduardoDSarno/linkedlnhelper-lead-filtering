@@ -1,12 +1,12 @@
 import {
   CONFIG_NUMBER_MINIMUMS,
   resolveConfigNumber,
-} from '../../helpers/index.js';
+} from '../../shared/helpers/index.js';
 import {
   resolveProviderModelId,
   resolveThinkingEffort,
-} from '../../models/index.js';
-import type { ThinkingEffort } from '../../models/index.js';
+} from '../../llm/index.js';
+import type { ThinkingEffort } from '../../llm/index.js';
 import type { ModelEvaluationOptions } from './types.js';
 
 /** Environment variables understood by the model-evaluation stage. */

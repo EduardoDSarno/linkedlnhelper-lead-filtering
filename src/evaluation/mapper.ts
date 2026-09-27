@@ -3,8 +3,8 @@
  * full profile data to the evaluation profile data.
  */
 
-import { asRecord, asString } from '../helpers/index.js';
-import type { LoadedProfileImage } from '../imageExtractor/index.js';
+import { asRecord, asString } from '../shared/helpers/index.js';
+import type { LoadedProfileImage } from './photos/index.js';
 import { buildCareerTimeline } from './career_timeline.js';
 import type { CareerTimeline } from './career_timeline.js';
 import type {
@@ -12,7 +12,7 @@ import type {
   ProfileEducation,
   ProfileExperience,
   ProfileLocation,
-} from '../profile/index.js';
+} from '../profiles/index.js';
 
 /**
  * Recursively marks shared profile values as read-only.

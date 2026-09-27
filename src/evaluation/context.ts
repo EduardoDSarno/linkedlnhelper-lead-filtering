@@ -1,4 +1,4 @@
-import type { FullProfile } from '../profile/index.js';
+import type { FullProfile } from '../profiles/index.js';
 import type { FullEvaluationCriteria } from './criterias/index.js';
 import {
   mapEvaluationProfileData,

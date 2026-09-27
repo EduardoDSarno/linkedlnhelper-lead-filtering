@@ -2,7 +2,7 @@ import type { ApifyCollectorOptions } from './types.js';
 import {
   CONFIG_NUMBER_MINIMUMS,
   resolveConfigNumber,
-} from '../../helpers/index.js';
+} from '../../../shared/helpers/index.js';
 
 /** Defaults used when neither caller options nor environment values exist. */
 export const APIFY_COLLECTOR_DEFAULTS = {

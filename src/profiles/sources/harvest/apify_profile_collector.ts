@@ -15,15 +15,15 @@ import {
   decideFailureOutcome,
 } from './error_handling.js';
 import type { FailureDescriptor } from './error_handling.js';
-import { normalizeLinkedinUrl } from '../../linkedin/index.js';
-import { deduplicateBy } from '../../helpers/index.js';
+import { normalizeLinkedinUrl } from '../../../linkedin/index.js';
+import { deduplicateBy } from '../../../shared/helpers/index.js';
 import {
   PIPELINE_PROGRESS_MESSAGE,
   PIPELINE_STAGE,
   displayIndex,
   elapsedMs,
-} from '../../logging/index.js';
-import type { Logger } from '../../logging/index.js';
+} from '../../../shared/logging/index.js';
+import type { Logger } from '../../../shared/logging/index.js';
 import type {
   ApifyBatchContext,
   ApifyBatchExecutor,

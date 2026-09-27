@@ -5,9 +5,9 @@ import test from 'node:test';
 import {
   EVALUATION_PASS,
   PIPELINE_PROGRESS_MESSAGE,
-} from '../../logging/index.js';
-import type { ModelRequest, ModelResponse } from '../../models/index.js';
-import { recordingLogger } from '../../test_support/recording_logger.js';
+} from '../../shared/logging/index.js';
+import type { ModelRequest, ModelResponse } from '../../llm/index.js';
+import { recordingLogger } from '../../shared/test_support/recording_logger.js';
 import type { FullEvaluationCriteria } from '../criterias/index.js';
 import type { EvaluationProfileData } from '../context.js';
 import {

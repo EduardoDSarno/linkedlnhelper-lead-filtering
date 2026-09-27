@@ -3,7 +3,7 @@ import test from 'node:test';
 
 import { createEvaluationContext } from '../context.js';
 import type { FullEvaluationCriteria } from '../criterias/index.js';
-import type { FullProfile } from '../../profile/index.js';
+import type { FullProfile } from '../../profiles/index.js';
 
 test('builds a compact AI evaluation payload without exposing the raw profile', () => {
   const criteria: FullEvaluationCriteria = {

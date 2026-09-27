@@ -8,3 +8,5 @@ export type {
 
 export { attachLinkedHelperPublicId } from './full_profile.js';
 export type { FullProfile } from './full_profile.js';
+
+export { mapApifyProfile } from './apify_profile_mapper.js';

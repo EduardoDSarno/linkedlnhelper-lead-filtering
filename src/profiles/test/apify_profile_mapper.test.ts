@@ -10,7 +10,7 @@ import {
   malformedApifyProfile,
   simultaneousCurrentRolesApifyProfile,
   sparseApifyProfile,
-} from '../../test_support/apify_profile_fixtures.js';
+} from '../../shared/test_support/apify_profile_fixtures.js';
 
 test('maps every normalized field from a complete provider payload', () => {
   const profile = mapApifyProfile(completeApifyProfile(), 'profile-1');

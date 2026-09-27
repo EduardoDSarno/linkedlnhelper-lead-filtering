@@ -1,4 +1,4 @@
-import { errorMessage as messageFromThrownError } from '../../helpers/error_message.js';
+import { errorMessage as messageFromThrownError } from '../../../shared/helpers/error_message.js';
 import {
   HTTP_BAD_REQUEST,
   HTTP_CLIENT_ERROR,
@@ -20,7 +20,7 @@ import {
   asHttpStatus,
   asRecord,
   asString,
-} from '../../helpers/index.js';
+} from '../../../shared/helpers/index.js';
 
 /**
  * A failure classified but not yet tied to a profile or a retry count. The

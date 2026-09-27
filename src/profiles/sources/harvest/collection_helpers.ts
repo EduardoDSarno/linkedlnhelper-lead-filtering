@@ -1,5 +1,5 @@
-import { asRecord, asString } from '../../helpers/index.js';
-import { PIPELINE_STAGE, displayIndex } from '../../logging/index.js';
+import { asRecord, asString } from '../../../shared/helpers/index.js';
+import { PIPELINE_STAGE, displayIndex } from '../../../shared/logging/index.js';
 import { APIFY_RETRY_JITTER_MS } from './config.js';
 import type {
   ApifyBatchContext,

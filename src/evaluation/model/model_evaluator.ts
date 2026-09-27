@@ -1,4 +1,4 @@
-import { asHttpStatus, asRecord, asString, errorMessage } from '../../helpers/index.js';
+import { asHttpStatus, asRecord, asString, errorMessage } from '../../shared/helpers/index.js';
 import {
   EVALUATION_PASS,
   PIPELINE_PROGRESS_MESSAGE,
@@ -6,10 +6,10 @@ import {
   displayIndex,
   displayRange,
   elapsedMs,
-} from '../../logging/index.js';
-import type { EvaluationPass, Logger } from '../../logging/index.js';
-import { resolveModelClient } from '../../models/index.js';
-import type { ModelResponse, ModelTokenUsage } from '../../models/index.js';
+} from '../../shared/logging/index.js';
+import type { EvaluationPass, Logger } from '../../shared/logging/index.js';
+import { resolveModelClient } from '../../llm/index.js';
+import type { ModelResponse, ModelTokenUsage } from '../../llm/index.js';
 import type { FullEvaluationCriteria } from '../criterias/index.js';
 import type { EvaluationProfileData } from '../context.js';
 import {

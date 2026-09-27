@@ -1,4 +1,4 @@
-import type { Logger } from '../../logging/index.js';
+import type { Logger } from '../../../shared/logging/index.js';
 
 /** A provider record is intentionally permissive and remains untouched. */
 export type RawApifyProfile = Record<string, unknown>;

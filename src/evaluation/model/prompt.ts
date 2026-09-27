@@ -1,6 +1,6 @@
 import type { FullEvaluationCriteria } from '../criterias/index.js';
 import type { EvaluationProfileData } from '../context.js';
-import type { ModelPart } from '../../models/index.js';
+import type { ModelPart } from '../../llm/index.js';
 import {
   MODEL_EVALUATION_CLOSING,
   MODEL_EVALUATION_EMPTY_CAMPAIGN_CRITERIA,

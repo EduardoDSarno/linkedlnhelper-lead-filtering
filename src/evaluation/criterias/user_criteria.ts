@@ -1,4 +1,4 @@
-import type { ProfileLocation } from '../../profile/index.js';
+import type { ProfileLocation } from '../../profiles/index.js';
 
 /** A ProfileLocation key the campaign may compare against. */
 export type LocationField = keyof ProfileLocation;

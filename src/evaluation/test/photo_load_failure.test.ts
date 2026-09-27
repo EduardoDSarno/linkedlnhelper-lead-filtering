@@ -4,8 +4,8 @@ import test from 'node:test';
 import { evaluateProfiles } from '../evaluate.js';
 import type { EvaluationBatchContext, EvaluationProfileData } from '../context.js';
 import type { FullEvaluationCriteria } from '../criterias/index.js';
-import type { ModelPart, ModelRequest } from '../../models/index.js';
-import type { loadProfileImage } from '../../imageExtractor/index.js';
+import type { ModelPart, ModelRequest } from '../../llm/index.js';
+import type { loadProfileImage } from '../photos/index.js';
 
 /** A photo URL whose signature LinkedIn has already stopped honouring. */
 const EXPIRED_PHOTO_URL =

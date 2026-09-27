@@ -1,4 +1,4 @@
-# Apify profile collector
+# Harvest profile source
 
 This module is the fault-tolerant boundary between a list of LinkedIn URLs and
 the Harvest profile scraper on Apify. In the funnel it fills the gaps Unipile
@@ -84,7 +84,7 @@ mapping and evaluation.
 - `config.ts`: defaults, safety limits, environment parsing, and API-key access.
 - `constants.ts`: provider identifiers and HTTP status constants.
 - `error_handling.ts`: provider error classification and failure construction.
-- `../../linkedin/`: shared LinkedIn URL comparison and strict profile keys.
+- `../../../linkedin/`: shared LinkedIn URL comparison and strict profile keys.
 - `types.ts`: public inputs, outputs, failure categories, and executor types.
 - `index.ts`: the module's public exports.
 - `config.test.ts`: deterministic configuration and validation tests.

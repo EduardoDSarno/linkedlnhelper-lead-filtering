@@ -1,4 +1,4 @@
-import type { ProfileEducation, ProfileExperience } from '../profile/index.js';
+import type { ProfileEducation, ProfileExperience } from '../profiles/index.js';
 
 /**
  * Education that says nothing about someone's age as a graduate.

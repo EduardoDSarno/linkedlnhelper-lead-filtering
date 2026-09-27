@@ -6,7 +6,7 @@ import {
   DEFAULT_OPENROUTER_THINKING_EFFORT,
   OPENROUTER_MODEL_ENVIRONMENT_KEY,
   OPENROUTER_THINKING_EFFORT_ENVIRONMENT_KEY,
-} from '../../models/index.js';
+} from '../../llm/index.js';
 import { resolveModelEvaluationOptions } from '../model/config.js';
 
 test('uses the shared model env for evaluation, falling back to the default', () => {

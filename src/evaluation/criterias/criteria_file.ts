@@ -1,4 +1,4 @@
-import { asRecord, asString } from '../../helpers/index.js';
+import { asRecord, asString } from '../../shared/helpers/index.js';
 import { CRITERIA_MATCH } from './user_criteria.js';
 import {
   DECISION_POLICY_MODE,

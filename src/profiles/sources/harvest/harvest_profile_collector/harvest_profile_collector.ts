@@ -8,7 +8,7 @@ import type {
   ApifyCollectorOptions,
   RawApifyProfile,
 } from '../types.js';
-import type { Logger } from '../../../logging/index.js';
+import type { Logger } from '../../../../shared/logging/index.js';
 import {
   HARVEST_LINKEDIN_PROFILE_SCRAPER_ACTOR,
   HARVEST_PROFILE_DETAILS_MODE,

@@ -7,10 +7,10 @@ import type {
 import {
   loadProfileImage,
   PROFILE_IMAGE_DOWNLOAD,
-} from '../imageExtractor/index.js';
-import { errorMessage } from '../helpers/index.js';
-import { PIPELINE_PROGRESS_MESSAGE } from '../logging/index.js';
-import type { Logger } from '../logging/index.js';
+} from './photos/index.js';
+import { errorMessage } from '../shared/helpers/index.js';
+import { PIPELINE_PROGRESS_MESSAGE } from '../shared/logging/index.js';
+import type { Logger } from '../shared/logging/index.js';
 
 /** One profile whose photo could not be downloaded for the model request. */
 export interface ProfilePhotoLoadFailure {
