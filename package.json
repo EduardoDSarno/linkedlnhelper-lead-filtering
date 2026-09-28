@@ -20,7 +20,8 @@
   "dependencies": {
     "@openrouter/sdk": "^1.2.103",
     "apify-client": "^2.25.0",
-    "pino": "^10.3.1"
+    "pino": "^10.3.1",
+    "unipile-node-sdk": "^1.9.3"
   },
   "engines": {
     "node": ">=22"

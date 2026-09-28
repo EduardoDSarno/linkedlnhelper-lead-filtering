@@ -24,10 +24,10 @@ beside these as it is built.
 | `src/evaluation/` | Judges a profile against the client's criteria with an LLM: prompt, response schema, retries, decision policy. `photos/` downloads the profile photo sent with the request. |
 | `src/llm/` | Provider-neutral model client with the OpenRouter adapter. Shared: evaluation uses it now; writing messages and reading replies will too. |
 | `src/profiles/` | The profile model every stage passes around, and the mapping into it. `sources/harvest/` fetches full profiles from Harvest on Apify to fill gaps. |
-| `src/linkedin/` | LinkedIn URL handling; the Unipile client belongs here. |
+| `src/linkedin/` | The vendor-neutral `LinkedinProvider` interface (connect link, account country, search, profile, invitation), with the Unipile adapter in `unipile/`. Nothing outside this folder imports a vendor SDK. |
 | `src/shared/` | Helpers, logging, and test support used across the codebase. |
 
-Still to build: the Unipile client, webhooks, the scheduler that owns
+Still to build: webhooks, the scheduler that owns
 per-account limits, and the lead pipeline that ties them together.
 
 ## Where v1 went
@@ -45,7 +45,7 @@ Requires Node 22 or newer.
 
 ```bash
 npm install
-cp .env.example .env   # fill in APIFY_API_KEY and OPENROUTER_API_KEY
+cp .env.example .env   # fill in the API keys and the Unipile workspace
 npm test               # type-check and unit tests
 ```
 

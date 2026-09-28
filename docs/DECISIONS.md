@@ -393,12 +393,22 @@ obsolete under this approach.
   warnings.
 - **Unipile proxies:** each LinkedIn account gets a fixed IP automatically;
   country (50+) or an IP to match can be chosen, or our own proxy supplied,
-  and changed later. Our server's location does not matter to LinkedIn. Pass
-  `country: "BR"` explicitly when connecting: a third-party source says the
-  default proxy sits near whoever opens the login link, which would be the
-  wrong country. The docs do not state that every action (not only login)
-  uses the proxy; verify in the trial. Unipile's per-account rate limits are
-  "Coming Soon", so limits stay in our code.
+  and changed later. Our server's location does not matter to LinkedIn.
+  **The hosted login link has no `country` field** (only a full custom
+  `proxy` object); `country` is accepted when connecting with credentials or
+  a cookie, and by `PATCH /accounts/{id}` on an account already connected.
+  Plan: connect through the hosted link, then set `country: "BR"` right away.
+  A third-party source says the default proxy sits near whoever opens the
+  login link, so the login itself may run from the wrong country; check what
+  it uses in the trial. The docs do not state that every action (not only
+  login) uses the proxy; verify that too. Unipile's per-account rate limits
+  are "Coming Soon", so limits stay in our code.
+- **Search paging:** on a Premium (not Sales Navigator) account a people
+  search returns at most 10 results per page, so ~700 results a week is ~70
+  search calls per account, which the scheduler has to spread out.
+- **Unipile SDK** (`unipile-node-sdk`, last published June 2025) wraps connect
+  links, profiles, and invitations; search and the proxy-country update go
+  through its raw request sender.
 - **Unipile trial:** assumed to include all features. Build the thin path
   before starting the 7-day clock, and test on an account with Premium,
   >150 connections, and some history.
@@ -427,8 +437,11 @@ obsolete under this approach.
 
 1. Acceptance rate per account (requests → accepted).
 2. Trial checks: does a pasted search URL return the same people
-   LinkedHelper found; are webhooks reliable over several days; does every
-   action go through the account's proxy.
+   LinkedHelper found, and does paging with the cursor work while the URL is
+   re-sent; which country the hosted login's proxy uses, and does the
+   country update take effect; does every action go through the account's
+   proxy; what a full profile record looks like (to write its mapping into
+   the app's profile model); are webhooks reliable over several days.
 3. Which replies the AI may send on its own first.
 
 ---
