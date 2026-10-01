@@ -89,6 +89,44 @@ test('turns a non-2xx answer into an error carrying the status and Unipile\'s re
   );
 });
 
+test('reads Unipile\'s error fields into a message that says what to fix', async () => {
+  const { fetchFunction } = fakeFetch(
+    Response.json(
+      {
+        title: 'Invalid parameters',
+        detail: 'expiresOn must be in the future',
+        instance: '/api/v1/hosted/accounts/link',
+        type: 'errors/invalid_parameters',
+        status: 400,
+      },
+      { status: 400 },
+    ),
+  );
+
+  await assert.rejects(
+    () => unipileRequest(WORKSPACE, { method: 'POST', path: '/hosted/accounts/link' }, fetchFunction),
+    (error: unknown) =>
+      error instanceof UnipileRequestError &&
+      error.status === 400 &&
+      error.type === 'errors/invalid_parameters' &&
+      error.message ===
+        'Unipile POST /hosted/accounts/link failed with 400 (errors/invalid_parameters): ' +
+          'Invalid parameters — expiresOn must be in the future',
+  );
+});
+
+test('quotes a failed reply as it came when it is not Unipile\'s JSON', async () => {
+  const { fetchFunction } = fakeFetch(new Response('<html>Bad Gateway</html>', { status: 502 }));
+
+  await assert.rejects(
+    () => unipileRequest(WORKSPACE, { method: 'GET', path: '/accounts' }, fetchFunction),
+    (error: unknown) =>
+      error instanceof UnipileRequestError &&
+      error.type === undefined &&
+      error.message === 'Unipile GET /accounts failed with 502: <html>Bad Gateway</html>',
+  );
+});
+
 test('creates a LinkedIn connect link with the documented body', async () => {
   const { fetchFunction, requests } = fakeFetch(
     Response.json({ object: 'HostedAuthUrl', url: 'https://account.unipile.com/link' }),

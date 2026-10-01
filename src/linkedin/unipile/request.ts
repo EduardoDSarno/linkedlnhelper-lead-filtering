@@ -1,3 +1,4 @@
+import { asRecord, asString } from '../../shared/helpers/index.js';
 import type { UnipileWorkspace } from './config.js';
 
 /** Every endpoint we call lives under this version prefix. */
@@ -32,12 +33,31 @@ export class UnipileRequestError extends Error {
   /** The HTTP status Unipile answered with. */
   readonly status: number;
 
-  /** Builds the error from the request that failed and Unipile's reply. */
+  /**
+   * Unipile's machine-readable error kind, e.g. `errors/invalid_parameters`.
+   * Absent when the reply was not Unipile's usual JSON error body.
+   */
+  readonly type?: string;
+
+  /**
+   * Builds the error from the request that failed and Unipile's reply.
+   *
+   * Unipile describes errors as JSON with `type`, `title`, and `detail`, so
+   * those are read into the message when present: "invalid parameters: the
+   * expiresOn date is in the past" says what to fix, where the raw JSON only
+   * hints at it. A body that is not that shape is quoted as it came.
+   */
   constructor(request: UnipileRequest, status: number, responseText: string) {
-    const excerpt = responseText.slice(0, ERROR_BODY_EXCERPT_LENGTH);
-    super(`Unipile ${request.method} ${request.path} failed with ${status}: ${excerpt}`);
+    const problem = unipileProblem(responseText);
+    const reason =
+      [problem.title, problem.detail].filter(Boolean).join(' — ') ||
+      responseText.slice(0, ERROR_BODY_EXCERPT_LENGTH);
+    const kind = problem.type ? ` (${problem.type})` : '';
+
+    super(`Unipile ${request.method} ${request.path} failed with ${status}${kind}: ${reason}`);
     this.name = 'UnipileRequestError';
     this.status = status;
+    if (problem.type) this.type = problem.type;
   }
 }
 
@@ -51,7 +71,7 @@ export class UnipileRequestError extends Error {
  *
  * @throws UnipileRequestError when Unipile answers outside the 2xx range.
  */
-export async function unipileRequest(
+export async function buildUnipileRequest(
   workspace: UnipileWorkspace,
   request: UnipileRequest,
   fetchFunction: FetchFunction = fetch,
@@ -80,4 +100,34 @@ function requestUrl(workspace: UnipileWorkspace, request: UnipileRequest): URL {
     url.searchParams.set(name, value);
   }
   return url;
+}
+
+/**
+ * Reads Unipile's error fields from a failed reply's body.
+ *
+ * Never throws: a body that is not JSON (a proxy's HTML error page, an empty
+ * reply) yields no fields, and the caller falls back to quoting it.
+ */
+function unipileProblem(responseText: string): {
+  type?: string;
+  title?: string;
+  detail?: string;
+} {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(responseText);
+  } catch {
+    return {};
+  }
+
+  const record = asRecord(parsed);
+  const type = asString(record?.['type']);
+  const title = asString(record?.['title']);
+  const detail = asString(record?.['detail']);
+
+  return {
+    ...(type ? { type } : {}),
+    ...(title ? { title } : {}),
+    ...(detail ? { detail } : {}),
+  };
 }

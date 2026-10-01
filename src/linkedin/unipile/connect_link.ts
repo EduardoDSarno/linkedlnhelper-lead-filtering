@@ -1,6 +1,6 @@
 import { asRecord, asString } from '../../shared/helpers/index.js';
 import type { UnipileWorkspace } from './config.js';
-import { unipileRequest } from './request.js';
+import { buildUnipileRequest as sendUnipileRequest } from './request.js';
 import type { FetchFunction } from './request.js';
 
 /** Unipile's name for LinkedIn in a connect link's provider list. */
@@ -36,7 +36,7 @@ export async function createConnectLink(
   request: ConnectLinkRequest,
   fetchFunction?: FetchFunction,
 ): Promise<string> {
-  const response = await unipileRequest(
+  const response = await sendUnipileRequest(
     workspace,
     {
       method: 'POST',
