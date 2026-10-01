@@ -6,13 +6,19 @@ import type {FetchFunction, UnipileRequest, } from './request.ts'
 import {UnipileRequestError} from './request.js'
 
 
-interface UnipileAccount{
-   connectionStatus: 'CREATION_SUCCESS' | 'RECONNECTED';
-    accountId: string,
-    label:string,
-    account_status: 'OK'| 'CREDENTIALS'| 'ERROR' | 'STOPPED';
-    name: string;
-    connectedAt: number;
+/*What Unipile sends your webhook when a login finishes*/
+export interface UnipileAccountConnected {
+  status: 'CREATION_SUCCESS' | 'RECONNECTED';
+  accountId: string;
+  label: string;        // the name sent on the link
+}
+
+// One account from Unipile's account list
+export interface UnipileAccount {
+  accountId: string;
+  name: string;         // LinkedIn display name
+  status: string;       // 'OK', 'CREDENTIALS', 'ERROR', 'STOPPED', …
+  connectedAt?: string; // Unipile sends a date as text
 }
 
 

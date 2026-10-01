@@ -4,6 +4,7 @@ import {
   CONFIG_NUMBER_MINIMUMS,
   resolveConfigNumber,
 } from '../shared/helpers/index.js';
+import { registerUnipileWebhooks } from './webhooks/unipile/webhook.js';
 
 /** Port used when the PORT environment variable is absent or unusable. */
 const DEFAULT_PORT = 3000;
@@ -19,7 +20,7 @@ const MAXIMUM_PORT = 65_535;
  */
 export function buildServer(): FastifyInstance {
   const app = Fastify({ logger: true });
-  registerPingRoute(app);
+  registerRoutes(app);
   return app;
 }
 
@@ -42,8 +43,9 @@ async function startServer(): Promise<void> {
 }
 
 /** A route that only proves the server is up and answering. */
-function registerPingRoute(app: FastifyInstance): void {
+function registerRoutes(app: FastifyInstance): void {
   app.get('/api/ping', async () => ({ message: 'Pong' }));
+  registerUnipileWebhooks(app);
 }
 
 /**
