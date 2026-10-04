@@ -5,7 +5,6 @@ import {createConnectLink} from "../linkedin/unipile/connect_link.js";
 import {HTTP_BAD_REQUEST} from "./consts.js"
 import type {UnipileConfig}  from "../linkedin/unipile/config.js";
 import type { FetchFunction } from "../linkedin/unipile/index.js";
-import { requirePublicUrl } from "./config.js";
 import { ACCOUNT_CONNECTED_PATH } from "./webhooks/unipile/webhook.js";
 
 const LINKEDIN_ACCOUNTS_CONNECTED_PATH = "/api/linkedin-accounts/connect";
@@ -19,12 +18,12 @@ const LINK_LIFETIME_MS = 3_600_000;
 export async function registerLinkedinAccountRoute(
     app: FastifyInstance,
     config : UnipileConfig,
+    publicUrl: string,
     fetchFunction?: FetchFunction,
 )
 {
-    // Read once, when the server starts: a missing PUBLIC_URL stops the
-    // server right away instead of failing on the first connect request.
-    const notifyUrl = `${requirePublicUrl()}${ACCOUNT_CONNECTED_PATH}`;
+    // Where Unipile reports a finished login: our address plus the webhook path.
+    const notifyUrl = `${publicUrl}${ACCOUNT_CONNECTED_PATH}`;
 
     app.post(LINKEDIN_ACCOUNTS_CONNECTED_PATH, async (request, reply)=>{
 

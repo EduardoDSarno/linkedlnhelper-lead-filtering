@@ -7,6 +7,7 @@ import {
 import { registerUnipileWebhooks } from './webhooks/unipile/webhook.js';
 import { requireUnipileWorkspace } from '../linkedin/unipile/config.js';
 import { registerLinkedinAccountRoute } from './linkedinAccounts.js';
+import { requirePublicUrl } from './config.js';
 
 /** Port used when the PORT environment variable is absent or unusable. */
 const DEFAULT_PORT = 3000;
@@ -48,7 +49,7 @@ async function startServer(): Promise<void> {
 function registerRoutes(app: FastifyInstance): void {
   app.get('/api/ping', async () => ({ message: 'Pong' }));
   registerUnipileWebhooks(app);
-  registerLinkedinAccountRoute(app, requireUnipileWorkspace());
+  registerLinkedinAccountRoute(app, requireUnipileWorkspace(),requirePublicUrl());
 }
 
 /**
