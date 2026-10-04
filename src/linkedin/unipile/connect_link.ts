@@ -21,6 +21,8 @@ export interface ConnectLinkRequest {
   readonly failureRedirectUrl?: string;
 }
 
+
+
 /**
  * Creates a hosted login link for connecting one LinkedIn account.
  *
@@ -63,3 +65,38 @@ export async function createConnectLink(
   if (!url) throw new Error('Unipile created no connect link URL.');
   return url;
 }
+
+
+/** The login results we act on; anything else is rejected. */
+const ACCOUNT_CONNECTED_STATUSES = ['CREATION_SUCCESS', 'RECONNECTED'] as const;
+type AccountConnectedStatus = (typeof ACCOUNT_CONNECTED_STATUSES)[number];
+
+/** Unipile's "a login finished" message, after it has been checked. */
+export interface AccountConnectedEvent {
+  readonly status: AccountConnectedStatus;
+  readonly accountId: string;  // Unipile's id for the LinkedIn account
+  readonly label: string;      // the label you sent when creating the link
+}
+
+
+/**
+ * This function will be responsible for getting the body,
+ * parsing it and checking if the connection is valid or not it will
+ * only return if it is valid
+ */
+export function checkConnectionReply(body: unknown): AccountConnectedEvent
+{
+
+    const record = asRecord(body);
+    const accountId = asString(record?.['account_id']);
+    const label = asString(record?.['name']);
+
+    const status = ACCOUNT_CONNECTED_STATUSES.find(
+      (value) => value === record?.['status'],
+    );
+     if (!accountId || !label || !status) {                          // 4
+      throw new Error('Not a valid Unipile account-connected message.');
+    }
+    return { status, accountId, label };                            // 5
+}
+
