@@ -1,5 +1,5 @@
 import { asRecord, asString } from '../../shared/helpers/index.js';
-import type { UnipileWorkspace } from './config.js';
+import type { UnipileConfig } from './config.js';
 
 /** Every endpoint we call lives under this version prefix. */
 const API_PREFIX = '/api/v1';
@@ -48,7 +48,7 @@ export class UnipileRequestError extends Error {
    * hints at it. A body that is not that shape is quoted as it came.
    */
   constructor(request: UnipileRequest, status: number, responseText: string) {
-    const problem = unipileProblem(responseText);
+    const problem = unipileErrorParse(responseText);
     const reason =
       [problem.title, problem.detail].filter(Boolean).join(' — ') ||
       responseText.slice(0, ERROR_BODY_EXCERPT_LENGTH);
@@ -71,8 +71,8 @@ export class UnipileRequestError extends Error {
  *
  * @throws UnipileRequestError when Unipile answers outside the 2xx range.
  */
-export async function buildUnipileRequest(
-  workspace: UnipileWorkspace,
+export async function sendUnipileRequest(
+  workspace: UnipileConfig,
   request: UnipileRequest,
   fetchFunction: FetchFunction = fetch,
 ): Promise<unknown> {
@@ -94,7 +94,7 @@ export async function buildUnipileRequest(
 }
 
 /** Builds the full URL: workspace base, version prefix, path, and query. */
-function requestUrl(workspace: UnipileWorkspace, request: UnipileRequest): URL {
+function requestUrl(workspace: UnipileConfig, request: UnipileRequest): URL {
   const url = new URL(`${API_PREFIX}${request.path}`, workspace.baseUrl);
   for (const [name, value] of Object.entries(request.query ?? {})) {
     url.searchParams.set(name, value);
@@ -108,7 +108,7 @@ function requestUrl(workspace: UnipileWorkspace, request: UnipileRequest): URL {
  * Never throws: a body that is not JSON (a proxy's HTML error page, an empty
  * reply) yields no fields, and the caller falls back to quoting it.
  */
-function unipileProblem(responseText: string): {
+function unipileErrorParse(responseText: string): {
   type?: string;
   title?: string;
   detail?: string;

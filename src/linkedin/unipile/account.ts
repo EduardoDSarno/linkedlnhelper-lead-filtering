@@ -1,5 +1,5 @@
 import { asRecord } from '../../shared/helpers/index.js';
-import type { UnipileWorkspace } from './config.js';
+import type { UnipileConfig } from './config.js';
 import type { ConnectLinkRequest } from './connect_link.js';
 import {createConnectLink} from './connect_link.js'
 import type {FetchFunction, UnipileRequest, } from './request.ts'
@@ -23,7 +23,7 @@ export interface UnipileAccount {
 
 
 export async function createAccount(
-  workspace: UnipileWorkspace,
+  workspace: UnipileConfig,
   request: ConnectLinkRequest,
   fetchFunction?: FetchFunction){
 

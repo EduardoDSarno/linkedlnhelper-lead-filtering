@@ -1,6 +1,6 @@
 import { asRecord, asString } from '../../shared/helpers/index.js';
-import type { UnipileWorkspace } from './config.js';
-import { buildUnipileRequest as sendUnipileRequest } from './request.js';
+import type { UnipileConfig } from './config.js';
+import { sendUnipileRequest } from './request.js';
 import type { FetchFunction } from './request.js';
 
 /** Unipile's name for LinkedIn in a connect link's provider list. */
@@ -32,7 +32,7 @@ export interface ConnectLinkRequest {
  * @throws When Unipile's reply carries no URL.
  */
 export async function createConnectLink(
-  workspace: UnipileWorkspace,
+  workspace: UnipileConfig,
   request: ConnectLinkRequest,
   fetchFunction?: FetchFunction,
 ): Promise<string> {

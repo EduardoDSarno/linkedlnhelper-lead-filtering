@@ -5,10 +5,10 @@ const UNIPILE_ENVIRONMENT_KEYS = {
 } as const;
 
 /** What every Unipile request needs to reach our workspace. */
-export interface UnipileWorkspace {
+export interface UnipileConfig {
   /** `https://` plus the DSN: the base of every API URL. */
   readonly baseUrl: string;
-  readonly accessToken: string;
+  readonly accessToken: string;  
 }
 
 /**
@@ -23,7 +23,7 @@ export interface UnipileWorkspace {
  */
 export function requireUnipileWorkspace(
   environment: NodeJS.ProcessEnv = process.env,
-): UnipileWorkspace {
+): UnipileConfig {
   const dsn = environment[UNIPILE_ENVIRONMENT_KEYS.dsn]?.trim();
   const accessToken = environment[UNIPILE_ENVIRONMENT_KEYS.accessToken]?.trim();
 
