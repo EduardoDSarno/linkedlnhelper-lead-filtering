@@ -49,11 +49,18 @@ import {
     checkCredentials,
     credentialsStatus,
 } from './credentials.js';
-import { WEB_APP_DIRECTORY, WEB_APP_ENTRY } from './constants.js';
+import {
+    ACCESS_CHALLENGE,
+    ACCESS_PASSWORD_ENVIRONMENT_KEY,
+    WEB_APP_DIRECTORY,
+    WEB_APP_ENTRY,
+} from './constants.js';
 
+/** Builds the API with every route and the bundled web app registered. */
 export async function buildServer()
 {
     const server = Fastify({logger:true});
+    registerAccessGuard(server);
     await registerCsvParser(server);
     registerImportRoute(server);
     registerFilterRoute(server);
@@ -68,6 +75,31 @@ export async function buildServer()
     registerCredentialRoutes(server);
     await registerWebApp(server);
     return server;
+}
+
+/**
+ * Requires the configured access password on every request, when one is set.
+ *
+ * Basic authentication is used because the browser prompts for it and then
+ * resends it on every same-origin request, so the web app needs no login
+ * screen. Without a password the server stays open, which is right only while
+ * it is bound to localhost.
+ */
+function registerAccessGuard(server: FastifyInstance)
+{
+    const password = process.env[ACCESS_PASSWORD_ENVIRONMENT_KEY]?.trim();
+    if (!password) return;
+
+    const expected = Buffer.from(password, 'utf8');
+    server.addHook('onRequest', async (request, reply) =>
+    {
+        if (suppliesPassword(request.headers.authorization, expected)) return;
+
+        return reply
+            .status(HTTP_STATUS.unauthorized)
+            .header('WWW-Authenticate', ACCESS_CHALLENGE)
+            .send({ error: 'Authentication required' });
+    });
 }
 
 /**
@@ -752,7 +784,13 @@ function registerRenameRunRoute(server: FastifyInstance)
     });
 }
 
-/** Deletes one campaign: its files and its database row. */
+/**
+ * Deletes one campaign: its files and its database row.
+ *
+ * The id comes from the URL, where an encoded slash decodes into a path
+ * segment, so nothing is removed from disk until the database confirms the id
+ * names a real run. Only server-generated ids reach the filesystem.
+ */
 function registerDeleteRunRoute(server: FastifyInstance)
 {
     server.delete(API_ROUTES.run, async (request, reply) =>
@@ -763,14 +801,17 @@ function registerDeleteRunRoute(server: FastifyInstance)
         const processingId = asString(params[API_FIELD.processingId]);
         if (!processingId) return reply.status(HTTP_STATUS.badRequest).send({ error: 'Missing processingId' });
 
-        // Remove the run's files first; the directory may already be gone.
-        await rm(processingPaths(processingId).dir, { recursive: true, force: true });
-
         const db = openDatabase();
         try
         {
-            const removed = dbDeleteProcessingRun(processingId, db);
-            if (!removed) return reply.status(HTTP_STATUS.notFound).send({ error: 'Processing run not found' });
+            if (!dbGetProcessingRunById(processingId, db))
+            {
+                return reply.status(HTTP_STATUS.notFound).send({ error: 'Processing run not found' });
+            }
+
+            // The directory may already be gone.
+            await rm(processingPaths(processingId).dir, { recursive: true, force: true });
+            dbDeleteProcessingRun(processingId, db);
 
             return reply.status(HTTP_STATUS.ok).send({ processingId, deleted: true });
         }
@@ -882,4 +923,21 @@ function registerCriteriaPresetRoutes(server: FastifyInstance)
             db.close();
         }
     });
+}
+
+/**
+ * Checks a Basic authorization header against the access password.
+ *
+ * The username is ignored, so the operator only has to remember one value.
+ * The comparison is constant-time to avoid leaking the password by timing.
+ */
+function suppliesPassword(header: string | undefined, expected: Buffer): boolean
+{
+    const [scheme, encoded] = header?.split(' ') ?? [];
+    if (scheme !== 'Basic' || !encoded) return false;
+
+    const credentials = Buffer.from(encoded, 'base64').toString('utf8');
+    const supplied = Buffer.from(credentials.slice(credentials.indexOf(':') + 1), 'utf8');
+
+    return supplied.length === expected.length && crypto.timingSafeEqual(supplied, expected);
 }

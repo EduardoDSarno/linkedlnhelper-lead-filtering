@@ -38,6 +38,10 @@ here wins over a remembered one, so a development machine keeps its own keys.
 | --- | --- | --- |
 | `PORT` | `3000` | Port the Fastify server listens on (`npm run serve`). |
 | `HOST` | *(unset — localhost only)* | Bind address. Leave blank for local development; set `0.0.0.0` when the server must accept external connections (for example inside a container). |
+| `ACCESS_PASSWORD` | *(unset — no password)* | Password every route requires, entered in the browser's login prompt with any username. Leave blank only while the server is reachable from localhost alone; set it before exposing the app through a tunnel (ngrok) or a public `HOST`. |
+
+For a tunnel against the Vite dev server, put its hostname in `DEV_TUNNEL_HOST`
+(shell or an untracked `web/.env.local`); Vite rejects any other external host.
 
 ## Logging
 

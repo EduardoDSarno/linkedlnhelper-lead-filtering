@@ -4,6 +4,7 @@ export const HTTP_STATUS = {
   created: 201,
   accepted: 202,
   badRequest: 400,
+  unauthorized: 401,
   notFound: 404,
   conflict: 409,
   internalError: 500,
@@ -24,6 +25,17 @@ export const API_ROUTES = {
   credentials: '/credentials',
   credentialsCheck: '/credentials/check',
 } as const;
+
+/**
+ * Variable holding an optional password for every route.
+ *
+ * Unset on the operator's own machine, where only localhost can connect. Set
+ * it whenever the server is reachable from elsewhere, such as through a tunnel.
+ */
+export const ACCESS_PASSWORD_ENVIRONMENT_KEY = 'ACCESS_PASSWORD';
+
+/** Challenge that makes the browser show its own login prompt. */
+export const ACCESS_CHALLENGE = 'Basic realm="Leadscan", charset="UTF-8"';
 
 /** Built web app the API serves, relative to the repository root. */
 export const WEB_APP_DIRECTORY = 'web/dist';

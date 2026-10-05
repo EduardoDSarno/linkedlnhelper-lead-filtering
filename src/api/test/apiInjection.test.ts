@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
+import { existsSync } from 'node:fs';
 import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -393,5 +394,94 @@ test('GET /runs reports final decision counts that follow overrides', async () =
     await rm(processingPaths(processingId).dir, { recursive: true, force: true });
     await rm(databasePath, { force: true });
     delete process.env['DATABASE_PATH'];
+  }
+});
+
+test('DELETE /runs refuses an id that escapes the processing directory', async () => {
+  const databasePath = join(tmpdir(), `api-test-${randomUUID()}.sqlite`);
+  process.env['DATABASE_PATH'] = databasePath;
+  const processingId = randomUUID();
+  const sentinel = join(processingPaths(processingId).dir, 'keep.txt');
+
+  try {
+    await mkdir(processingPaths(processingId).dir, { recursive: true });
+    await writeFile(sentinel, 'keep');
+    const app = await buildServer();
+
+    // Decodes to `<id>/..`, which resolves to the shared processing directory.
+    const response = await app.inject({
+      method: 'DELETE',
+      url: API_ROUTES.run.replace(':processingId', `${processingId}%2F..`),
+    });
+
+    assert.equal(response.statusCode, HTTP_STATUS.notFound);
+    assert.equal(existsSync(sentinel), true);
+  } finally {
+    await rm(processingPaths(processingId).dir, { recursive: true, force: true });
+    await rm(databasePath, { force: true });
+    delete process.env['DATABASE_PATH'];
+  }
+});
+
+test('DELETE /runs removes a known run and its files', async () => {
+  const databasePath = join(tmpdir(), `api-test-${randomUUID()}.sqlite`);
+  process.env['DATABASE_PATH'] = databasePath;
+  const processingId = randomUUID();
+
+  try {
+    await seedCompletedRun(processingId);
+    const app = await buildServer();
+
+    const response = await app.inject({
+      method: 'DELETE',
+      url: API_ROUTES.run.replace(':processingId', processingId),
+    });
+
+    assert.equal(response.statusCode, HTTP_STATUS.ok);
+    assert.equal(existsSync(processingPaths(processingId).dir), false);
+    const db = openDatabase();
+    try {
+      assert.equal(dbGetProcessingRunById(processingId, db), undefined);
+    } finally {
+      db.close();
+    }
+  } finally {
+    await rm(processingPaths(processingId).dir, { recursive: true, force: true });
+    await rm(databasePath, { force: true });
+    delete process.env['DATABASE_PATH'];
+  }
+});
+
+test('ACCESS_PASSWORD gates every route behind Basic authentication', async () => {
+  const databasePath = join(tmpdir(), `api-test-${randomUUID()}.sqlite`);
+  process.env['DATABASE_PATH'] = databasePath;
+  process.env['ACCESS_PASSWORD'] = 'open-sesame';
+  const basic = (password: string) =>
+    `Basic ${Buffer.from(`any-user:${password}`).toString('base64')}`;
+
+  try {
+    const app = await buildServer();
+
+    const anonymous = await app.inject({ method: 'GET', url: API_ROUTES.runs });
+    assert.equal(anonymous.statusCode, HTTP_STATUS.unauthorized);
+    assert.match(String(anonymous.headers['www-authenticate']), /^Basic /);
+
+    const wrong = await app.inject({
+      method: 'GET',
+      url: API_ROUTES.runs,
+      headers: { authorization: basic('guess') },
+    });
+    assert.equal(wrong.statusCode, HTTP_STATUS.unauthorized);
+
+    const allowed = await app.inject({
+      method: 'GET',
+      url: API_ROUTES.runs,
+      headers: { authorization: basic('open-sesame') },
+    });
+    assert.equal(allowed.statusCode, HTTP_STATUS.ok);
+  } finally {
+    await rm(databasePath, { force: true });
+    delete process.env['DATABASE_PATH'];
+    delete process.env['ACCESS_PASSWORD'];
   }
 });
