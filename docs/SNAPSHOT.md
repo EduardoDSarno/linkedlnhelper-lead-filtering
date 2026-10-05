@@ -190,5 +190,5 @@ Recorded rather than fixed, so the cleanup pass has a list:
 
 - `npm test` = typecheck + unit tests. Must be green.
 - `scripts/` is gitignored and checked separately (`npm run typecheck:experiments`, `npm run test:experiments`).
-- `docs/` is gitignored. `CONFIGURATION.md` is tracked because it was force-added before the rule existed.
+- `docs/` is tracked; every file in it is part of the repository.
 - Commits separate "moved code" from "changed behavior".

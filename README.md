@@ -54,10 +54,11 @@ outside job that LinkedHelper lacks having.**
 - 1.2: Then we import the CSV through an HTTP request (which will be covered in another documentation) and
 extract the profile links from the document.
 
-- 1.3: We then run it through a third-party API, currently called Harvest API, that given the profile links
-returns the full profile data (experience, education, location, headline, photo, etc). This runs through
-Apify, in batches with bounded concurrency, so a run of hundreds of profiles doesn't get sent as one giant
-request.
+- 1.3: We then run it through third-party LinkedIn scrapers on Apify that, given the profile links, return
+the full profile data (experience, education, location, headline, photo, etc). Bebity is the primary
+scraper and Harvest API is the fallback for anything Bebity can't handle (`APIFY_PROFILE_COLLECTOR`
+picks one alone instead). Both run in batches with bounded concurrency, so a run of hundreds of profiles
+doesn't get sent as one giant request.
 
 - 1.4: Each raw profile then gets mapped into the app's own profile model, and correlated back to the
 public_id from the original CSV so we never lose track of which LinkedHelper lead a profile belongs to.
@@ -104,7 +105,7 @@ _All shown with the app's built-in mock data (`?mock` in the URL) — no real ca
 - **Backend:** TypeScript, Node.js (22+), Fastify for the API server, Pino for logging, and Node's
   built-in `node:sqlite` for storage.
 - **Frontend:** React 19 with Vite and TypeScript.
-- **External services:** Apify (running the Harvest API LinkedIn scraper) for profile collection, and
+- **External services:** Apify (running the Bebity and Harvest API LinkedIn scrapers) for profile collection, and
   OpenRouter for evaluation, with the profile photo sent as part of the same request (any model it
   serves, selected through a single env var).
 - **Tests:** Node's built-in test runner (`node --test`), no external test framework.
