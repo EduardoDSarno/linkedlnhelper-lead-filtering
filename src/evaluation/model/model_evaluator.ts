@@ -56,160 +56,189 @@ interface ModelEvaluationProgress {
   readonly passProfileTotal: number;
 }
 
-/** Creates a present, serializable token total for aggregation. */
-export function emptyModelEvaluationTokenUsage(): ModelEvaluationTokenUsage {
+/**
+ * Evaluates compact profiles through bounded concurrent model requests.
+ *
+ * Successful groups are retained even when another group fails, and every
+ * returned token count is included in the run total. A profile that never
+ * scored on the main pass — whether its whole group was rejected or the model
+ * silently dropped it from an otherwise-usable reply — is pooled with every
+ * other unscored profile from this run and re-requested exactly once, in new
+ * groups of the same request size (the last one smaller if the remainder does
+ * not fill it). Already-scored siblings are never re-sent. This mirrors the
+ * Apify collector's pool-and-rebatch retry, but bounded to a single follow-up
+ * round rather than looping: a schema-shaped omission is a content problem,
+ * not a transient one, so repeated rounds would mostly re-spend tokens.
+ */
+export async function evaluateProfilesWithModel(
+  profiles: readonly EvaluationProfileData[],
+  criteria: FullEvaluationCriteria,
+  callerOptions: ModelEvaluationOptions = {},
+): Promise<ModelEvaluationOutcome> {
+  const options = resolveModelEvaluationOptions(callerOptions);
+  const generateContent = callerOptions.generateContent ?? resolveModelClient();
+  const wait = callerOptions.wait ?? waitForRetry;
+  const logger = callerOptions.logger;
+
+  const groups = groupProfilesForModelEvaluation(
+    profiles,
+    options.profilesPerRequest,
+  );
+  logger?.info(
+    {
+      stage: PIPELINE_STAGE.eval,
+      pass: EVALUATION_PASS.primary,
+      requestedProfiles: profiles.length,
+      totalGroups: groups.length,
+      profilesPerRequest: options.profilesPerRequest,
+      concurrency: options.concurrency,
+    },
+    PIPELINE_PROGRESS_MESSAGE.evalStarted,
+  );
+  const primary = reduceGroupResults(
+    await runProfileGroups(
+      groups,
+      criteria,
+      options,
+      generateContent,
+      wait,
+      {
+        pass: EVALUATION_PASS.primary,
+        passProfileTotal: profiles.length,
+        ...(logger ? { logger } : {}),
+      },
+    ),
+  );
+
+  const tokenUsage = emptyModelEvaluationTokenUsage();
+  addTokenUsage(tokenUsage, primary.tokenUsage);
+
+  let evaluations = primary.evaluations;
+  let failures = primary.failures;
+
+  const failedProfileIds = failures.flatMap((failure) => failure.profileIds);
+  if (failedProfileIds.length > 0) {
+    const profilesById = new Map(
+      profiles.map((profile) => [profile.profileId, profile]),
+    );
+    const retryProfiles = failedProfileIds.flatMap((id) => {
+      const profile = profilesById.get(id);
+      return profile ? [profile] : [];
+    });
+
+    if (retryProfiles.length > 0) {
+      const retryGroups = groupProfilesForModelEvaluation(
+        retryProfiles,
+        options.profilesPerRequest,
+      );
+      logger?.info(
+        {
+          stage: PIPELINE_STAGE.eval,
+          pass: EVALUATION_PASS.retry,
+          requestedProfiles: retryProfiles.length,
+          totalGroups: retryGroups.length,
+          profilesPerRequest: options.profilesPerRequest,
+          concurrency: options.concurrency,
+        },
+        PIPELINE_PROGRESS_MESSAGE.evalRetryStarted,
+      );
+      const retry = reduceGroupResults(
+        await runProfileGroups(
+          retryGroups,
+          criteria,
+          options,
+          generateContent,
+          wait,
+          {
+            pass: EVALUATION_PASS.retry,
+            passProfileTotal: retryProfiles.length,
+            ...(logger ? { logger } : {}),
+          },
+        ),
+      );
+
+      addTokenUsage(tokenUsage, retry.tokenUsage);
+      evaluations = [...evaluations, ...retry.evaluations];
+      // Every id in failedProfileIds went into this retry, so its outcome
+      // (scored or still failed) fully replaces the main-pass failure list.
+      failures = retry.failures;
+    }
+  }
+
+  const failedProfiles = failures.reduce(
+    (total, failure) => total + failure.profileIds.length,
+    0,
+  );
+
   return {
-    promptTokens: 0,
-    outputTokens: 0,
-    thinkingTokens: 0,
-    totalTokens: 0,
-    cachedPromptTokens: 0,
+    requestedProfiles: profiles.length,
+    successfulProfiles: evaluations.length,
+    failedProfiles,
+    evaluations,
+    failures,
+    tokenUsage,
   };
 }
 
-/** Adds optional model usage into a stable run-level total. */
-function addTokenUsage(
-  target: ModelEvaluationTokenUsage,
-  usage: ModelTokenUsage | ModelEvaluationTokenUsage | undefined,
-): void {
-  if (!usage) return;
+/** Runs profile groups through the model with bounded concurrency. */
+async function runProfileGroups(
+  groups: readonly (readonly EvaluationProfileData[])[],
+  criteria: FullEvaluationCriteria,
+  options: ReturnType<typeof resolveModelEvaluationOptions>,
+  generateContent: NonNullable<ModelEvaluationOptions['generateContent']>,
+  wait: NonNullable<ModelEvaluationOptions['wait']>,
+  progress: ModelEvaluationProgress,
+): Promise<readonly ModelEvaluationGroupResult[]> {
+  const groupResults = new Array<ModelEvaluationGroupResult>(groups.length);
+  let nextGroupIndex = 0;
+  let completedGroups = 0;
 
-  target.promptTokens += usage.promptTokens ?? 0;
-  target.outputTokens += usage.outputTokens ?? 0;
-  target.thinkingTokens += usage.thinkingTokens ?? 0;
-  target.totalTokens += usage.totalTokens ?? 0;
-  target.cachedPromptTokens += usage.cachedPromptTokens ?? 0;
-}
+  /** Claims and evaluates profile groups until the shared queue is empty. */
+  async function worker(): Promise<void> {
+    while (nextGroupIndex < groups.length) {
+      const groupIndex = nextGroupIndex;
+      nextGroupIndex += 1;
+      const group = groups[groupIndex];
+      if (!group) continue;
 
-/** Reports whether a token total contains any billable model activity. */
-function hasTokenUsage(usage: ModelEvaluationTokenUsage): boolean {
-  return Object.values(usage).some((value) => value > 0);
-}
+      logEvaluationGroupStart(
+        progress,
+        groupIndex,
+        groups.length,
+        group,
+        options.profilesPerRequest,
+      );
+      const startedAt = Date.now();
+      const result = await evaluateProfileGroup(
+        group,
+        criteria,
+        options,
+        generateContent,
+        wait,
+      );
+      completedGroups += 1;
+      groupResults[groupIndex] = result;
+      logEvaluationGroupOutcome(
+        progress,
+        groupIndex,
+        groups.length,
+        completedGroups,
+        group,
+        options.profilesPerRequest,
+        result,
+        elapsedMs(startedAt),
+      );
+    }
+  }
 
-/** Waits between production retry attempts without blocking the event loop. */
-async function waitForRetry(milliseconds: number): Promise<void> {
-  await new Promise<void>((resolve) => setTimeout(resolve, milliseconds));
-}
-
-/** Calculates bounded exponential backoff after a failed attempt. */
-function retryDelayMs(baseDelayMs: number, failedAttempts: number): number {
-  const exponentialDelay = baseDelayMs * 2 ** Math.max(0, failedAttempts - 1);
-  return Math.min(
-    exponentialDelay,
-    MODEL_EVALUATION_DEFAULTS.retryMaximumDelayMs,
-  );
-}
-
-/**
- * Budgets one attempt, giving every retry a fraction of the first attempt's
- * time.
- *
- * Retries run after the group has already failed once, so they are capped by
- * the configured retry share rather than the full request budget; see the
- * retry policy for why a slow retry is not worth waiting out.
- */
-function attemptTimeoutMs(requestTimeoutMs: number, attempt: number): number {
-  if (attempt <= 1) return requestTimeoutMs;
-
-  return Math.min(
-    requestTimeoutMs,
-    Math.max(
-      MODEL_EVALUATION_RETRY_POLICY.retryMinimumTimeoutMs,
-      Math.round(
-        requestTimeoutMs * MODEL_EVALUATION_RETRY_POLICY.retryTimeoutFraction,
-      ),
+  await Promise.all(
+    Array.from(
+      { length: Math.min(options.concurrency, groups.length) },
+      async () => worker(),
     ),
   );
-}
 
-/** Reads the HTTP status exposed by common SDK and fetch error shapes. */
-function errorHttpStatus(error: unknown): number | undefined {
-  const record = asRecord(error);
-  return asHttpStatus(record?.['status']) ?? asHttpStatus(record?.['code']);
-}
-
-/** Reads a network error code when a request failed before receiving HTTP. */
-function networkErrorCode(error: unknown): string | undefined {
-  const record = asRecord(error);
-  return asString(record?.['code']) ??
-    asString(asRecord(record?.['cause'])?.['code']);
-}
-
-/** Decides whether another attempt could recover one model-call failure. */
-function isRetryableModelError(error: unknown): boolean {
-  if (error instanceof ModelEvaluationResponseError) return error.retryable;
-
-  const status = errorHttpStatus(error);
-  if (
-    status !== undefined &&
-    MODEL_EVALUATION_RETRY_POLICY.httpStatusCodes.includes(
-      status as (typeof MODEL_EVALUATION_RETRY_POLICY.httpStatusCodes)[number],
-    )
-  ) {
-    return true;
-  }
-
-  const code = networkErrorCode(error);
-  if (
-    code &&
-    MODEL_EVALUATION_RETRY_POLICY.networkErrorCodes.includes(
-      code as (typeof MODEL_EVALUATION_RETRY_POLICY.networkErrorCodes)[number],
-    )
-  ) {
-    return true;
-  }
-
-  if (isTimeoutModelError(error)) return true;
-
-  return error instanceof TypeError;
-}
-
-/** Detects a cancelled or timed-out model call that is worth trying again. */
-function isTimeoutModelError(error: unknown): boolean {
-  const record = asRecord(error);
-  const name = asString(record?.['name']);
-  if (
-    name &&
-    MODEL_EVALUATION_RETRY_POLICY.timeoutErrorNames.includes(
-      name as (typeof MODEL_EVALUATION_RETRY_POLICY.timeoutErrorNames)[number],
-    )
-  ) {
-    return true;
-  }
-
-  const message = error instanceof Error ? error.message : String(error);
-  return /timeout|aborted/i.test(message);
-}
-
-/** Extracts usable response text or explains why the model produced none. */
-function responseText(response: ModelResponse): string {
-  if (response.blockReason) {
-    throw new ModelEvaluationResponseError(
-      `The model blocked the evaluation request: ${response.blockReason}.`,
-      MODEL_EVALUATION_RETRY_POLICY.transientBlockReasons.includes(
-        response.blockReason as (typeof MODEL_EVALUATION_RETRY_POLICY.transientBlockReasons)[number],
-      ),
-    );
-  }
-
-  const text = response.text.trim();
-  if (text) return text;
-
-  throw new ModelEvaluationResponseError('The model returned no evaluation.');
-}
-
-/** Splits profiles into request-sized groups while preserving input order. */
-export function groupProfilesForModelEvaluation(
-  profiles: readonly EvaluationProfileData[],
-  profilesPerRequest: number,
-): readonly (readonly EvaluationProfileData[])[] {
-  const groups: EvaluationProfileData[][] = [];
-
-  for (let index = 0; index < profiles.length; index += profilesPerRequest) {
-    groups.push(profiles.slice(index, index + profilesPerRequest));
-  }
-
-  return groups;
+  return groupResults;
 }
 
 /** Sends one request-sized profile group and applies isolated retry policy. */
@@ -333,6 +362,58 @@ async function evaluateProfileGroup(
   });
 }
 
+/** Flattens a batch of group results into one evaluation/failure/usage total. */
+function reduceGroupResults(
+  groupResults: readonly ModelEvaluationGroupResult[],
+): {
+  evaluations: ProfileModelEvaluation[];
+  failures: ModelEvaluationFailure[];
+  tokenUsage: ModelEvaluationTokenUsage;
+} {
+  const evaluations: ProfileModelEvaluation[] = [];
+  const failures: ModelEvaluationFailure[] = [];
+  const tokenUsage = emptyModelEvaluationTokenUsage();
+
+  for (const result of groupResults) {
+    if (!result) continue;
+    addTokenUsage(tokenUsage, result.tokenUsage);
+
+    if (result.status === 'fulfilled') {
+      evaluations.push(...result.evaluations);
+      failures.push(...result.failures);
+    } else {
+      failures.push(result.failure);
+    }
+  }
+
+  return { evaluations, failures, tokenUsage };
+}
+
+/** Splits profiles into request-sized groups while preserving input order. */
+export function groupProfilesForModelEvaluation(
+  profiles: readonly EvaluationProfileData[],
+  profilesPerRequest: number,
+): readonly (readonly EvaluationProfileData[])[] {
+  const groups: EvaluationProfileData[][] = [];
+
+  for (let index = 0; index < profiles.length; index += profilesPerRequest) {
+    groups.push(profiles.slice(index, index + profilesPerRequest));
+  }
+
+  return groups;
+}
+
+/** Creates a present, serializable token total for aggregation. */
+export function emptyModelEvaluationTokenUsage(): ModelEvaluationTokenUsage {
+  return {
+    promptTokens: 0,
+    outputTokens: 0,
+    thinkingTokens: 0,
+    totalTokens: 0,
+    cachedPromptTokens: 0,
+  };
+}
+
 /** Builds the rejected-group shape shared by parse failures and exhausted retries. */
 function rejectedGroupResult(input: {
   profileIds: readonly string[];
@@ -368,216 +449,135 @@ function loggedModelResponseText(text: string): string {
   return text.length <= limit ? text : text.slice(0, limit);
 }
 
-/** Runs profile groups through the model with bounded concurrency. */
-async function runProfileGroups(
-  groups: readonly (readonly EvaluationProfileData[])[],
-  criteria: FullEvaluationCriteria,
-  options: ReturnType<typeof resolveModelEvaluationOptions>,
-  generateContent: NonNullable<ModelEvaluationOptions['generateContent']>,
-  wait: NonNullable<ModelEvaluationOptions['wait']>,
-  progress: ModelEvaluationProgress,
-): Promise<readonly ModelEvaluationGroupResult[]> {
-  const groupResults = new Array<ModelEvaluationGroupResult>(groups.length);
-  let nextGroupIndex = 0;
-  let completedGroups = 0;
+/** Adds optional model usage into a stable run-level total. */
+function addTokenUsage(
+  target: ModelEvaluationTokenUsage,
+  usage: ModelTokenUsage | ModelEvaluationTokenUsage | undefined,
+): void {
+  if (!usage) return;
 
-  /** Claims and evaluates profile groups until the shared queue is empty. */
-  async function worker(): Promise<void> {
-    while (nextGroupIndex < groups.length) {
-      const groupIndex = nextGroupIndex;
-      nextGroupIndex += 1;
-      const group = groups[groupIndex];
-      if (!group) continue;
-
-      logEvaluationGroupStart(
-        progress,
-        groupIndex,
-        groups.length,
-        group,
-        options.profilesPerRequest,
-      );
-      const startedAt = Date.now();
-      const result = await evaluateProfileGroup(
-        group,
-        criteria,
-        options,
-        generateContent,
-        wait,
-      );
-      completedGroups += 1;
-      groupResults[groupIndex] = result;
-      logEvaluationGroupOutcome(
-        progress,
-        groupIndex,
-        groups.length,
-        completedGroups,
-        group,
-        options.profilesPerRequest,
-        result,
-        elapsedMs(startedAt),
-      );
-    }
-  }
-
-  await Promise.all(
-    Array.from(
-      { length: Math.min(options.concurrency, groups.length) },
-      async () => worker(),
-    ),
-  );
-
-  return groupResults;
+  target.promptTokens += usage.promptTokens ?? 0;
+  target.outputTokens += usage.outputTokens ?? 0;
+  target.thinkingTokens += usage.thinkingTokens ?? 0;
+  target.totalTokens += usage.totalTokens ?? 0;
+  target.cachedPromptTokens += usage.cachedPromptTokens ?? 0;
 }
 
-/** Flattens a batch of group results into one evaluation/failure/usage total. */
-function reduceGroupResults(
-  groupResults: readonly ModelEvaluationGroupResult[],
-): {
-  evaluations: ProfileModelEvaluation[];
-  failures: ModelEvaluationFailure[];
-  tokenUsage: ModelEvaluationTokenUsage;
-} {
-  const evaluations: ProfileModelEvaluation[] = [];
-  const failures: ModelEvaluationFailure[] = [];
-  const tokenUsage = emptyModelEvaluationTokenUsage();
+/** Reports whether a token total contains any billable model activity. */
+function hasTokenUsage(usage: ModelEvaluationTokenUsage): boolean {
+  return Object.values(usage).some((value) => value > 0);
+}
 
-  for (const result of groupResults) {
-    if (!result) continue;
-    addTokenUsage(tokenUsage, result.tokenUsage);
+/** Decides whether another attempt could recover one model-call failure. */
+function isRetryableModelError(error: unknown): boolean {
+  if (error instanceof ModelEvaluationResponseError) return error.retryable;
 
-    if (result.status === 'fulfilled') {
-      evaluations.push(...result.evaluations);
-      failures.push(...result.failures);
-    } else {
-      failures.push(result.failure);
-    }
+  const status = errorHttpStatus(error);
+  if (
+    status !== undefined &&
+    MODEL_EVALUATION_RETRY_POLICY.httpStatusCodes.includes(
+      status as (typeof MODEL_EVALUATION_RETRY_POLICY.httpStatusCodes)[number],
+    )
+  ) {
+    return true;
   }
 
-  return { evaluations, failures, tokenUsage };
+  const code = networkErrorCode(error);
+  if (
+    code &&
+    MODEL_EVALUATION_RETRY_POLICY.networkErrorCodes.includes(
+      code as (typeof MODEL_EVALUATION_RETRY_POLICY.networkErrorCodes)[number],
+    )
+  ) {
+    return true;
+  }
+
+  if (isTimeoutModelError(error)) return true;
+
+  return error instanceof TypeError;
+}
+
+/** Detects a cancelled or timed-out model call that is worth trying again. */
+function isTimeoutModelError(error: unknown): boolean {
+  const record = asRecord(error);
+  const name = asString(record?.['name']);
+  if (
+    name &&
+    MODEL_EVALUATION_RETRY_POLICY.timeoutErrorNames.includes(
+      name as (typeof MODEL_EVALUATION_RETRY_POLICY.timeoutErrorNames)[number],
+    )
+  ) {
+    return true;
+  }
+
+  const message = error instanceof Error ? error.message : String(error);
+  return /timeout|aborted/i.test(message);
+}
+
+/** Reads the HTTP status exposed by common SDK and fetch error shapes. */
+function errorHttpStatus(error: unknown): number | undefined {
+  const record = asRecord(error);
+  return asHttpStatus(record?.['status']) ?? asHttpStatus(record?.['code']);
+}
+
+/** Reads a network error code when a request failed before receiving HTTP. */
+function networkErrorCode(error: unknown): string | undefined {
+  const record = asRecord(error);
+  return asString(record?.['code']) ??
+    asString(asRecord(record?.['cause'])?.['code']);
+}
+
+/** Calculates bounded exponential backoff after a failed attempt. */
+function retryDelayMs(baseDelayMs: number, failedAttempts: number): number {
+  const exponentialDelay = baseDelayMs * 2 ** Math.max(0, failedAttempts - 1);
+  return Math.min(
+    exponentialDelay,
+    MODEL_EVALUATION_DEFAULTS.retryMaximumDelayMs,
+  );
 }
 
 /**
- * Evaluates compact profiles through bounded concurrent model requests.
+ * Budgets one attempt, giving every retry a fraction of the first attempt's
+ * time.
  *
- * Successful groups are retained even when another group fails, and every
- * returned token count is included in the run total. A profile that never
- * scored on the main pass — whether its whole group was rejected or the model
- * silently dropped it from an otherwise-usable reply — is pooled with every
- * other unscored profile from this run and re-requested exactly once, in new
- * groups of the same request size (the last one smaller if the remainder does
- * not fill it). Already-scored siblings are never re-sent. This mirrors the
- * Apify collector's pool-and-rebatch retry, but bounded to a single follow-up
- * round rather than looping: a schema-shaped omission is a content problem,
- * not a transient one, so repeated rounds would mostly re-spend tokens.
+ * Retries run after the group has already failed once, so they are capped by
+ * the configured retry share rather than the full request budget; see the
+ * retry policy for why a slow retry is not worth waiting out.
  */
-export async function evaluateProfilesWithModel(
-  profiles: readonly EvaluationProfileData[],
-  criteria: FullEvaluationCriteria,
-  callerOptions: ModelEvaluationOptions = {},
-): Promise<ModelEvaluationOutcome> {
-  const options = resolveModelEvaluationOptions(callerOptions);
-  const generateContent = callerOptions.generateContent ?? resolveModelClient();
-  const wait = callerOptions.wait ?? waitForRetry;
-  const logger = callerOptions.logger;
+function attemptTimeoutMs(requestTimeoutMs: number, attempt: number): number {
+  if (attempt <= 1) return requestTimeoutMs;
 
-  const groups = groupProfilesForModelEvaluation(
-    profiles,
-    options.profilesPerRequest,
-  );
-  logger?.info(
-    {
-      stage: PIPELINE_STAGE.eval,
-      pass: EVALUATION_PASS.primary,
-      requestedProfiles: profiles.length,
-      totalGroups: groups.length,
-      profilesPerRequest: options.profilesPerRequest,
-      concurrency: options.concurrency,
-    },
-    PIPELINE_PROGRESS_MESSAGE.evalStarted,
-  );
-  const primary = reduceGroupResults(
-    await runProfileGroups(
-      groups,
-      criteria,
-      options,
-      generateContent,
-      wait,
-      {
-        pass: EVALUATION_PASS.primary,
-        passProfileTotal: profiles.length,
-        ...(logger ? { logger } : {}),
-      },
+  return Math.min(
+    requestTimeoutMs,
+    Math.max(
+      MODEL_EVALUATION_RETRY_POLICY.retryMinimumTimeoutMs,
+      Math.round(
+        requestTimeoutMs * MODEL_EVALUATION_RETRY_POLICY.retryTimeoutFraction,
+      ),
     ),
   );
+}
 
-  const tokenUsage = emptyModelEvaluationTokenUsage();
-  addTokenUsage(tokenUsage, primary.tokenUsage);
+/** Waits between production retry attempts without blocking the event loop. */
+async function waitForRetry(milliseconds: number): Promise<void> {
+  await new Promise<void>((resolve) => setTimeout(resolve, milliseconds));
+}
 
-  let evaluations = primary.evaluations;
-  let failures = primary.failures;
-
-  const failedProfileIds = failures.flatMap((failure) => failure.profileIds);
-  if (failedProfileIds.length > 0) {
-    const profilesById = new Map(
-      profiles.map((profile) => [profile.profileId, profile]),
+/** Extracts usable response text or explains why the model produced none. */
+function responseText(response: ModelResponse): string {
+  if (response.blockReason) {
+    throw new ModelEvaluationResponseError(
+      `The model blocked the evaluation request: ${response.blockReason}.`,
+      MODEL_EVALUATION_RETRY_POLICY.transientBlockReasons.includes(
+        response.blockReason as (typeof MODEL_EVALUATION_RETRY_POLICY.transientBlockReasons)[number],
+      ),
     );
-    const retryProfiles = failedProfileIds.flatMap((id) => {
-      const profile = profilesById.get(id);
-      return profile ? [profile] : [];
-    });
-
-    if (retryProfiles.length > 0) {
-      const retryGroups = groupProfilesForModelEvaluation(
-        retryProfiles,
-        options.profilesPerRequest,
-      );
-      logger?.info(
-        {
-          stage: PIPELINE_STAGE.eval,
-          pass: EVALUATION_PASS.retry,
-          requestedProfiles: retryProfiles.length,
-          totalGroups: retryGroups.length,
-          profilesPerRequest: options.profilesPerRequest,
-          concurrency: options.concurrency,
-        },
-        PIPELINE_PROGRESS_MESSAGE.evalRetryStarted,
-      );
-      const retry = reduceGroupResults(
-        await runProfileGroups(
-          retryGroups,
-          criteria,
-          options,
-          generateContent,
-          wait,
-          {
-            pass: EVALUATION_PASS.retry,
-            passProfileTotal: retryProfiles.length,
-            ...(logger ? { logger } : {}),
-          },
-        ),
-      );
-
-      addTokenUsage(tokenUsage, retry.tokenUsage);
-      evaluations = [...evaluations, ...retry.evaluations];
-      // Every id in failedProfileIds went into this retry, so its outcome
-      // (scored or still failed) fully replaces the main-pass failure list.
-      failures = retry.failures;
-    }
   }
 
-  const failedProfiles = failures.reduce(
-    (total, failure) => total + failure.profileIds.length,
-    0,
-  );
+  const text = response.text.trim();
+  if (text) return text;
 
-  return {
-    requestedProfiles: profiles.length,
-    successfulProfiles: evaluations.length,
-    failedProfiles,
-    evaluations,
-    failures,
-    tokenUsage,
-  };
+  throw new ModelEvaluationResponseError('The model returned no evaluation.');
 }
 
 /**
