@@ -34,7 +34,7 @@ My goal was to create something that could filter a batch of profiles based on c
 
   ```mermaid
   flowchart LR
-      A[Collect profiles<br/>Apify] --> B[Map / parse]
+      A[Upload CSV<br/>Perfis baixados] --> B[Map career columns]
       B --> C[Broad filter]
       C --> D[Load photos]
       D --> E[LLM evaluation]
@@ -49,21 +49,26 @@ My goal was to create something that could filter a batch of profiles based on c
 LinkedHelper (third-party software) and the user. My application, for now, just exists to simplify an
 outside job that LinkedHelper lacks having.**
 
-- 1.1: The process starts with an input of a CSV formatted file (since LinkedHelper exports the campaign as a CSV).
+- 1.1: The process starts with a CSV that LinkedHelper exports for the campaign. It has to be the
+"Perfis baixados" export, which carries each person's career: numbered columns for every job
+(`organization_N`, `organization_title_N`, dates, description) and school (`education_N`, degree, field,
+dates), plus the About text, location and photo URL. A lighter export without those columns is refused
+at upload.
 
-- 1.2: Then we import the CSV through an HTTP request (which will be covered in another documentation) and
-extract the profile links from the document.
+- 1.2: The CSV is uploaded through an HTTP request and parsed straight away, so the upload screen can
+report what the file holds before anything is spent.
 
-- 1.3: We then run it through third-party LinkedIn scrapers on Apify that, given the profile links, return
-the full profile data (experience, education, location, headline, photo, etc). Bebity is the primary
-scraper and Harvest API is the fallback for anything Bebity can't handle (`APIFY_PROFILE_COLLECTOR`
-picks one alone instead). Both run in batches with bounded concurrency, so a run of hundreds of profiles
-doesn't get sent as one giant request.
+- 1.3: Each row is mapped into the app's own profile model (`src/mapper/linked_helper_csv_profile_mapper.ts`),
+keyed by the row's `public_id` so every result traces back to its LinkedHelper lead. The export appends
+labels such as "· No local" to a job location or puts "· Tempo integral" in an empty description; the
+mapper splits those into workplace and employment-type fields. One row that cannot be mapped is logged
+and skipped without taking the rest of the campaign down with it.
 
-- 1.4: Each raw profile then gets mapped into the app's own profile model, and correlated back to the
-public_id from the original CSV so we never lose track of which LinkedHelper lead a profile belongs to.
-One malformed record from the provider doesn't take the rest of the batch down with it, it just gets
-logged as a failure and the pipeline keeps going.
+  Profiles used to be collected from Apify scrapers instead. The last commit with that pipeline is
+  recorded in `docs/ROLLBACK_POINTS.md`.
+
+- 1.4: The export has limits the model is told about: it keeps only the first few education entries
+(usually the most recent) and a fixed number of jobs, and its photos are small thumbnails.
 
 - 1.5: Photos are downloaded and sent with the evaluation request itself, so the model looks at the
 picture rather than at someone else's description of it. There used to be a separate vision call here
@@ -105,9 +110,9 @@ _All shown with the app's built-in mock data (`?mock` in the URL) — no real ca
 - **Backend:** TypeScript, Node.js (22+), Fastify for the API server, Pino for logging, and Node's
   built-in `node:sqlite` for storage.
 - **Frontend:** React 19 with Vite and TypeScript.
-- **External services:** Apify (running the Bebity and Harvest API LinkedIn scrapers) for profile collection, and
-  OpenRouter for evaluation, with the profile photo sent as part of the same request (any model it
-  serves, selected through a single env var).
+- **External services:** OpenRouter for evaluation, with the profile photo sent as part of the same
+  request (any model it serves, selected through a single env var). Profile data comes from the
+  LinkedHelper CSV itself.
 - **Tests:** Node's built-in test runner (`node --test`), no external test framework.
 
 ## Handing it to someone non-technical
@@ -116,7 +121,7 @@ _All shown with the app's built-in mock data (`?mock` in the URL) — no real ca
 `Instalar.bat` / `Leadscan.bat` are what they actually double-click on Windows.
 The installer checks for Node, installs both dependency trees, builds the app,
 and drops a Desktop shortcut; the launcher starts the server and opens the
-browser. API keys are pasted into a setup screen in the app rather than a
+browser. The OpenRouter key is pasted into a setup screen in the app rather than a
 `.env` file, so nothing below is required of them.
 
 ## Setup
@@ -135,10 +140,9 @@ browser. API keys are pasted into a setup screen in the app rather than a
    ```
 
    Everything in `.env.example` has a sane default and can be left blank —
-   including `APIFY_API_KEY` and `OPENROUTER_API_KEY`, which the app asks for
-   on its setup screen if they are absent. Setting them here is the override
-   for a development machine: a key in the environment wins over one saved
-   from the browser.
+   including `OPENROUTER_API_KEY`, which the app asks for on its setup screen
+   if it is absent. Setting it here is the override for a development machine:
+   a key in the environment wins over one saved from the browser.
 
 3. Run the whole app as one process:
 
@@ -147,8 +151,8 @@ browser. API keys are pasted into a setup screen in the app rather than a
    ```
 
    This builds the server and the web bundle, then serves both from
-   `localhost:3000`. Open it, paste the two API keys when asked, upload a
-   LinkedHelper campaign CSV, set your criteria, and run the pipeline.
+   `localhost:3000`. Open it, paste the OpenRouter key when asked, upload a
+   LinkedHelper "Perfis baixados" CSV, set your criteria, and run the pipeline.
 
    For frontend work you still want Vite's hot reload, which needs the two
    processes:
@@ -166,8 +170,8 @@ browser. API keys are pasted into a setup screen in the app rather than a
 The same pipeline is also reachable straight from the CLI, which is what the `npm run serve` API wraps:
 
 ```bash
-npm run collect        # import a CSV and collect full profiles
-npm run review         # run evaluation against a set of criteria
+npm start -- profiles.csv                  # import a CSV only
+npm run review -- profiles.csv criteria.json   # import and evaluate
 ```
 
 ### Tests

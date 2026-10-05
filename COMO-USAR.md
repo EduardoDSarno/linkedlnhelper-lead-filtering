@@ -35,36 +35,35 @@ Um atalho chamado **Leadscan** aparece na sua Área de Trabalho.
 
 ---
 
-## Parte 2 — Criar as duas contas (só na primeira vez)
+## Parte 2 — Criar a conta da OpenRouter (só na primeira vez)
 
-O Leadscan usa duas contas **suas**. Você paga só pelo que usar, e ninguém
-além de você tem acesso a elas.
-
-### Conta 1 — Apify (busca os perfis do LinkedIn)
-
-1. Crie a conta em <https://console.apify.com/sign-up>
-2. Depois de entrar, vá em **Settings → Integrations**
-3. Copie o código que aparece em **Personal API token**
-
-### Conta 2 — OpenRouter (faz a avaliação com IA)
+O Leadscan usa uma conta **sua** na OpenRouter, que faz a avaliação com IA.
+Você paga só pelo que usar, e ninguém além de você tem acesso a ela.
 
 1. Crie a conta em <https://openrouter.ai>
 2. Vá em **Credits** e adicione crédito
 3. Vá em <https://openrouter.ai/keys> e clique em **Create Key**
 4. Copie o código que aparece
 
-> **Guarde os dois códigos.** Eles começam com `apify_api_...` e `sk-or-v1-...`.
+> **Guarde esse código.** Ele começa com `sk-or-v1-...`.
 > Se você marcar "Lembrar neste computador" na próxima etapa, só vai precisar
-> deles uma vez.
+> dele uma vez.
 
 ---
 
 ## Parte 3 — Usar
 
-1. Dê **dois cliques no atalho Leadscan** da Área de Trabalho
-2. Uma janela preta abre e o navegador abre sozinho
-3. Na primeira vez, cole os dois códigos e clique em **Conectar**
-4. Pronto: importe o CSV da campanha, defina os critérios e mande avaliar
+1. No Linked Helper, exporte a campanha como **Perfis baixados**
+   (o arquivo tem um nome que começa com `Perfis_baixados_de_lh`).
+   É essa exportação que traz o histórico profissional e a formação de cada
+   pessoa; outros tipos de CSV são recusados.
+2. Dê **dois cliques no atalho Leadscan** da Área de Trabalho
+3. Uma janela preta abre e o navegador abre sozinho
+4. Na primeira vez, cole o código da OpenRouter e clique em **Conectar**
+5. Pronto: importe o CSV da campanha, defina os critérios e mande avaliar
+
+> **Avalie o CSV logo depois de exportar.** Os links das fotos do LinkedIn
+> expiram depois de algumas semanas; um CSV antigo é avaliado sem as fotos.
 
 **Enquanto estiver usando, deixe a janela preta aberta.**
 Para fechar o programa, feche essa janela.
@@ -85,9 +84,13 @@ Seu crédito está acabando. Entre em <https://openrouter.ai/credits> e
 adicione mais antes de rodar a campanha, senão parte dos perfis volta
 sem avaliação.
 
-**Pediu as chaves de novo.**
-Ou você não marcou "Lembrar neste computador", ou uma das chaves parou de
+**Pediu a chave de novo.**
+Ou você não marcou "Lembrar neste computador", ou a chave parou de
 funcionar. É só colar de novo.
+
+**Apareceu "Este CSV não tem o histórico profissional".**
+O arquivo veio de outro tipo de exportação. Exporte a campanha de novo no
+Linked Helper como **Perfis baixados** e envie esse arquivo.
 
 **Quero usar em outro computador.**
 Repita a Parte 1 nele. Suas campanhas ficam salvas em cada computador
@@ -99,5 +102,4 @@ separadamente, não são sincronizadas.
 
 Tudo fica **no seu computador**, dentro da pasta do Leadscan:
 as campanhas importadas, os perfis coletados e os resultados.
-Nada é enviado para ninguém além da Apify e da OpenRouter, que são as
-suas próprias contas.
+Nada é enviado para ninguém além da OpenRouter, que é a sua própria conta.

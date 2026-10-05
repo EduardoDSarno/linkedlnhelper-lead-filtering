@@ -8,13 +8,12 @@ Every setting is read from the environment at startup (loaded from `.env` by
 
 | Variable | Purpose |
 | --- | --- |
-| `APIFY_API_KEY` | Apify / HarvestAPI token used to collect LinkedIn profile data. |
 | `OPENROUTER_API_KEY` | OpenRouter token used for profile evaluation. |
 
-Both may be left blank: the app's setup screen collects them at runtime and
-writes them into the process environment, optionally remembering them in
+It may be left blank: the app's setup screen collects it at runtime and
+writes it into the process environment, optionally remembering it in
 `src/dataStorage/credentials.json` (gitignored, owner-readable). A value set
-here wins over a remembered one, so a development machine keeps its own keys.
+here wins over a remembered one, so a development machine keeps its own key.
 
 ## Model selection
 
@@ -55,12 +54,8 @@ For a tunnel against the Vite dev server, put its hostname in `DEV_TUNNEL_HOST`
 | Variable | Purpose |
 | --- | --- |
 | `MAX_PIPELINE_PROFILES` | Cap on profiles accepted in one run. |
-| `APIFY_BATCH_SIZE` | Profiles per Apify Actor run. |
-| `APIFY_BATCH_CONCURRENCY` | Actor runs in flight at once. |
-| `APIFY_MAX_ATTEMPTS` | Attempts per profile, initial try included. |
-| `APIFY_RETRY_BASE_DELAY_MS` | Base retry backoff before jitter. |
-| `IMAGE_ANALYSIS_CONCURRENCY` | Photos downloaded at once for the evaluation request. |
 | `IMAGE_ANALYSIS_RESOLUTION` | Image tokenization resolution: `low`, `medium`, or `high`. |
+| `IMAGE_REQUEST_TIMEOUT_MS` | Timeout for one photo request. |
 
 ## Evaluation tuning (optional)
 
@@ -72,7 +67,7 @@ For a tunnel against the Vite dev server, put its hostname in `DEV_TUNNEL_HOST`
 | `EVALUATION_MAXIMUM_ATTEMPTS` | Attempts per group, initial try included. |
 | `EVALUATION_RETRY_BASE_DELAY_MS` | Base retry backoff before the bounded exponential climb. |
 
-Blank values use the defaults defined next to each consumer (`src/dataCollector/apify_profile_collector/config.ts`, `src/imageExtractor/config.ts`, `src/pipeline/config.ts`, `src/evaluation/model/config.ts`).
+Blank values use the defaults defined next to each consumer (`src/imageExtractor/config.ts`, `src/pipeline/config.ts`, `src/evaluation/model/config.ts`).
 
 ## Fixed application behavior (code constants, not environment)
 
