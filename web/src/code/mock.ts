@@ -1,6 +1,6 @@
 /**
  * In-browser mock of the backend, for building and demoing the screens without
- * a real (paid, minutes-long) Apify + the model run.
+ * a real (paid, minutes-long) model run.
  *
  * It is used only when the page is opened with `?mock` in the URL; otherwise the
  * real client in `api.ts` is used. The mock returns fabricated profiles with a
@@ -615,12 +615,11 @@ export function deleteRun(processingId: string): Promise<void> {
 
 /**
  * Mock of getCredentials: the demo never calls a paid service, so it reports
- * both keys present and skips the setup gate entirely.
+ * the key present and skips the setup gate entirely.
  */
 export function getCredentials(): Promise<CredentialsStatus> {
   return delay(
     {
-      apify: { configured: true, remembered: false },
       openRouter: { configured: true, remembered: false },
       ready: true,
     },
@@ -628,19 +627,16 @@ export function getCredentials(): Promise<CredentialsStatus> {
   );
 }
 
-/** Mock of saveCredentials: accepts anything and reports both keys valid. */
+/** Mock of saveCredentials: accepts anything and reports the key valid. */
 export function saveCredentials(_input: {
-  apify?: string;
-  openRouter?: string;
+  openRouter: string;
   remember: boolean;
 }): Promise<CredentialsStatus & { check: CredentialsCheck }> {
   return delay(
     {
-      apify: { configured: true, remembered: false },
       openRouter: { configured: true, remembered: false },
       ready: true,
       check: {
-        apify: { valid: true, label: 'demo' },
         openRouter: { valid: true, label: 'demo', remainingCredit: 25 },
       },
     },
@@ -652,7 +648,6 @@ export function saveCredentials(_input: {
 export function checkCredentials(): Promise<CredentialsCheck> {
   return delay(
     {
-      apify: { valid: true, label: 'demo' },
       openRouter: { valid: true, label: 'demo', remainingCredit: 25 },
     },
     80,

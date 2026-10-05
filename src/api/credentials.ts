@@ -1,7 +1,6 @@
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 
-import { ApifyClient } from 'apify-client';
 import { OpenRouter } from '@openrouter/sdk';
 
 import { asRecord, asString } from '../helpers/type_guards.js';
@@ -9,12 +8,11 @@ import { asRecord, asString } from '../helpers/type_guards.js';
 /**
  * Environment variables the rest of the application reads its secrets from.
  *
- * Both consumers read `process.env` at call time rather than at startup, so
- * putting a key here reaches them without a restart and without either one
- * knowing the keys can now arrive from a browser.
+ * The model client reads `process.env` at call time rather than at startup,
+ * so putting a key here reaches it without a restart and without it knowing
+ * the key can now arrive from a browser.
  */
 const CREDENTIAL_ENVIRONMENT_KEYS = {
-  apify: 'APIFY_API_KEY',
   openRouter: 'OPENROUTER_API_KEY',
 } as const;
 
@@ -38,9 +36,8 @@ export interface CredentialState {
 
 /** What the setup screen needs to decide whether to prompt. */
 export interface CredentialsStatus {
-  apify: CredentialState;
   openRouter: CredentialState;
-  /** True when both services have a key, whatever its source. */
+  /** True when every service has a key, whatever its source. */
   ready: boolean;
 }
 
@@ -55,15 +52,13 @@ export interface CredentialCheck {
   label?: string;
 }
 
-/** Both services checked at once, as the setup screen reports them. */
+/** Every service checked at once, as the setup screen reports them. */
 export interface CredentialsCheck {
-  apify: CredentialCheck;
   openRouter: CredentialCheck;
 }
 
 /** Keys submitted together from the setup screen. */
 export interface CredentialsInput {
-  apify?: string | undefined;
   openRouter?: string | undefined;
 }
 
@@ -79,18 +74,17 @@ export function credentialsStatus(): CredentialsStatus {
     };
   };
 
-  const apify = state('apify');
   const openRouter = state('openRouter');
 
-  return { apify, openRouter, ready: apify.configured && openRouter.configured };
+  return { openRouter, ready: openRouter.configured };
 }
 
 /**
  * Puts submitted keys into effect, optionally keeping them across restarts.
  *
- * Writing to `process.env` is what makes this reach the collector and the
- * model client: both read it per call, so a key pasted mid-session applies to
- * the next run without a restart. Remembering is a deliberate choice rather
+ * Writing to `process.env` is what makes this reach the model client: it
+ * reads it per call, so a key pasted mid-session applies to the next run
+ * without a restart. Remembering is a deliberate choice rather
  * than the default, so a shared machine can be left holding nothing.
  */
 export function applyCredentials(
@@ -103,10 +97,7 @@ export function applyCredentials(
   }
 
   if (remember) {
-    rememberCredentials({
-      apify: currentKey('apify'),
-      openRouter: currentKey('openRouter'),
-    });
+    rememberCredentials({ openRouter: currentKey('openRouter') });
   } else {
     forgetCredentials();
   }
@@ -143,32 +134,13 @@ export function loadRememberedCredentials(): void {
 }
 
 /**
- * Checks both keys against their own services.
+ * Checks the key against the service that issued it.
  *
- * Done before a campaign rather than during one: a rejected key surfaces
- * halfway through the pipeline otherwise, after collection has already been
- * paid for.
+ * Done before a campaign rather than during one: a rejected key otherwise
+ * surfaces only once the first evaluation request fails.
  */
 export async function checkCredentials(): Promise<CredentialsCheck> {
-  const [apify, openRouter] = await Promise.all([
-    checkApifyKey(currentKey('apify')),
-    checkOpenRouterKey(currentKey('openRouter')),
-  ]);
-
-  return { apify, openRouter };
-}
-
-/** Confirms an Apify token by asking the service who it belongs to. */
-async function checkApifyKey(apiKey: string | undefined): Promise<CredentialCheck> {
-  if (!apiKey) return { valid: false, error: 'No Apify key has been entered yet.' };
-
-  try {
-    const user = await new ApifyClient({ token: apiKey }).user('me').get();
-    const label = user?.username;
-    return { valid: true, ...(label ? { label } : {}) };
-  } catch (error: unknown) {
-    return { valid: false, error: credentialErrorMessage(error, 'Apify') };
-  }
+  return { openRouter: await checkOpenRouterKey(currentKey('openRouter')) };
 }
 
 /**
@@ -207,7 +179,7 @@ async function checkOpenRouterKey(
 function credentialErrorMessage(error: unknown, service: string): string {
   const message = error instanceof Error ? error.message : String(error);
 
-  // Both services phrase a bad token as a missing user rather than a refused
+  // A bad token can be phrased as a missing user rather than a refused
   // credential, so the rejection is recognized by its wording as well as by a
   // status code. Anything else is reported verbatim: an outage and a typo need
   // different actions, and guessing between them helps nobody.

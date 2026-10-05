@@ -411,7 +411,6 @@ function SelectionBar({
 
 /** Portuguese label for each reported stage, in running order. */
 const PROGRESS_STAGES = [
-  { key: 'collecting', label: 'Coletando perfis' },
   { key: 'loading_photos', label: 'Baixando fotos' },
   { key: 'evaluating', label: 'Avaliando com a IA' },
 ] as const;
@@ -435,7 +434,7 @@ function stageLabel(progress: RunProgress | undefined): string {
  * The bar is always present: before the first stage reports it simply sits at
  * zero with a neutral label, rather than swapping between two different
  * widgets. `overall` already spans every stage, so the fill only ever moves
- * forward as the run advances from collection through to scoring.
+ * forward as the run advances from photo downloads through to scoring.
  */
 function LoadingState({ progress }: { progress?: RunProgress }) {
   const percent = Math.round((progress?.overall ?? 0) * 100);

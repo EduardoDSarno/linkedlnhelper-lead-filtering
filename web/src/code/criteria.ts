@@ -52,13 +52,6 @@ export const MAX_THINKING_WAVE_SECONDS = 80;
 export const IMAGE_ANALYSIS_WAVE_SECONDS = 12;
 
 /**
- * Profiles per second Apify collects, from the collector's own production
- * benchmark (750 profiles in ~80s at the configured concurrency).
- * See src/dataCollector/apify_profile_collector/APIFY_COLLECTOR_CONFIG.md.
- */
-export const APIFY_PROFILES_PER_SECOND = 750 / 80;
-
-/**
  * How many times slower a max-thinking wave is than a default wave.
  *
  * Derived from the measured wave durations so hover copy stays in lockstep.
@@ -211,14 +204,10 @@ export function estimateImageAnalysisSeconds(
   return imageAnalysisWaveCount(profileCount) * IMAGE_ANALYSIS_WAVE_SECONDS;
 }
 
-/** Estimates Apify collection wall time from the collector's measured rate. */
-export function estimateCollectionSeconds(profileCount: number): number {
-  return Math.max(profileCount, 1) / APIFY_PROFILES_PER_SECOND;
-}
-
 /**
- * Estimates total run wall time: collection, then photo analysis (unless
- * skipped), then scoring — the same three stages the pipeline runs in order.
+ * Estimates total run wall time: photo analysis (unless skipped), then
+ * scoring — the stages the pipeline runs in order. Profiles come from the
+ * uploaded CSV, so there is no collection time to add.
  */
 export function estimatePipelineSeconds(
   profileCount: number,
@@ -226,7 +215,6 @@ export function estimatePipelineSeconds(
   skipImageAnalysis: boolean,
 ): number {
   return (
-    estimateCollectionSeconds(profileCount) +
     estimateImageAnalysisSeconds(profileCount, skipImageAnalysis) +
     estimateEvaluationSeconds(profileCount, mode)
   );
@@ -250,7 +238,7 @@ export function formatDurationEstimate(seconds: number): string {
 /**
  * Builds the upload-screen estimate shown above the send-to-AI button.
  *
- * Covers the whole run — collection, photo analysis, and scoring — not just
+ * Covers the whole run — photo analysis and scoring — not just
  * scoring. Max thinking and a skipped photo analysis each name themselves in
  * the sentence so either time-affecting choice is obvious.
  */

@@ -62,7 +62,6 @@ export default function App() {
   useEffect(() => {
     /** Treats an unreadable status as "no keys yet". */
     const blank = (): CredentialsStatus => ({
-      apify: { configured: false, remembered: false },
       openRouter: { configured: false, remembered: false },
       ready: false,
     });
@@ -78,9 +77,9 @@ export default function App() {
         // operator back to setup with a reason when it is not.
         const check = await checkCredentials().catch(() => null);
         if (!check) return;
-        if (check.apify.valid && check.openRouter.valid) return;
+        if (check.openRouter.valid) return;
 
-        setKeyError(check.apify.error ?? check.openRouter.error ?? null);
+        setKeyError(check.openRouter.error ?? null);
         setCredentials({ ...status, ready: false });
       })
       .catch(() => setCredentials(blank()));

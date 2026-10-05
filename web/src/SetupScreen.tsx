@@ -5,7 +5,6 @@ import type { CredentialsCheck, CredentialsStatus } from './code/api';
 
 /** Where the operator goes to create each key, shown beside its field. */
 const KEY_SOURCES = {
-  apify: 'https://console.apify.com/settings/integrations',
   openRouter: 'https://openrouter.ai/keys',
 } as const;
 
@@ -78,11 +77,11 @@ function CheckLine({ service, check }: { service: string; check?: { valid: boole
 }
 
 /**
- * The gate shown until both keys are in place.
+ * The gate shown until the OpenRouter key is in place.
  *
  * The keys live in the running server by default and are gone when it stops,
  * which is why this screen exists at all rather than a file someone has to
- * edit. Remembering them is offered because pasting two long strings at every
+ * edit. Remembering it is offered because pasting a long string at every
  * launch is its own kind of friction, and the alternative is the operator
  * keeping them somewhere less safe than this machine.
  */
@@ -92,33 +91,24 @@ export function SetupScreen({ status, notice, onReady }: {
   notice?: string;
   onReady: (status: CredentialsStatus) => void;
 }) {
-  const [apify, setApify] = useState('');
   const [openRouter, setOpenRouter] = useState('');
-  const [remember, setRemember] = useState(status.apify.remembered);
+  const [remember, setRemember] = useState(status.openRouter.remembered);
   const [check, setCheck] = useState<CredentialsCheck | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  // A key already held by the server counts as supplied: a returning operator
-  // who only needs to replace one key should not have to re-paste the other.
-  const canSubmit =
-    (apify.trim() !== '' || status.apify.configured) &&
-    (openRouter.trim() !== '' || status.openRouter.configured);
+  const canSubmit = openRouter.trim() !== '';
 
-  /** Sends whatever was typed, then reports each service's answer. */
+  /** Sends the typed key, then reports the service's answer. */
   const submit = async () => {
     setBusy(true);
     setError(null);
 
     try {
-      const result = await saveCredentials({
-        ...(apify.trim() ? { apify: apify.trim() } : {}),
-        ...(openRouter.trim() ? { openRouter: openRouter.trim() } : {}),
-        remember,
-      });
+      const result = await saveCredentials({ openRouter: openRouter.trim(), remember });
 
       setCheck(result.check);
-      if (result.check.apify.valid && result.check.openRouter.valid) {
+      if (result.check.openRouter.valid) {
         onReady(result);
       }
     } catch (caught: unknown) {
@@ -150,11 +140,11 @@ export function SetupScreen({ status, notice, onReady }: {
         }}
       >
         <h1 style={{ fontSize: 17, margin: '0 0 6px', letterSpacing: '-0.02em' }}>
-          Conectar suas contas
+          Conectar sua conta
         </h1>
         <p style={{ fontSize: 13, color: '#64748b', margin: '0 0 22px', lineHeight: 1.5 }}>
-          O Leadscan usa duas contas suas: a Apify busca os perfis e a OpenRouter
-          faz a avaliação. Cole as duas chaves abaixo para começar.
+          O Leadscan usa a sua conta da OpenRouter para avaliar os perfis com IA.
+          Cole a chave abaixo para começar.
         </p>
 
         {notice && (
@@ -173,16 +163,6 @@ export function SetupScreen({ status, notice, onReady }: {
             {notice}
           </div>
         )}
-
-        <KeyField
-          label="Chave da Apify"
-          help="Coleta os dados dos perfis do LinkedIn."
-          link={KEY_SOURCES.apify}
-          placeholder="apify_api_..."
-          value={apify}
-          {...(status.apify.tail ? { tail: status.apify.tail } : {})}
-          onChange={setApify}
-        />
 
         <KeyField
           label="Chave da OpenRouter"
@@ -241,7 +221,6 @@ export function SetupScreen({ status, notice, onReady }: {
 
         {check && (
           <div style={{ marginTop: 12 }}>
-            <CheckLine service="Apify" check={check.apify} />
             <CheckLine service="OpenRouter" check={check.openRouter} />
           </div>
         )}

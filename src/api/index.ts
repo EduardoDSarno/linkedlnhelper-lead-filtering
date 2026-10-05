@@ -152,19 +152,15 @@ function registerCredentialRoutes(server: FastifyInstance)
         const body = asRecord(request.body);
         if (!body) return reply.status(HTTP_STATUS.badRequest).send({ error: 'Invalid body' });
 
-        const apify = asString(body['apify'])?.trim();
         const openRouter = asString(body['openRouter'])?.trim();
-        if (!apify && !openRouter)
+        if (!openRouter)
         {
             return reply
                 .status(HTTP_STATUS.badRequest)
-                .send({ error: 'Provide at least one key' });
+                .send({ error: 'Provide the OpenRouter key' });
         }
 
-        const status = applyCredentials(
-            { ...(apify ? { apify } : {}), ...(openRouter ? { openRouter } : {}) },
-            body['remember'] === true,
-        );
+        const status = applyCredentials({ openRouter }, body['remember'] === true);
 
         // Confirm against the services rather than trusting the paste, so a
         // truncated key is caught here instead of part-way through a campaign.

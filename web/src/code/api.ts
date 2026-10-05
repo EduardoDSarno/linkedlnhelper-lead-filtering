@@ -73,7 +73,7 @@ export type ProcessingStatus = 'queued' | 'running' | 'completed' | 'failed' | '
 /** How far a running pipeline has got, present only while it runs. */
 export interface RunProgress
 {
-    stage: 'collecting' | 'loading_photos' | 'evaluating';
+    stage: 'loading_photos' | 'evaluating';
     /** Items finished within the current stage. */
     completed: number;
     /** Items the current stage will process in total. */
@@ -393,7 +393,6 @@ export interface CredentialState {
 
 /** Which keys the backend currently holds. */
 export interface CredentialsStatus {
-    apify: CredentialState;
     openRouter: CredentialState;
     ready: boolean;
 }
@@ -407,9 +406,8 @@ export interface CredentialCheck {
     label?: string;
 }
 
-/** Both services' answers, returned together. */
+/** Every service's answer, returned together. */
 export interface CredentialsCheck {
-    apify: CredentialCheck;
     openRouter: CredentialCheck;
 }
 
@@ -423,14 +421,13 @@ export async function getCredentials(): Promise<CredentialsStatus> {
 }
 
 /**
- * Sends the pasted keys and reports what each service said about them.
+ * Sends the pasted key and reports what the service said about it.
  *
  * The backend validates as part of saving, so one round trip both applies the
- * keys and tells the operator whether they work.
+ * key and tells the operator whether it works.
  */
 export async function saveCredentials(input: {
-    apify?: string;
-    openRouter?: string;
+    openRouter: string;
     remember: boolean;
 }): Promise<CredentialsStatus & { check: CredentialsCheck }> {
     const response = await fetch('/credentials', {
