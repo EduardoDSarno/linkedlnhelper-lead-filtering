@@ -10,9 +10,8 @@ export interface MutualConnectionSummary {
 /**
  * The current employment observed by Linked Helper.
  *
- * This is only a fallback before provider enrichment. Apify remains the source
- * of truth for the normalized employment history because Linked Helper only
- * populated these fields for a small part of the inspected export.
+ * A quick summary of the current role. The full employment history comes from
+ * the numbered career columns, which the profile mapper reads.
  */
 export interface ImportedCurrentEmployment {
   companyName: string;

@@ -70,9 +70,7 @@ export function mapLinkedHelperCsvProfile(
     ...(summary.lastName ? { lastName: summary.lastName } : {}),
     ...(summary.headline ? { headline: summary.headline } : {}),
     ...(about ? { about } : {}),
-    ...(summary.avatarUrl
-      ? { photo: summary.avatarUrl, photoSource: 'linkedHelper' as const }
-      : {}),
+    ...(summary.avatarUrl ? { photo: summary.avatarUrl } : {}),
     openToWork: summary.openToWork,
     ...(summary.location ? { location: parseBrazilLocation(summary.location) } : {}),
     experience: mapExperience(raw),

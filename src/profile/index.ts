@@ -8,7 +8,7 @@ export type {
   ProfileEducation,
   ProfileExperience,
   ProfileLocation,
-} from './apify_profile.js';
+} from './profile.js';
 
 export { attachLinkedHelperPublicId } from './full_profile.js';
 export type { FullProfile } from './full_profile.js';

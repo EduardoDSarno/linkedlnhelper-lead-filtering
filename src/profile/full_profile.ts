@@ -1,10 +1,9 @@
-import type { Profile } from './apify_profile.js';
+import type { Profile } from './profile.js';
 
 /**
  * Complete application-facing profile.
  *
- * The normalized Apify profile remains the source of identity, employment,
- * education, and the original photo URL. The photo itself is read at
+ * Built from one Linked Helper CSV row. The photo itself is read at
  * evaluation time and sent to the model, so no assessment is stored here.
  */
 export interface FullProfile extends Profile {

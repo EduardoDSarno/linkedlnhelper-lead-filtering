@@ -65,9 +65,9 @@ interface ModelEvaluationProgress {
  * silently dropped it from an otherwise-usable reply — is pooled with every
  * other unscored profile from this run and re-requested exactly once, in new
  * groups of the same request size (the last one smaller if the remainder does
- * not fill it). Already-scored siblings are never re-sent. This mirrors the
- * Apify collector's pool-and-rebatch retry, but bounded to a single follow-up
- * round rather than looping: a schema-shaped omission is a content problem,
+ * not fill it). Already-scored siblings are never re-sent. The retry is
+ * bounded to a single follow-up round rather than looping: a schema-shaped
+ * omission is a content problem,
  * not a transient one, so repeated rounds would mostly re-spend tokens.
  */
 export async function evaluateProfilesWithModel(

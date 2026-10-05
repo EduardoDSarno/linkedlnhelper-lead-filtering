@@ -52,7 +52,7 @@ test('maps identity, About, photo and location from a Linked Helper row', () => 
   assert.equal(profile.linkedHelperPublicId, 'test-person-001');
   assert.equal(profile.linkedinUrl, 'https://www.linkedin.com/in/test-person-001');
   assert.equal(profile.about, 'Runs regional logistics operations.');
-  assert.equal(profile.photoSource, 'linkedHelper');
+  assert.equal(profile.photo, 'https://example.invalid/photos/test-person-001.jpg');
   assert.equal(profile.openToWork, true);
   assert.deepEqual(profile.location, {
     text: 'Campo Grande, Mato Grosso do Sul, Brasil',

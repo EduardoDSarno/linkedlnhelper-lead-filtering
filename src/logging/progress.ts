@@ -1,6 +1,5 @@
 /** Pipeline stages that emit live N-of-total progress in the terminal. */
 export const PIPELINE_STAGE = {
-  apify: 'apify',
   images: 'images',
   eval: 'eval',
 } as const;
@@ -18,12 +17,6 @@ export const EVALUATION_PASS = {
  * complete lines stay unchanged so older log searches still match.
  */
 export const PIPELINE_PROGRESS_MESSAGE = {
-  apifyStarted: 'Starting Apify collection.',
-  apifyBatchStarted: 'Starting Apify collection batch.',
-  apifyBatchCompleted: 'Completed Apify collection batch.',
-  apifyBatchFailed: 'Apify collection batch failed.',
-  apifyRoundProgress: 'Apify collection progress.',
-  apifyProfileFailed: 'Apify profile collection failed.',
   photoLoadStarted: 'Starting profile photo download.',
   photoLoadProgress: 'Profile photo download progress.',
   photoLoadCompleted: 'Completed profile photo download.',

@@ -20,11 +20,7 @@ const LOG_PATH = process.env['LOG_PATH']?.trim() || 'output/pipeline.log';
  * Import only:
  *   npm start -- "test_data/profiles.csv"
  *
- * Complete Apify + image-analysis pipeline:
- *   npm run collect -- "test_data/profiles.csv"
- *   npm run collect:apify -- "test_data/profiles.csv"
- *
- * Complete collection + evaluation pipeline:
+ * Import and evaluation:
  *   npm run review -- "test_data/profiles.csv" "criteria.json"
  */
 export async function main(): Promise<void> {

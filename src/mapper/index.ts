@@ -1,2 +1,1 @@
-export { mapApifyProfile } from './apify_profile_mapper.js';
-
+export { mapLinkedHelperCsvProfile } from './linked_helper_csv_profile_mapper.js';

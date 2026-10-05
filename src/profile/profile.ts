@@ -1,7 +1,7 @@
 /**
  * A date with only the precision LinkedIn provides.
  *
- * `year` may be absent when the provider only returns text such as "Present".
+ * `year` may be absent when only text is available.
  * `month`, when available, is normalized to a number from 1 through 12.
  */
 export interface ProfileDate {
@@ -49,10 +49,9 @@ export interface ProfileEducation {
 }
 
 /**
- * The minimal application-facing representation of one Apify profile.
+ * The minimal application-facing representation of one LinkedIn profile.
  *
- * `fullName` is derived from `firstName` and `lastName`. Current employment is
- * derived from the experience whose `endDate.text` is "Present".
+ * Current employment is the experience with no end date.
  */
 export interface Profile {
   /** Application-owned UUID or ordinary random database ID. */
@@ -67,18 +66,8 @@ export interface Profile {
   headline?: string;
   /** The profile's own About section. */
   about?: string;
+  /** Signed LinkedIn photo URL from the export; it expires some weeks later. */
   photo?: string;
-  /**
-   * Where {@link photo} came from.
-   *
-   * "provider" means the scraper saw it on the live profile. "linkedHelper"
-   * means the scraper reported none and the URL came from the Linked Helper
-   * export instead — which sees the profile as the operator's own logged-in
-   * account, so it catches photos restricted to members or connections that a
-   * scraper cannot see. Those two cases are not equally certain, so anything
-   * gating on a photo needs to be able to tell them apart.
-   */
-  photoSource?: 'provider' | 'linkedHelper';
   openToWork?: boolean;
 
   location?: ProfileLocation;
@@ -87,8 +76,8 @@ export interface Profile {
   education: ProfileEducation[];
 
   /**
-   * Complete untouched Apify object for this profile. Fields omitted from the
-   * normalized model remain available here.
+   * The untouched source row for this profile. Columns the model omits stay
+   * available here.
    */
   raw: unknown;
 }
