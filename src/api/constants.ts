@@ -37,6 +37,14 @@ export const ACCESS_PASSWORD_ENVIRONMENT_KEY = 'ACCESS_PASSWORD';
 /** Challenge that makes the browser show its own login prompt. */
 export const ACCESS_CHALLENGE = 'Basic realm="Leadscan", charset="UTF-8"';
 
+/**
+ * Upload error for a CSV without the career columns, shown to the operator.
+ *
+ * Written in Portuguese because the upload screen shows it verbatim.
+ */
+export const CSV_WITHOUT_CAREER_MESSAGE =
+  'Este CSV não tem o histórico profissional. Exporte a campanha no Linked Helper como "Perfis baixados" e envie de novo.';
+
 /** Built web app the API serves, relative to the repository root. */
 export const WEB_APP_DIRECTORY = 'web/dist';
 
@@ -53,7 +61,6 @@ export const API_FIELD = {
   decision: 'decision',
   reason: 'reason',
   name: 'name',
-  skipCollection: 'skipCollection',
   thinkingEffort: 'thinkingEffort',
 } as const;
 

@@ -6,7 +6,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 
-import { API_ROUTES, CSV_CONTENT_TYPE, HTTP_STATUS } from '../constants.js';
+import {
+  API_ROUTES,
+  CSV_CONTENT_TYPE,
+  CSV_WITHOUT_CAREER_MESSAGE,
+  HTTP_STATUS,
+} from '../constants.js';
 import { buildServer } from '../index.js';
 import {
   dbGetProcessingRunById,
@@ -137,7 +142,7 @@ test('POST /import stores the CSV and queues a processing run', async () => {
 
   const app = await buildServer();
   const csv = Buffer.from(
-    '﻿public_id;full_name\r\nabc;Ada Lovelace\r\n',
+    '﻿public_id;full_name;organization_title_1;education_1\r\nabc;Ada Lovelace;CTO;Cambridge\r\n',
     'utf-8',
   );
 
@@ -483,5 +488,28 @@ test('ACCESS_PASSWORD gates every route behind Basic authentication', async () =
     await rm(databasePath, { force: true });
     delete process.env['DATABASE_PATH'];
     delete process.env['ACCESS_PASSWORD'];
+  }
+});
+
+test('POST /import refuses an export without career columns', async () => {
+  const databasePath = join(tmpdir(), `api-test-${randomUUID()}.sqlite`);
+  process.env['DATABASE_PATH'] = databasePath;
+
+  try {
+    const app = await buildServer();
+    const response = await app.inject({
+      method: 'POST',
+      url: API_ROUTES.import,
+      headers: { 'content-type': CSV_CONTENT_TYPE },
+      payload: Buffer.from('﻿public_id;full_name\r\nabc;Ada Lovelace\r\n', 'utf-8'),
+    });
+
+    assert.equal(response.statusCode, HTTP_STATUS.badRequest);
+    assert.equal((response.json() as { error: string }).error, CSV_WITHOUT_CAREER_MESSAGE);
+    const runs = await app.inject({ method: 'GET', url: API_ROUTES.runs });
+    assert.deepEqual((runs.json() as { runs: unknown[] }).runs, []);
+  } finally {
+    await rm(databasePath, { force: true });
+    delete process.env['DATABASE_PATH'];
   }
 });

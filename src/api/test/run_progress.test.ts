@@ -22,37 +22,6 @@ function recordingLogger(): Logger & { lines: string[] } {
   );
 }
 
-test('advances collection on every batch, not once per round', () => {
-  // A round only reports after all of its batches have settled, which on a
-  // run with no retries is a single report at the very end — the bar would
-  // sit at zero for the whole stage and then jump.
-  const runId = 'run-collect';
-  const logger = progressReportingLogger(runId, recordingLogger());
-
-  logger.info({ requestedProfiles: 600 }, PIPELINE_PROGRESS_MESSAGE.apifyStarted);
-  assert.deepEqual(runProgress(runId), {
-    stage: 'collecting',
-    completed: 0,
-    total: 600,
-    overall: 0,
-  });
-
-  logger.info(
-    { completed: 3, total: 12, runRequestedProfiles: 600 },
-    PIPELINE_PROGRESS_MESSAGE.apifyBatchCompleted,
-  );
-  const quarter = runProgress(runId);
-  assert.equal(quarter?.completed, 150);
-  assert.equal(quarter?.total, 600);
-
-  logger.info(
-    { completed: 6, total: 12, runRequestedProfiles: 600 },
-    PIPELINE_PROGRESS_MESSAGE.apifyBatchCompleted,
-  );
-  assert.equal(runProgress(runId)?.completed, 300);
-  clearRunProgress(runId);
-});
-
 test('advances photo loading as each download lands', () => {
   const runId = 'run-photos';
   const logger = progressReportingLogger(runId, recordingLogger());
@@ -89,13 +58,6 @@ test('keeps one overall position that only ever moves forward', () => {
   const seen: number[] = [];
   const record = () => seen.push(runProgress(runId)?.overall ?? 0);
 
-  logger.info({ requestedProfiles: 10 }, PIPELINE_PROGRESS_MESSAGE.apifyStarted);
-  record();
-  logger.info(
-    { completed: 1, total: 2, runRequestedProfiles: 10 },
-    PIPELINE_PROGRESS_MESSAGE.apifyBatchCompleted,
-  );
-  record();
   logger.info({ photos: 8 }, PIPELINE_PROGRESS_MESSAGE.photoLoadStarted);
   record();
   logger.info({ completed: 8, total: 8 }, PIPELINE_PROGRESS_MESSAGE.photoLoadProgress);
@@ -112,7 +74,7 @@ test('keeps one overall position that only ever moves forward', () => {
   );
   assert.equal(seen[seen.length - 1], 1, 'a finished run reaches the end of the bar');
   assert.equal(runProgress(runId)?.stage, 'evaluating');
-  assert.equal(base.lines.length, 6, 'every line must reach the real logger');
+  assert.equal(base.lines.length, 4, 'every line must reach the real logger');
   clearRunProgress(runId);
 });
 
@@ -124,11 +86,8 @@ test('ignores a late line from a stage that already finished', () => {
   logger.info({ scoredProfiles: 10, failedProfiles: 0 }, PIPELINE_PROGRESS_MESSAGE.evalGroupCompleted);
   const finished = runProgress(runId)?.overall;
 
-  // A collection line arriving after evaluation finished must not rewind.
-  logger.info(
-    { completed: 1, total: 9, runRequestedProfiles: 10 },
-    PIPELINE_PROGRESS_MESSAGE.apifyBatchCompleted,
-  );
+  // A photo line arriving after evaluation finished must not rewind.
+  logger.info({ completed: 1, total: 9 }, PIPELINE_PROGRESS_MESSAGE.photoLoadProgress);
 
   assert.equal(runProgress(runId)?.overall, finished);
   assert.equal(runProgress(runId)?.stage, 'evaluating');
@@ -195,7 +154,7 @@ test('marks the follow-up round without rewinding or double counting', () => {
 test('forgets a run once it is cleared', () => {
   const runId = 'run-cleared';
   const logger = progressReportingLogger(runId, recordingLogger());
-  logger.info({ requestedProfiles: 5 }, PIPELINE_PROGRESS_MESSAGE.apifyStarted);
+  logger.info({ requestedProfiles: 5 }, PIPELINE_PROGRESS_MESSAGE.evalStarted);
 
   clearRunProgress(runId);
 

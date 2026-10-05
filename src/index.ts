@@ -9,7 +9,6 @@ import { APPLICATION_MODE, parseCliArguments } from './cli/arguments.js';
 import { loadFullEvaluationCriteria } from './evaluation/index.js';
 import { errorMessage } from './helpers/index.js';
 import { createFileLogger } from './logging/index.js';
-import { runFullProfilePipeline } from './pipeline/index.js';
 import { processingPaths } from './dataCollector/processing/processing.js';
 
 // Resolved at startup, after dotenv has loaded; blank means absent.
@@ -55,11 +54,6 @@ export async function main(): Promise<void> {
         { originalPath, profilesImported: importedData.total_profiles },
         'Completed CSV-only import.',
       );
-      return;
-    }
-
-    if (applicationArguments.mode === APPLICATION_MODE.collectProfiles) {
-      await runFullProfilePipeline(importedData, logger);
       return;
     }
 

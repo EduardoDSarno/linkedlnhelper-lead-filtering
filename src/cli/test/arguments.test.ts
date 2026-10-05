@@ -7,18 +7,11 @@ import {
   parseApplicationArguments,
 } from '../arguments.js';
 
-test('parses import, collection, and review invocations independently', () => {
+test('parses import and review invocations independently', () => {
   assert.deepEqual(parseApplicationArguments(['profiles.csv']), {
     mode: APPLICATION_MODE.importCsv,
     csvPath: 'profiles.csv',
   });
-  assert.deepEqual(
-    parseApplicationArguments(['--collect', 'profiles.csv']),
-    {
-      mode: APPLICATION_MODE.collectProfiles,
-      csvPath: 'profiles.csv',
-    },
-  );
   assert.deepEqual(
     parseApplicationArguments([
       '--review',
@@ -33,23 +26,14 @@ test('parses import, collection, and review invocations independently', () => {
   );
 });
 
-test('keeps the Apify collection alias compatible', () => {
-  assert.deepEqual(
-    parseApplicationArguments(['--collect-apify', 'profiles.csv']),
-    {
-      mode: APPLICATION_MODE.collectProfiles,
-      csvPath: 'profiles.csv',
-    },
-  );
-});
-
 test('rejects missing, extra, conflicting, and unknown arguments', () => {
   const invalidArguments = [
     [],
     ['profiles.csv', 'unexpected.json'],
     ['--review', 'profiles.csv'],
     ['--review', 'profiles.csv', 'criteria.json', 'unexpected.json'],
-    ['--review', '--collect', 'profiles.csv', 'criteria.json'],
+    ['--review', '--review', 'profiles.csv', 'criteria.json'],
+    ['--collect', 'profiles.csv'],
     ['--unknown', 'profiles.csv'],
   ];
 

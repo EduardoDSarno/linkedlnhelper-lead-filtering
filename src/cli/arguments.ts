@@ -4,33 +4,23 @@ import type { Logger } from '../logging/index.js';
 /** Supported execution modes exposed by the current terminal entry point. */
 export const APPLICATION_MODE = {
   importCsv: 'import_csv',
-  collectProfiles: 'collect_profiles',
   reviewProfiles: 'review_profiles',
 } as const;
 
 /** Command flags selecting work beyond a CSV-only import. */
 const APPLICATION_MODE_FLAG = {
-  collect: '--collect',
-  collectApify: '--collect-apify',
   review: '--review',
 } as const;
 
 /** Human-readable invocation examples reported for invalid arguments. */
 const APPLICATION_USAGE = {
   importCsv: 'npm start -- <path-to-csv>',
-  collectProfiles: 'npm run collect -- <path-to-csv>',
   reviewProfiles: 'npm run review -- <path-to-csv> <path-to-criteria-json>',
 } as const;
 
 /** Parsed arguments for a CSV-only import. */
 interface CsvImportArguments {
   mode: typeof APPLICATION_MODE.importCsv;
-  csvPath: string;
-}
-
-/** Parsed arguments for provider collection without profile evaluation. */
-interface ProfileCollectionArguments {
-  mode: typeof APPLICATION_MODE.collectProfiles;
   csvPath: string;
 }
 
@@ -44,7 +34,6 @@ interface ReviewInputArguments {
 /** Every valid argument shape accepted by the application. */
 type ApplicationArguments =
   | CsvImportArguments
-  | ProfileCollectionArguments
   | ReviewInputArguments;
 
 /** Identifies a command line that cannot safely select one application flow. */
@@ -69,19 +58,13 @@ function applicationMode(
 ): ApplicationArguments['mode'] {
   if (modeFlags.length > 1) {
     throw new ApplicationArgumentsError(
-      'Choose only one collection or review mode.',
+      'Choose only one review mode.',
     );
   }
 
   const flag = modeFlags[0];
   if (flag === APPLICATION_MODE_FLAG.review) {
     return APPLICATION_MODE.reviewProfiles;
-  }
-  if (
-    flag === APPLICATION_MODE_FLAG.collect ||
-    flag === APPLICATION_MODE_FLAG.collectApify
-  ) {
-    return APPLICATION_MODE.collectProfiles;
   }
   return APPLICATION_MODE.importCsv;
 }
@@ -117,12 +100,8 @@ export function parseApplicationArguments(
 
   const [csvPath, ...unexpected] = positionalArguments;
   if (!csvPath || unexpected.length > 0) {
-    const usage =
-      mode === APPLICATION_MODE.collectProfiles
-        ? APPLICATION_USAGE.collectProfiles
-        : APPLICATION_USAGE.importCsv;
     throw new ApplicationArgumentsError(
-      `This mode requires exactly one CSV path: ${usage}.`,
+      `This mode requires exactly one CSV path: ${APPLICATION_USAGE.importCsv}.`,
     );
   }
 

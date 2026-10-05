@@ -31,7 +31,7 @@ export async function writeReviewArtifacts(
   const approvedPublicIds = collectApprovedPublicIds(result.evaluationRun);
   await writeApprovedCsv(raw, approvedPublicIds, paths.approved);
   await writeEvaluationReport(
-    result.profilePipeline.profiles,
+    result.profiles,
     result.evaluationRun,
     paths.report,
   );

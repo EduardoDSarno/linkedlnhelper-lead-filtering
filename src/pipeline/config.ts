@@ -1,6 +1,5 @@
 import { randomUUID } from 'node:crypto';
 
-import { resolveProfileCollector } from '../dataCollector/apify_profile_collector/index.js';
 import {
   dbInsertEvaluationRun,
   dbInsertProfile,
@@ -9,14 +8,12 @@ import {
 import {
   CONFIG_NUMBER_MINIMUMS,
   resolveConfigNumber,
-  writeJsonAtomically,
 } from '../helpers/index.js';
+import type { ReviewPipelineDependencies } from './types.js';
 
-/** Environment variables understood by the full-profile pipeline. */
+/** Environment variables understood by the review pipeline. */
 export const PIPELINE_ENVIRONMENT_KEYS = {
   maximumProfiles: 'MAX_PIPELINE_PROFILES',
-  imageConcurrency: 'IMAGE_ANALYSIS_CONCURRENCY',
-  imageResolution: 'IMAGE_ANALYSIS_RESOLUTION',
 } as const;
 
 /** Default upper bound for profiles accepted by one pipeline run. */
@@ -41,15 +38,6 @@ export function maxPipelineProfilesFromEnvironment(
   );
 }
 
-/** Default artifact destinations for a completed pipeline run. */
-export const DEFAULT_PIPELINE_OUTPUT_PATHS = {
-  rawApifyProfiles: 'output/apify-profiles.json',
-  apifyProfileFailures: 'output/apify-profile-failures.json',
-  fullProfiles: 'output/full-profiles.json',
-  summary: 'output/pipeline-summary.json',
-} as const;
-
-
 /** Returns the current wall-clock time through the production clock boundary. */
 function currentPipelineTime(): Date {
   return new Date();
@@ -60,25 +48,10 @@ function createReviewRunId(): string {
   return randomUUID();
 }
 
-/**
- * Production implementations for every external boundary used by the pipeline.
- *
- * The collector is chosen from the environment at module load, after
- * `dotenv/config` has run in every entry point, so one deployment can switch
- * Actors without a code change.
- */
-export const DEFAULT_PIPELINE_DEPENDENCIES = {
-  collectProfiles: resolveProfileCollector(),
-  writeJson: writeJsonAtomically,
+/** Production boundaries used by the complete CSV-to-evaluation workflow. */
+export const DEFAULT_REVIEW_PIPELINE_DEPENDENCIES: ReviewPipelineDependencies = {
   openDatabase,
   insertProfile: dbInsertProfile,
-  now: currentPipelineTime,
-};
-
-/** Production boundaries used by the complete CSV-to-evaluation workflow. */
-export const DEFAULT_REVIEW_PIPELINE_DEPENDENCIES = {
-  profilePipeline: DEFAULT_PIPELINE_DEPENDENCIES,
-  openDatabase,
   insertEvaluationRun: dbInsertEvaluationRun,
   createRunId: createReviewRunId,
   now: currentPipelineTime,

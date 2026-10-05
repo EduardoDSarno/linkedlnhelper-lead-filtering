@@ -25,11 +25,13 @@ import { MANUAL_DECISION, PROCESSING_STATUS } from '../database/types.js';
 import type { ManualOverride } from '../database/types.js';
 import { finalizeRun } from '../dataCollector/processing/finalize.js';
 import { loadProfilesFromCsv } from '../dataCollector/csv/csvdata.js';
+import { hasCareerColumns } from '../mapper/linked_helper_csv_profile_mapper.js';
 import {
     API_ROUTES,
     ARTIFACT_TYPE,
     CSV_CONTENT_TYPE,
     CSV_UPLOAD_BODY_LIMIT_BYTES,
+    CSV_WITHOUT_CAREER_MESSAGE,
     HTTP_STATUS,
     PARSE_AS_BUFFER,
     API_FIELD,
@@ -530,11 +532,6 @@ function registerFilterRoute(server: FastifyInstance)
             db.close();
         }
 
-        const skipCollection = body[API_FIELD.skipCollection];
-        if (skipCollection !== undefined && typeof skipCollection !== 'boolean') {
-            return reply.status(HTTP_STATUS.badRequest).send({ error: 'Invalid skipCollection' });
-        }
-
         let thinkingEffort: ThinkingEffort;
         try {
             thinkingEffort = parseThinkingEffortFromBody(body[API_FIELD.thinkingEffort]);
@@ -571,10 +568,7 @@ function registerFilterRoute(server: FastifyInstance)
             validCriteria,
             progressReportingLogger(processingId, request.log as Logger),
             name,
-            {
-                skipCollection: skipCollection === true,
-                modelEvaluation: { thinkingEffort },
-            },
+            { modelEvaluation: { thinkingEffort } },
         )
         .finally(() => clearRunProgress(processingId))
         .catch((error) =>
@@ -615,6 +609,15 @@ function registerImportRoute(server: FastifyInstance)
         {
             request.log.error({ err: error }, 'Uploaded CSV could not be parsed');
             return reply.status(HTTP_STATUS.badRequest).send({ error: 'Could not parse the uploaded CSV' });
+        }
+
+        // Every row shares the header, so the first one tells the career export
+        // apart from the lighter one before a run is queued for it.
+        const firstRow = Object.values(imported.records)[0]?.raw;
+        if (firstRow && !hasCareerColumns(firstRow))
+        {
+            await rm(processingPaths(id).dir, { recursive: true, force: true });
+            return reply.status(HTTP_STATUS.badRequest).send({ error: CSV_WITHOUT_CAREER_MESSAGE });
         }
 
         const db = openDatabase();
@@ -833,7 +836,7 @@ function registerDeleteRunRoute(server: FastifyInstance)
 /**
  * Loads the review pipeline only when a run starts.
  *
- * app.ts pulls Apify and the model SDKs. Importing it at startup left listen()
+ * app.ts pulls the model SDK. Importing it at startup left listen()
  * unreachable, so the API process never bound a port.
  */
 async function startReviewPipeline(
@@ -843,7 +846,6 @@ async function startReviewPipeline(
     logger: Logger,
     name: string | undefined,
     options: {
-        skipCollection: boolean;
         modelEvaluation: { thinkingEffort: ThinkingEffort };
     },
 ): Promise<void> {

@@ -22,8 +22,11 @@ export async function importCsv(file: File): Promise<ImportResult>
     });
 
     if (!response.ok) {
-        throw new Error(`Request failed: ${response.status}`);
-      }
+        // The server explains a refused file, such as an export without the
+        // career columns; that reason is what the operator needs to see.
+        const body = (await response.json().catch(() => ({}))) as { error?: string };
+        throw new Error(body.error ?? `Request failed: ${response.status}`);
+    }
 
     const data = (await response.json()) as ImportResult;
     return data;

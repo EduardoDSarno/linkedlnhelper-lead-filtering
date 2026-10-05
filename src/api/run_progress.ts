@@ -4,7 +4,6 @@ import { asRecord } from '../helpers/index.js';
 
 /** The stage a run is currently working through. */
 const RUN_PROGRESS_STAGE = {
-  collecting: 'collecting',
   loadingPhotos: 'loading_photos',
   evaluating: 'evaluating',
 } as const;
@@ -15,15 +14,13 @@ type RunProgressStage =
 /**
  * Where each stage sits on one continuous 0-1 bar.
  *
- * Split by how long each stage actually takes rather than evenly: on a
- * 604-profile run, collection and photo downloads together took under half
- * the time evaluation did, so an even three-way split would crawl through
- * evaluation and race through the rest.
+ * Split by how long each stage actually takes rather than evenly: photo
+ * downloads are a small fraction of the time evaluation takes, so an even
+ * split would race through photos and then crawl through evaluation.
  */
 const STAGE_SPAN: Record<RunProgressStage, { from: number; to: number }> = {
-  [RUN_PROGRESS_STAGE.collecting]: { from: 0, to: 0.3 },
-  [RUN_PROGRESS_STAGE.loadingPhotos]: { from: 0.3, to: 0.45 },
-  [RUN_PROGRESS_STAGE.evaluating]: { from: 0.45, to: 1 },
+  [RUN_PROGRESS_STAGE.loadingPhotos]: { from: 0, to: 0.2 },
+  [RUN_PROGRESS_STAGE.evaluating]: { from: 0.2, to: 1 },
 };
 
 /** How far one run has got, as the status route reports it. */
@@ -140,35 +137,6 @@ function progressFromLog(
   current: RunProgress | undefined,
 ): RunProgress | undefined {
   switch (message) {
-    case PIPELINE_PROGRESS_MESSAGE.apifyStarted:
-      return progressAt(
-        RUN_PROGRESS_STAGE.collecting,
-        0,
-        count(payload, 'requestedProfiles') ?? 0,
-      );
-
-    // Batch completions, not round completions: a round only reports once
-    // every batch in it has already settled, which on a run with no retries
-    // means a single report at the very end. Batches report as they land.
-    case PIPELINE_PROGRESS_MESSAGE.apifyBatchCompleted: {
-      const batchesDone = count(payload, 'completed') ?? 0;
-      const batchesTotal = count(payload, 'total') ?? 0;
-      const profilesTotal =
-        count(payload, 'runRequestedProfiles') ?? current?.total ?? 0;
-      const profilesDone =
-        batchesTotal > 0
-          ? Math.min(
-              profilesTotal,
-              Math.round((batchesDone / batchesTotal) * profilesTotal),
-            )
-          : 0;
-      return progressAt(
-        RUN_PROGRESS_STAGE.collecting,
-        profilesDone,
-        profilesTotal,
-      );
-    }
-
     case PIPELINE_PROGRESS_MESSAGE.photoLoadStarted:
       return progressAt(
         RUN_PROGRESS_STAGE.loadingPhotos,
@@ -225,7 +193,7 @@ function progressFromLog(
 /**
  * Wraps a logger so progress lines update this run's status on their way past.
  *
- * Watching the logger keeps the collector, photo loader and evaluator unaware
+ * Watching the logger keeps the photo loader and evaluator unaware
  * of progress reporting: they already log these counts, and every line is
  * forwarded unchanged to the real logger.
  */

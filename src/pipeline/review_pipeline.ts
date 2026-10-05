@@ -5,20 +5,13 @@ import {
   evaluateProfiles,
 } from '../evaluation/index.js';
 import type { Logger } from '../logging/index.js';
-import type { FullProfile } from '../profile/index.js';
-import {
-  buildCachedProfilePipelineResult,
-  readCachedProfilesFile,
-  resolveCachedProfilesForImport,
-} from './cached_profiles.js';
 import { DEFAULT_REVIEW_PIPELINE_DEPENDENCIES } from './config.js';
-import { runFullProfilePipelineWithDependencies } from './full_profile_pipeline.js';
+import { importCsvProfiles } from './csv_profiles.js';
 import {
   logBroadFilterDecisions,
   logModelDecisions,
 } from './profile_decision_logging.js';
 import type {
-  FullProfilePipelineResult,
   ReviewPipelineDependencies,
   ReviewPipelineOptions,
   ReviewPipelineResult,
@@ -41,8 +34,8 @@ export async function runReviewPipeline(
 }
 
 /**
- * Connects acquisition and evaluation while keeping their implementations
- * independent and their paid boundaries replaceable in deterministic tests.
+ * Connects the CSV import and evaluation while keeping the paid model call
+ * and the database replaceable in deterministic tests.
  */
 export async function runReviewPipelineWithDependencies(
   importedData: ImportedCsvData,
@@ -52,24 +45,12 @@ export async function runReviewPipelineWithDependencies(
   options: ReviewPipelineOptions = {},
 ): Promise<ReviewPipelineResult> {
   logger.info(
-    {
-      importedProfiles: importedData.total_profiles,
-      skipCollection: options.skipCollection === true,
-    },
+    { importedProfiles: importedData.total_profiles },
     'Starting profile review pipeline.',
   );
 
-  const profilePipeline = await acquireProfilesForReview(
-    importedData,
-    criteria,
-    logger,
-    dependencies,
-    options,
-  );
-  const context = createEvaluationBatchContext(
-    profilePipeline.profiles,
-    criteria,
-  );
+  const { profiles } = importCsvProfiles(importedData, logger, dependencies);
+  const context = createEvaluationBatchContext(profiles, criteria);
   const evaluation = await evaluateProfiles(
     context,
     { ...options.modelEvaluation, logger },
@@ -85,13 +66,13 @@ export async function runReviewPipelineWithDependencies(
   };
   logBroadFilterDecisions(
     logger,
-    profilePipeline.profiles,
+    profiles,
     evaluationRun.id,
     evaluation,
   );
   logModelDecisions(
     logger,
-    profilePipeline.profiles,
+    profiles,
     evaluationRun.id,
     evaluation,
   );
@@ -127,76 +108,5 @@ export async function runReviewPipelineWithDependencies(
     'Completed profile review pipeline.',
   );
 
-  return { profilePipeline, evaluationRun };
-}
-
-/**
- * Returns full profiles from a fresh collection or from the cached artifact.
- *
- * Collection stays the default path. The cached path exists so an operator can
- * re-score already-enriched people without paying Apify or the image model.
- */
-async function acquireProfilesForReview(
-  importedData: ImportedCsvData,
-  criteria: FullEvaluationCriteria,
-  logger: Logger,
-  dependencies: ReviewPipelineDependencies,
-  options: ReviewPipelineOptions,
-): Promise<FullProfilePipelineResult> {
-  if (options.skipCollection !== true) {
-    return runFullProfilePipelineWithDependencies(
-      importedData,
-      logger,
-      dependencies.profilePipeline,
-      {
-        ...options.profilePipeline,
-        // Photo analysis is opt-in: an unset criterion defaults to skipping it,
-        // so a caller must explicitly ask for the slower, costlier photo signal.
-        skipImageAnalysis: criteria.skipImageAnalysis ?? true,
-      },
-    );
-  }
-
-  const cachedProfiles = await resolveCachedProfilesForImport(importedData, {
-    ...(options.cachedProfiles ? { cachedProfiles: options.cachedProfiles } : {}),
-    ...(options.cachedProfilesPath
-      ? { cachedProfilesPath: options.cachedProfilesPath }
-      : {}),
-    readCachedProfiles:
-      dependencies.readCachedProfiles ?? readCachedProfilesFile,
-  });
-  const profiles = persistCachedProfiles(
-    cachedProfiles,
-    dependencies.profilePipeline,
-  );
-
-  logger.info(
-    {
-      cachedProfiles: profiles.length,
-    },
-    'Loaded cached full profiles for review.',
-  );
-
-  return buildCachedProfilePipelineResult(profiles, dependencies.now());
-}
-
-/**
- * Upserts cached profiles so the review list can load them by LinkedIn identity.
- *
- * A new processing run still needs rows in the profile table even when Apify
- * was skipped; the insert restores the stable database id on each profile.
- */
-function persistCachedProfiles(
-  profiles: readonly FullProfile[],
-  profilePipeline: ReviewPipelineDependencies['profilePipeline'],
-): FullProfile[] {
-  const db = profilePipeline.openDatabase();
-
-  try {
-    return profiles.map((profile) =>
-      profilePipeline.insertProfile(profile, db),
-    );
-  } finally {
-    db.close();
-  }
+  return { profiles, evaluationRun };
 }

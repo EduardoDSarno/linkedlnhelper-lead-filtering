@@ -1,19 +1,11 @@
-import type {
-  ApifyCollectionResult,
-  RawApifyProfile,
-} from '../dataCollector/apify_profile_collector/index.js';
 import type { ImportedCsvData } from '../dataCollector/csv/csvdata.js';
-import type {
-} from '../imageExtractor/index.js';
 import type { Logger } from '../logging/index.js';
 import type { ImportedCsvProfile } from '../profile/index.js';
 
 /**
  * Fake boundaries for full-pipeline tests.
  *
- * Every fake records what it was asked to do, so a test can assert on the calls
- * as well as the result. Nothing here reaches a network, a real clock, or the
- * filesystem.
+ * Nothing here reaches a network or the filesystem.
  */
 
 /** A logger that discards output but keeps counts for assertions. */
@@ -43,13 +35,24 @@ export function recordingLogger(): RecordingLogger {
   return logger as unknown as RecordingLogger;
 }
 
-/** Builds imported CSV data from LinkedIn URLs alone. */
+/** One imported person: their LinkedIn URL and, optionally, a photo. */
+export interface ImportedPersonFixture {
+  profileUrl: string;
+  avatarUrl?: string;
+}
+
+/**
+ * Builds imported CSV data shaped like the "Perfis baixados" export.
+ *
+ * Each row carries one job and one school, so the import accepts it as a
+ * career export and the evaluation has something to read.
+ */
 export function importedCsvDataFor(
-  profileUrls: readonly string[],
+  people: readonly ImportedPersonFixture[],
 ): ImportedCsvData {
   const records: Record<string, ImportedCsvProfile> = {};
 
-  for (const [index, profileUrl] of profileUrls.entries()) {
+  for (const [index, { profileUrl, avatarUrl }] of people.entries()) {
     const publicId = `imported-${index}`;
     records[publicId] = {
       summary: {
@@ -57,88 +60,29 @@ export function importedCsvDataFor(
         profileUrl,
         linkedHelperId: `lh-${index}`,
         fullName: `Imported Person ${index}`,
+        firstName: `Person ${index}`,
+        ...(avatarUrl ? { avatarUrl } : {}),
         openToWork: false,
         hiring: false,
         premium: false,
         influencer: false,
       },
-      raw: { public_id: publicId, profile_url: profileUrl },
+      raw: {
+        public_id: publicId,
+        profile_url: profileUrl,
+        organization_1: 'Example Company',
+        organization_title_1: 'Account Executive',
+        organization_start_1: '2022.01',
+        education_1: 'Example University',
+        education_degree_1: 'Bachelor',
+      },
     };
   }
 
   return {
-    total_rows: profileUrls.length,
-    total_profiles: profileUrls.length,
+    total_rows: people.length,
+    total_profiles: people.length,
     duplicated_profiles: 0,
     records,
   };
 }
-
-/** Builds a collection result with the supplied records and failures. */
-export function apifyCollectionResult(
-  profiles: readonly RawApifyProfile[],
-  failures: ApifyCollectionResult['failures'] = [],
-  statsOverrides: Partial<ApifyCollectionResult['stats']> = {},
-): ApifyCollectionResult {
-  return {
-    profiles: [...profiles],
-    failures: [...failures],
-    stats: {
-      requestedProfiles: profiles.length + failures.length,
-      collectedProfiles: profiles.length,
-      failedProfiles: failures.length,
-      permanentFailures: failures.length,
-      exhaustedTransientFailures: 0,
-      retriedProfiles: 0,
-      totalProfileAttempts: profiles.length + failures.length,
-      roundsCompleted: 1,
-      retryRounds: 0,
-      actorRuns: 1,
-      batchSize: 10,
-      batchConcurrency: 10,
-      unexpectedProviderRecords: 0,
-      ...statsOverrides,
-    },
-  };
-}
-
-/** Records every artifact a run writes, in the order it wrote them. */
-export interface RecordingWriter {
-  writeJson: (path: string, value: unknown) => Promise<void>;
-  writes: { path: string; value: unknown }[];
-  paths: () => string[];
-  valueAt: (path: string) => unknown;
-}
-
-/** Builds a writer that keeps artifacts in memory instead of on disk. */
-export function recordingWriter(
-  failOn?: { path: string; error: Error },
-): RecordingWriter {
-  const writes: RecordingWriter['writes'] = [];
-
-  return {
-    writes,
-    writeJson: async (path, value) => {
-      if (failOn && path === failOn.path) throw failOn.error;
-      writes.push({ path, value });
-    },
-    paths: () => writes.map((write) => write.path),
-    valueAt: (path) =>
-      writes.find((write) => write.path === path)?.value,
-  };
-}
-
-/** Builds a clock that advances a fixed amount on every reading. */
-export function steppingClock(
-  startIso = '2026-01-01T00:00:00.000Z',
-  stepMs = 1_000,
-): () => Date {
-  let current = new Date(startIso).getTime();
-
-  return () => {
-    const reading = new Date(current);
-    current += stepMs;
-    return reading;
-  };
-}
-

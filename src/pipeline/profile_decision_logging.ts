@@ -1,92 +1,12 @@
 import type { EvaluationRunResult } from '../evaluation/index.js';
 import type { Logger } from '../logging/index.js';
 import type { FullProfile } from '../profile/index.js';
-import type { ProfileImageAnalysisOutcome } from './types.js';
-
-/** Stable status labels used by per-profile image-analysis log entries. */
-const PROFILE_IMAGE_LOG_STATUS = {
-  succeeded: 'succeeded',
-  failed: 'failed',
-  skippedMissingPhoto: 'skipped_missing_photo',
-  skippedByCriteria: 'skipped_by_criteria',
-} as const;
-
-const MISSING_PHOTO_REASON = 'No profile photo is available.';
-const SKIPPED_BY_CRITERIA_REASON =
-  "The campaign's criteria skipped photo analysis for this run.";
 
 /** Builds a profile lookup for attaching persisted links to evaluation results. */
 function profilesById(
   profiles: readonly FullProfile[],
 ): ReadonlyMap<string, FullProfile> {
   return new Map(profiles.map((profile) => [profile.id, profile]));
-}
-
-/** Associates image failures with profile links before database IDs may change. */
-function imageFailuresByLink(
-  outcome: ProfileImageAnalysisOutcome,
-): ReadonlyMap<string, string> {
-  const linksBySourceId = new Map(
-    outcome.fullProfiles.map((profile) => [profile.id, profile.linkedinUrl]),
-  );
-  const failures = outcome.failures.flatMap((failure) => {
-    const linkedinUrl = linksBySourceId.get(failure.profileId);
-    return linkedinUrl ? [[linkedinUrl, failure.error] as const] : [];
-  });
-
-  return new Map(failures);
-}
-
-/** Resolves one profile's compact image-processing status and optional reason. */
-function imageLogResult(
-  profile: FullProfile,
-  failureReason: string | undefined,
-  analysisSkipped: boolean,
-): { status: string; reason?: string } {
-  if (!profile.photo) {
-    return {
-      status: PROFILE_IMAGE_LOG_STATUS.skippedMissingPhoto,
-      reason: MISSING_PHOTO_REASON,
-    };
-  }
-  if (analysisSkipped) {
-    return {
-      status: PROFILE_IMAGE_LOG_STATUS.skippedByCriteria,
-      reason: SKIPPED_BY_CRITERIA_REASON,
-    };
-  }
-  if (failureReason) {
-    return { status: PROFILE_IMAGE_LOG_STATUS.failed, reason: failureReason };
-  }
-  return { status: PROFILE_IMAGE_LOG_STATUS.succeeded };
-}
-
-/** Logs one compact image-analysis outcome for every persisted profile. */
-export function logProfileImageOutcomes(
-  logger: Logger,
-  profiles: readonly FullProfile[],
-  outcome: ProfileImageAnalysisOutcome,
-): void {
-  const failuresByLink = imageFailuresByLink(outcome);
-
-  for (const profile of profiles) {
-    const result = imageLogResult(
-      profile,
-      failuresByLink.get(profile.linkedinUrl),
-      outcome.analysisSkipped,
-    );
-    const payload = {
-      profileId: profile.id,
-      linkedinUrl: profile.linkedinUrl,
-      ...result,
-    };
-
-    if (result.status === PROFILE_IMAGE_LOG_STATUS.failed) {
-      logger.warn(payload, 'Profile image analysis outcome.');
-    } else {
-      logger.info(payload, 'Profile image analysis outcome.');
-    }
-  }
 }
 
 /** Keeps only broad-filter evidence that directly caused an exclusion. */
