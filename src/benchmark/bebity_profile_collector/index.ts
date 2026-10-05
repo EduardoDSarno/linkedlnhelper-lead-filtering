@@ -15,6 +15,7 @@ import {
 } from '../apify_profile_collector/argument_parser.js';
 import { loadApifyBenchmarkInput } from '../apify_profile_collector/input_loader.js';
 
+/** Runs one Bebity benchmark from the command line into its own output directory. */
 async function main(): Promise<void> {
   const runId = randomUUID();
   const outputDirectory = join('output/benchmarks/bebity', runId);

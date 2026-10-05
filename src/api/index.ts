@@ -175,6 +175,12 @@ function registerCredentialRoutes(server: FastifyInstance)
         reply.status(HTTP_STATUS.ok).send(await checkCredentials()));
 }
 
+/**
+ * Streams a completed run's approved CSV or evaluation report.
+ *
+ * The artifact name only selects one of the run's fixed paths, and the run
+ * must exist and be completed, so a request cannot reach any other file.
+ */
 function registerDownloadRoute(server: FastifyInstance)
 {
     server.get(API_ROUTES.download, async (request, reply) =>

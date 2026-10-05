@@ -55,6 +55,7 @@ export function resolveProfileImageResolution(
     : PROFILE_IMAGE_DEFAULTS.resolution;
 }
 
+/** Resolves every photo-loading setting from caller options, then the environment, then defaults. */
 export function resolveProfileImageExtractionOptions(
   options: ProfileImageExtractionOptions = {},
   environment: NodeJS.ProcessEnv = process.env,

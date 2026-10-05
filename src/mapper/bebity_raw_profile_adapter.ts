@@ -156,11 +156,17 @@ function adaptBebityExperienceEntry(
  * contain a comma; splitting one of those cuts a sentence in half instead of
  * separating a degree from a field. Checked against every real degree/field
  * concatenation in stored data: legitimate degree titles topped out at 52
- * characters before the comma, and the free-text cases started at 79, so 65
- * sits in the gap between them.
+ * characters before the comma, and the free-text cases started at 79, so the
+ * limit sits in the gap between them.
  */
 const IMPLAUSIBLE_DEGREE_LENGTH = 65;
 
+/**
+ * Separates a Bebity degree that carries its field of study after a comma.
+ *
+ * Applied only when no field of study was given and the leading segment is
+ * short enough to be a degree title rather than free text.
+ */
 function splitBebityDegree(
   degreeName: string,
   existingFieldOfStudy: unknown,

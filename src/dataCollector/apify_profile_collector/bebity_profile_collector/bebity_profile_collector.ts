@@ -31,6 +31,13 @@ export function resolveBebityConcurrency(environment: NodeJS.ProcessEnv = proces
   });
 }
 
+/**
+ * Reads which optional LinkedIn sections Bebity should fetch.
+ *
+ * Blank keeps the default sections that profile mapping relies on, `all`
+ * lifts the restriction, and an unknown name fails fast because each section
+ * costs a separate LinkedIn request per profile.
+ */
 export function resolveBebityProfileFields(environment: NodeJS.ProcessEnv = process.env): BebityProfileField[] | undefined
 {
   const raw = environment[BEBITY_PROFILE_FIELDS_ENVIRONMENT_KEY]?.trim();
@@ -49,6 +56,7 @@ export function resolveBebityProfileFields(environment: NodeJS.ProcessEnv = proc
   return [...new Set(values)] as BebityProfileField[];
 }
 
+/** Builds the Bebity Actor input, omitting the section list when every section is wanted. */
 export function bebityActorInput(profileLinks: readonly string[], profileFields: readonly BebityProfileField[] | undefined): Record<string, unknown> {
   return { action: 'get-profiles', keywords: [...profileLinks], ...(profileFields ? { profileFields: [...profileFields] } : {}) };
 }
@@ -111,6 +119,7 @@ export async function collectBebityProfiles(
   );
 }
 
+/** Recognizes a Bebity dataset item shaped like a raw profile, so a changed format fails the batch loudly. */
 function isRawProfileRecord(value: unknown): value is RawApifyProfile {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
