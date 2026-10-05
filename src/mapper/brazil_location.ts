@@ -1,11 +1,34 @@
+import type { ProfileLocation } from '../profile/index.js';
+
+/** Country fields attached to a location that resolved to a Brazilian state. */
+const BRAZIL_COUNTRY = { country: 'Brasil', countryCode: 'BR' } as const;
+
 /**
- * Brazilian UF codes mapped to official state names.
+ * Splits a LinkedIn "City, State, Country" location into its parts.
  *
- * Bebity returns a single location string whose country word is localized to
- * whatever language its scrape ran in ("Brésil", "Brezilya"), so the adapter
- * finds the state by testing every comma-separated segment against this table
- * rather than trusting the segment's position.
+ * The country word is localized to whoever viewed the profile, so the state is
+ * found by testing each segment against the state table rather than trusting
+ * its position. The last match wins, so a city named after its state ("São
+ * Paulo, São Paulo, Brasil") keeps its city. Text with no Brazilian state is
+ * kept whole instead of guessed at.
  */
+export function parseBrazilLocation(text: string): ProfileLocation {
+  const segments = text
+    .split(',')
+    .map((segment) => segment.trim())
+    .filter(Boolean);
+  const stateIndex = segments.findLastIndex(
+    (segment) => resolveBrazilRegion(segment) !== undefined,
+  );
+  const region =
+    stateIndex === -1 ? undefined : resolveBrazilRegion(segments[stateIndex] as string);
+  if (!region) return { text };
+
+  const city = segments.slice(0, stateIndex).join(', ');
+  return { text, ...(city ? { city } : {}), state: region.state, ...BRAZIL_COUNTRY };
+}
+
+/** Brazilian UF codes mapped to official state names. */
 const BRAZIL_STATE_BY_UF = {
   AC: 'Acre',
   AL: 'Alagoas',

@@ -27,6 +27,12 @@ export interface ProfileExperience {
   companyName: string;
   /** Provider-reported location of this job, when available. */
   location?: string;
+  /** What the person wrote about this role. */
+  description?: string;
+  /** Contract kind as LinkedIn labels it, such as full-time or freelance. */
+  employmentType?: string;
+  /** On-site, hybrid or remote, as LinkedIn labels it. */
+  workplaceType?: string;
 
   startDate?: ProfileDate;
   endDate?: ProfileDate;
@@ -59,6 +65,8 @@ export interface Profile {
   lastName?: string;
 
   headline?: string;
+  /** The profile's own About section. */
+  about?: string;
   photo?: string;
   /**
    * Where {@link photo} came from.

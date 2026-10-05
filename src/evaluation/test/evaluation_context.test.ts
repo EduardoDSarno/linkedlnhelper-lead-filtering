@@ -16,6 +16,7 @@ test('builds a compact AI evaluation payload without exposing the raw profile', 
     linkedHelperPublicId: 'example-profile',
     linkedinUrl: 'https://www.linkedin.com/in/example-profile',
     headline: 'Customer Success Manager',
+    about: 'Builds long-term customer relationships.',
     openToWork: false,
     location: {
       text: 'Goiânia, Goiás, Brasil',
@@ -28,6 +29,9 @@ test('builds a compact AI evaluation payload without exposing the raw profile', 
         position: 'Customer Success Manager',
         companyName: 'Example Company',
         location: 'Goiânia, Goiás, Brasil',
+        description: 'Leads onboarding and retention programs.',
+        employmentType: 'Full-time',
+        workplaceType: 'Remote',
         startDate: { year: 2024, month: 3 },
       },
     ],
@@ -40,20 +44,7 @@ test('builds a compact AI evaluation payload without exposing the raw profile', 
         endDate: { year: 2021 },
       },
     ],
-    raw: {
-      about: 'Builds long-term customer relationships.',
-      emails: ['private@example.test'],
-      experience: [
-        {
-          position: 'Customer Success Manager',
-          companyName: 'Example Company',
-          description: 'Leads onboarding and retention programs.',
-          employmentType: 'Full-time',
-          workplaceType: 'Remote',
-          skills: ['Customer Success'],
-        },
-      ],
-    },
+    raw: { email: 'private@example.test' },
   };
 
   const context = createEvaluationContext(fullProfile, criteria);
@@ -83,18 +74,9 @@ test('builds a compact AI evaluation payload without exposing the raw profile', 
     experience: fullProfile.experience,
     education: fullProfile.education,
     about: 'Builds long-term customer relationships.',
-    workDetails: [
-      {
-        position: 'Customer Success Manager',
-        companyName: 'Example Company',
-        description: 'Leads onboarding and retention programs.',
-        employmentType: 'Full-time',
-        workplaceType: 'Remote',
-      },
-    ],
   });
   assert.equal('raw' in context.profile, false);
-  assert.equal('emails' in context.profile, false);
+  assert.equal('email' in context.profile, false);
   assert.equal(context.profile.experience, fullProfile.experience);
   assert.equal(context.profile.education, fullProfile.education);
 });

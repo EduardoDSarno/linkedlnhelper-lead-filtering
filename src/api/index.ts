@@ -432,7 +432,9 @@ function registerResultsRoute(server: FastifyInstance)
                 const model = modelByPublicId.get(publicId);
                 const override = overrideByPublicId.get(publicId);
                 const currentRole = profile?.experience?.[0];
-                const about = asString(asRecord(profile?.raw)?.['about']);
+                // Runs collected before the CSV-only pipeline kept About in the
+                // scraper's raw payload.
+                const about = profile?.about ?? asString(asRecord(profile?.raw)?.['about']);
 
                 return {
                     publicId,
