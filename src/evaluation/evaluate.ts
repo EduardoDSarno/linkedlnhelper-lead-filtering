@@ -60,11 +60,7 @@ const DEFAULT_PHOTO_LOAD_CONCURRENCY = 25;
 function withoutUnreachablePhoto(
   profile: EvaluationProfileData,
 ): EvaluationProfileData {
-  const {
-    photoConfirmedByProvider: _confirmed,
-    photoUrl: _photoUrl,
-    ...rest
-  } = profile;
+  const { photoUrl: _photoUrl, ...rest } = profile;
 
   return { ...rest, hasPhoto: false };
 }

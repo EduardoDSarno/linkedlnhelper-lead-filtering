@@ -29,7 +29,6 @@ function profileClaimingAPhoto(): EvaluationProfileData {
     headline: 'Customer Success Manager',
     openToWork: false,
     hasPhoto: true,
-    photoConfirmedByProvider: false,
     photoUrl: EXPIRED_PHOTO_URL,
     experience: [],
     education: [],
@@ -103,7 +102,6 @@ test('tells the model no photo exists when the photo could not be downloaded', a
   const sent = sentProfileJson(request.parts);
   assert.equal(sent['hasPhoto'], false);
   assert.equal(sent['photoUrl'], undefined);
-  assert.equal(sent['photoConfirmedByProvider'], undefined);
   assert.ok(
     !request.parts.some((part) => 'image' in part),
     'no image should be attached when the download failed',
@@ -119,7 +117,6 @@ test('leaves the photo fields alone when the download succeeds', async () => {
 
   const sent = sentProfileJson(request.parts);
   assert.equal(sent['hasPhoto'], true);
-  assert.equal(sent['photoConfirmedByProvider'], false);
   assert.ok(
     request.parts.some((part) => 'image' in part),
     'the downloaded photo should be attached',

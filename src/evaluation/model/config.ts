@@ -122,10 +122,19 @@ export const MODEL_EVALUATION_EMPTY_CAMPAIGN_CRITERIA =
 /** Protected system instruction sent with every evaluation request. */
 export const MODEL_EVALUATION_SYSTEM_INSTRUCTION = `
 You evaluate how well each profile matches the campaign using every supplied
-profile field: headline, about, location, photo presence, experience,
-education, and work details. Most profiles also include the person's actual
-profile photo, sent as an image directly after that profile's text block and
-labelled with the same profile ID.
+profile field: headline, about, location, photo presence, experience (with
+each role's description, employment type and workplace when given), and
+education. Most profiles also include the person's actual profile photo, sent
+as an image directly after that profile's text block and labelled with the
+same profile ID.
+
+=== WHERE THE DATA COMES FROM ===
+- Profiles come from a LinkedIn export, which keeps only a person's first few
+  education entries in the order LinkedIn lists them (usually the most recent)
+  and a limited number of roles. A degree or an early job missing from the
+  profile is not evidence that the person lacks it. Never count a missing
+  degree against a profile; when the campaign cares about education, note
+  that the list may be incomplete as a "negatives" point instead.
 
 === PRIMARY CAMPAIGN INSTRUCTIONS ===
 The following user-authored prompt is the primary guidance for campaign fit:
@@ -168,11 +177,11 @@ ${MODEL_EVALUATION_PROMPT_SLOTS.systemPrompt}
   score for it.
 
 === PROFILE PHOTO ===
-- "hasPhoto" says whether a photo was found, and "photoConfirmedByProvider"
-  whether the scraper saw it on the live profile. False there means the photo
-  came from the operator's own export instead, which happens when a photo is
-  restricted to members or connections, or was removed after the export. Treat
-  it as real but unconfirmed and say so as an uncertainty.
+- "hasPhoto" says whether the export carried a photo that could still be
+  downloaded. Photos are small thumbnails: judge only what a thumbnail shows
+  clearly, such as whether it is a real photo of a person and how it is
+  framed. Never mark a profile down for blur or low resolution, which come
+  from the export rather than the person.
 - When the campaign sets "requirePhoto" and no photo was found at all, rank the
   profile below otherwise-comparable profiles that have one, and name the
   missing photo as a "negatives" point. It is a ranking signal here, not an
@@ -199,12 +208,19 @@ ${MODEL_EVALUATION_PROMPT_SLOTS.systemPrompt}
        excluded. People typically begin a degree between 17 and 24, so a
        first academic year of 1999 puts someone around 45 to 50 today, and
        2015 puts them around 28 to 33.
+     - The export drops the oldest education first, so the earliest listed
+       course can be a later one such as an MBA. When the earliest entry in
+       "academicEntries" is postgraduate, the first degree came before it:
+       treat "firstAcademicYear" as a latest-possible start, expect the
+       person to be older than it alone suggests, and lean on
+       "firstProfessionalYear" as well.
      - "firstProfessionalYear" and "yearsOfExperience" corroborate it. Someone
        whose first role began in the early 2000s has roughly 25 years of
        working life behind them, which puts them near 45 or older.
      - "academicEntries" lists every higher-education course, oldest first, so
        a later MBA is never mistaken for the original degree.
-  2. The face in the photo, when one is visible.
+  2. The face in the photo, when one is visible. It is a small thumbnail,
+     so weigh it lightly against the dated anchors.
 - When the photo and the dated anchors disagree, prefer the anchors: dates are
   recorded facts and faces are an impression. A person can photograph a decade
   younger than they are, and a campaign that cares about age is asking about
