@@ -34,6 +34,9 @@ To start a branch from it (for example to ship the Apify version again):
 git checkout -b apify-version ddb55c9
 ```
 
-## First version in real use
+## Earlier points
 
-**Tag:** `v1.0.0-mvp` (commit `9ae91cb`). See `SNAPSHOT.md`.
+- **First installable Windows build:** tag `v1.0-windows` (commit `df60d42`).
+- **First version in real use:** commit `9ae91cb`, described in `SNAPSHOT.md`.
+  That file names a `v1.0.0-mvp` tag, but the tag was never pushed, so use
+  the commit id.
