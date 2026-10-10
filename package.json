@@ -7,7 +7,10 @@
     "serve": "node --watch --env-file=.env --import tsx src/api/server.ts",
     "test": "npm run typecheck && npm run test:unit",
     "typecheck": "tsc --noEmit --noUnusedLocals --noUnusedParameters",
-    "test:unit": "node --import tsx --test 'src/**/test/*.test.ts'"
+    "test:unit": "node --import tsx --test 'src/**/test/*.test.ts'",
+    "db:run": "psql postgres://admin:app@localhost:5432/linkedlead -f",
+    "db:check": "psql postgres://admin:app@localhost:5432/linkedlead -c"
+
   },
   "keywords": [],
   "author": "",
@@ -22,6 +25,7 @@
     "@openrouter/sdk": "^1.2.103",
     "apify-client": "^2.25.0",
     "fastify": "^5.12.5",
+    "pg": "^8.23.1",
     "pino": "^10.3.1"
   },
   "engines": {
