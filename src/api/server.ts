@@ -8,6 +8,9 @@ import { registerUnipileWebhooks } from './webhooks/unipile/webhook.js';
 import { requireUnipileWorkspace } from '../linkedin/unipile/config.js';
 import { registerLinkedinAccountRoute } from './linkedinAccounts.js';
 import { requirePublicUrl } from './config.js';
+import { connectToDb}       from '../db/client.js';
+import type { Kysely } from 'kysely';
+import type { Database } from '../db/schema.js';
 
 /** Port used when the PORT environment variable is absent or unusable. */
 const DEFAULT_PORT = 3000;
@@ -21,9 +24,9 @@ const MAXIMUM_PORT = 65_535;
  * Kept apart from `startServer` so a test can call routes in memory with
  * Fastify's `inject`, without opening a real port.
  */
-export function buildServer(): FastifyInstance {
+export function buildServer(db: Kysely<Database>): FastifyInstance {
   const app = Fastify({ logger: true });
-  registerRoutes(app);
+  registerRoutes(app, db);
   return app;
 }
 
@@ -35,8 +38,8 @@ export function buildServer(): FastifyInstance {
  * that silently never came up.
  */
 async function startServer(): Promise<void> {
-  const app = buildServer();
-
+  const db = await connectToDb(); // Creating database connection
+  const app = buildServer(db);
   try {
     await app.listen({ port: resolvePort() });
   } catch (error: unknown) {
@@ -46,9 +49,9 @@ async function startServer(): Promise<void> {
 }
 
 /** A route that only proves the server is up and answering. */
-function registerRoutes(app: FastifyInstance): void {
+function registerRoutes(app: FastifyInstance, db: Kysely<Database>): void {
   app.get('/api/ping', async () => ({ message: 'Pong' }));
-  registerUnipileWebhooks(app);
+  registerUnipileWebhooks(app, db);
   registerLinkedinAccountRoute(app, requireUnipileWorkspace(),requirePublicUrl());
 }
 
