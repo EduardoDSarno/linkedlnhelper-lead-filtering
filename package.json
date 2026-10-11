@@ -8,8 +8,9 @@
     "test": "npm run typecheck && npm run test:unit",
     "typecheck": "tsc --noEmit --noUnusedLocals --noUnusedParameters",
     "test:unit": "node --import tsx --test 'src/**/test/*.test.ts'",
-    "db:run": "psql postgres://admin:app@localhost:5432/linkedlead -f",
-    "db:check": "psql postgres://admin:app@localhost:5432/linkedlead -c"
+    "db:run": "f() { psql postgres://admin:app@localhost:5432/linkedlead -f \"src/db/sql/$1\"; }; f",
+    "db:check": "f() { psql postgres://admin:app@localhost:5432/linkedlead -c \"\\d $1\"; }; f",
+    "db:query": "psql postgres://admin:app@localhost:5432/linkedlead -c"
   },
   "keywords": [],
   "author": "",

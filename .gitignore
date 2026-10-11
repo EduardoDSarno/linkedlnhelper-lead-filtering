@@ -15,3 +15,6 @@ src/dataStorage/
 *.sqlite
 
 .cursor/
+
+# Personal working notes, not part of the project
+TEMP_PLAN.md
