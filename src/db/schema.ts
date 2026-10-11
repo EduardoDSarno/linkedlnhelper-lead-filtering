@@ -1,4 +1,6 @@
-import type { Generated, GeneratedAlways } from 'kysely';
+import type { Generated, GeneratedAlways, JSONColumnType } from 'kysely';
+
+import type { FullEvaluationCriteria } from '../evaluation/criterias/user_criteria.js';
 
 /**
  * Every table as TypeScript sees it, so Kysely can check column names and
@@ -16,4 +18,23 @@ export interface Database {
     connected_at: Generated<Date>;
     updated_at: Generated<Date>;
   };
+
+  campaigns: {
+    id: GeneratedAlways<string>;
+    /** Points at `linkedin_accounts.id`, so also a bigint read as a string. */
+    linkedin_account_id: string;
+    name: string;
+    search_url: string;
+    /**
+     * Stored as jsonb. Reads come back as the parsed object; writes take a
+     * JSON string, so the caller decides exactly what text is saved.
+     */
+    criteria: JSONColumnType<FullEvaluationCriteria>;
+    status: Generated<CampaignStatus>;
+    created_at: Generated<Date>;
+    updated_at: Generated<Date>;
+  };
 }
+
+/** The values the SQL `CHECK` on `campaigns.status` allows. */
+export type CampaignStatus = 'active' | 'paused';
