@@ -19,11 +19,13 @@ export async function registerLinkedinAccountRoute(
     app: FastifyInstance,
     config : UnipileConfig,
     publicUrl: string,
+    webhookSecret: string,
     fetchFunction?: FetchFunction,
 )
 {
-    // Where Unipile reports a finished login: our address plus the webhook path.
-    const notifyUrl = `${publicUrl}${ACCOUNT_CONNECTED_PATH}`;
+    // Where Unipile reports a finished login: our address plus the webhook path,
+    // carrying the secret the webhook checks before trusting the message.
+    const notifyUrl = `${publicUrl}${ACCOUNT_CONNECTED_PATH}?secret=${encodeURIComponent(webhookSecret)}`;
 
     app.post(LINKEDIN_ACCOUNTS_CONNECTED_PATH, async (request, reply)=>{
 

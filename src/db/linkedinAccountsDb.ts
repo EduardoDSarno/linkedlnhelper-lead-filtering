@@ -3,7 +3,9 @@ import type { Kysely } from "kysely";
 
 import type { Database } from "./schema.js";
 
-/** Save an account, updating its label if it already exists. */
+/** Save an account, updating its label if it already exists.
+ * @returns the id back
+*/
 export async function insertLinkedinAccount(
   db: Kysely<Database>,
   account: { label: string; unipileId: string },

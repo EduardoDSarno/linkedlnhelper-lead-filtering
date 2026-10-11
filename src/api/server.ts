@@ -7,7 +7,7 @@ import {
 import { registerUnipileWebhooks } from './webhooks/unipile/webhook.js';
 import { requireUnipileWorkspace } from '../linkedin/unipile/config.js';
 import { registerLinkedinAccountRoute } from './linkedinAccounts.js';
-import { requirePublicUrl } from './config.js';
+import { getPublicUrl, getWebhookSecret } from './config.js';
 import { connectToDb}       from '../db/client.js';
 import type { Kysely } from 'kysely';
 import type { Database } from '../db/schema.js';
@@ -51,8 +51,11 @@ async function startServer(): Promise<void> {
 /** A route that only proves the server is up and answering. */
 function registerRoutes(app: FastifyInstance, db: Kysely<Database>): void {
   app.get('/api/ping', async () => ({ message: 'Pong' }));
-  registerUnipileWebhooks(app, db);
-  registerLinkedinAccountRoute(app, requireUnipileWorkspace(),requirePublicUrl());
+  const webhookSecret = getWebhookSecret();
+  registerUnipileWebhooks(app, db, webhookSecret);
+  registerLinkedinAccountRoute(app, requireUnipileWorkspace(),
+                                    getPublicUrl(),
+                                    webhookSecret);
 }
 
 /**
