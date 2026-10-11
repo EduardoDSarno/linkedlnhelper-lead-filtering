@@ -5,7 +5,13 @@ CREATE TABLE leads(
     -- LinkedIn's permanent id for the person (Unipile's provider_id); URLs can change, this cannot.
     linkedin_member_id      text NOT NULL,
     name                    text NOT NULL,
+    -- What the search card shows, so obvious mismatches are dropped before a profile fetch.
     headline                text,
+    location                text,
+    industry                text,
+    current_positions       jsonb,
+    premium                 boolean,
+    open_profile            boolean,
     -- Where the lead is in the funnel; later stages are added here as they are built.
     stage                   text NOT NULL DEFAULT 'found'
                             CHECK (stage IN ('found', 'profiled', 'qualified', 'rejected', 'invited')),
