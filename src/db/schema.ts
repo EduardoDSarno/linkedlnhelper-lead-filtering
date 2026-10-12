@@ -63,6 +63,23 @@ export interface Database {
     data: JSONColumnType<Record<string, unknown>>;
     fetched_at: Generated<Date>;
   };
+
+  organizations: {
+    id: GeneratedAlways<string>;
+    name: string;
+    created_at: Generated<Date>;
+  };
+
+  users: {
+    id: GeneratedAlways<string>;
+    /** Points at `organizations.id`, so also a bigint read as a string. */
+    organization_id: string;
+    /** Always saved in lowercase, so the same address can't sign up twice. */
+    email: string;
+    /** The one-way hash of the password; the password itself is never stored. */
+    password_hash: string;
+    created_at: Generated<Date>;
+  };
 }
 
 /** The values the SQL `CHECK` on `profiles.source` allows. */
