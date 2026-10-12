@@ -38,3 +38,34 @@ export async function saveProfile(
     )
     .execute();
 }
+
+/** A stored profile fetched at or after `since`, or nothing when there is none that recent. */
+export async function findFreshProfile(
+  db: Kysely<Database>,
+  linkedinMemberId: string,
+  since: Date,
+): Promise<FetchedProfile | undefined> {
+  const row = await db
+    .selectFrom("profiles")
+    .select(["linkedin_member_id", "source", "data"])
+    .where("linkedin_member_id", "=", linkedinMemberId)
+    .where("fetched_at", ">=", since)
+    .executeTakeFirst();
+  return row ? { linkedinMemberId: row.linkedin_member_id, source: row.source, data: row.data } : undefined;
+}
+
+/** Stored profiles for several people at once, keyed by member id. */
+export async function findProfiles(
+  db: Kysely<Database>,
+  linkedinMemberIds: readonly string[],
+): Promise<Map<string, FetchedProfile>> {
+  if (linkedinMemberIds.length === 0) return new Map();
+  const rows = await db
+    .selectFrom("profiles")
+    .select(["linkedin_member_id", "source", "data"])
+    .where("linkedin_member_id", "in", linkedinMemberIds)
+    .execute();
+  return new Map(
+    rows.map((row) => [row.linkedin_member_id, { linkedinMemberId: row.linkedin_member_id, source: row.source, data: row.data }]),
+  );
+}

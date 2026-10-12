@@ -1,50 +1,79 @@
+import { randomUUID } from "node:crypto";
+
 import type { FastifyInstance } from "fastify";
-import { asRecord, asString } from "../shared/helpers/index.js";
-import type {ConnectLinkRequest} from "../linkedin/unipile/connect_link.js";
-import {createConnectLink} from "../linkedin/unipile/connect_link.js";
-import {HTTP_BAD_REQUEST} from "./consts.js"
-import type {UnipileConfig}  from "../linkedin/unipile/config.js";
+import type { Kysely } from "kysely";
+
+import { insertLinkedinAccount, listLinkedinAccounts } from "../db/linkedinAccountsDb.js";
+import type { Database } from "../db/schema.js";
+import type { LinkedinClient } from "../linkedin/client.js";
+import { requireUnipileWorkspace } from "../linkedin/unipile/config.js";
+import { createConnectLink } from "../linkedin/unipile/connect_link.js";
 import type { FetchFunction } from "../linkedin/unipile/index.js";
+import { asRecord, asString } from "../shared/helpers/index.js";
+import { currentUser } from "./auth.js";
+import { getPublicUrl, getWebhookSecret } from "./config.js";
+import { HTTP_BAD_REQUEST } from "./consts.js";
 import { ACCOUNT_CONNECTED_PATH } from "./webhooks/unipile/webhook.js";
 
-const LINKEDIN_ACCOUNTS_CONNECTED_PATH = "/api/linkedin-accounts/connect";
-// One hour
-const LINK_LIFETIME_MS = 3_600_000;
+/** How long a Unipile login link stays usable. */
+const LINK_LIFETIME_MS = 60 * 60 * 1000;
 
-/** This function will receive a instance of the server, the configs and
- * optionally fetch function for tests. It will return a promise, of the
- * url send to the user. It's job is to build a request rount
+/** Prefix of the Unipile id given to accounts connected in fake mode. */
+const FAKE_ACCOUNT_PREFIX = "fake-account-";
+
+/**
+ * Routes to list the organization's LinkedIn accounts and connect a new one.
+ * Must be registered behind `requireUser`.
+ *
+ * Connecting differs by mode: with Unipile it returns a login link, and the
+ * account is saved when Unipile calls the webhook; in fake mode the account is
+ * saved at once, so the rest of the app can be used without Unipile.
  */
-export async function registerLinkedinAccountRoute(
-    app: FastifyInstance,
-    config : UnipileConfig,
-    publicUrl: string,
-    webhookSecret: string,
-    fetchFunction?: FetchFunction,
-)
-{
-    // Where Unipile reports a finished login: our address plus the webhook path,
-    // carrying the secret the webhook checks before trusting the message.
-    const notifyUrl = `${publicUrl}${ACCOUNT_CONNECTED_PATH}?secret=${encodeURIComponent(webhookSecret)}`;
+export function registerLinkedinAccountRoutes(
+  app: FastifyInstance,
+  db: Kysely<Database>,
+  linkedin: LinkedinClient,
+  environment: NodeJS.ProcessEnv = process.env,
+  fetchFunction?: FetchFunction,
+): void {
+  app.get("/api/linkedin-accounts", async (request) => ({
+    accounts: await listLinkedinAccounts(db, currentUser(request).organizationId),
+  }));
 
-    app.post(LINKEDIN_ACCOUNTS_CONNECTED_PATH, async (request, reply)=>{
+  app.post("/api/linkedin-accounts/connect", async (request, reply) => {
+    const label = asString(asRecord(request.body)?.["label"])?.trim();
+    if (!label) return reply.code(HTTP_BAD_REQUEST).send({ error: "label is required" });
 
-        const bodyRecord = asRecord(request.body);
-        const label      = asString(bodyRecord?.['label']);
+    const { organizationId } = currentUser(request);
 
-        if (!label)
-        {
-            return reply.code(HTTP_BAD_REQUEST).send({ error: 'label is required' });
-        }
+    if (linkedin.mode === "fake") {
+      const unipileId = `${FAKE_ACCOUNT_PREFIX}${randomUUID()}`;
+      await insertLinkedinAccount(db, { organizationId, label, unipileId });
+      return { connected: true };
+    }
 
-        const connectRequest : ConnectLinkRequest = {
-            accountLabel: label,
-            expiresAt:    new Date(Date.now() + LINK_LIFETIME_MS),
-            notifyUrl,
-        }
+    const url = await createConnectLink(
+      requireUnipileWorkspace(environment),
+      {
+        accountLabel: label,
+        expiresAt: new Date(Date.now() + LINK_LIFETIME_MS),
+        notifyUrl: notifyUrl(environment, organizationId),
+      },
+      fetchFunction,
+    );
+    return { url };
+  });
+}
 
-        // this function returns the url we wll send to the user
-        const userUrl = await createConnectLink(config, connectRequest, fetchFunction);
-        return { url: userUrl };
-    })
+/**
+ * Where Unipile reports a finished login: our address plus the webhook path,
+ * carrying the secret the webhook checks and the organization that asked, so
+ * the account is saved under it.
+ */
+function notifyUrl(environment: NodeJS.ProcessEnv, organizationId: string): string {
+  const query = new URLSearchParams({
+    secret: getWebhookSecret(environment),
+    organization_id: organizationId,
+  });
+  return `${getPublicUrl(environment)}${ACCOUNT_CONNECTED_PATH}?${query}`;
 }
