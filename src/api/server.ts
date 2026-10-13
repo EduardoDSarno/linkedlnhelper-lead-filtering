@@ -1,3 +1,5 @@
+import helmet from '@fastify/helmet';
+import rateLimit from '@fastify/rate-limit';
 import Fastify, { type FastifyInstance } from 'fastify';
 
 import {
@@ -18,14 +20,34 @@ const DEFAULT_PORT = 3000;
 /** Highest valid TCP port. */
 const MAXIMUM_PORT = 65_535;
 
+/** Largest request body accepted; our forms are tiny, so anything bigger is refused before any route reads it. */
+const MAXIMUM_BODY_BYTES = 100 * 1024;
+
+/** Request and response parts the log hides, so cookies and tokens never reach log files. */
+const LOG_REDACTED_PATHS = ['req.headers.cookie', 'req.headers.authorization', 'res.headers["set-cookie"]'];
+
+/**
+ * Requests one IP may make to any route per rate-limit window; generous for a
+ * person using the app, low enough to stop a bot flood. Login gets its own,
+ * much stricter limit.
+ */
+const GENERAL_REQUESTS_PER_WINDOW = 100;
+const RATE_LIMIT_WINDOW_MS = 60_000;
+
 /**
  * Builds the app with every route registered, without starting to listen.
  *
  * Kept apart from `startServer` so a test can call routes in memory with
- * Fastify's `inject`, without opening a real port.
+ * Fastify's `inject`, without opening a real port. The safety plugins are
+ * awaited before any route exists, so every route gets their protection.
  */
-export function buildServer(db: Kysely<Database>): FastifyInstance {
-  const app = Fastify({ logger: true });
+export async function buildServer(db: Kysely<Database>): Promise<FastifyInstance> {
+  const app = Fastify({
+    logger: { redact: LOG_REDACTED_PATHS },
+    bodyLimit: MAXIMUM_BODY_BYTES,
+  });
+  await app.register(helmet);
+  await app.register(rateLimit, { max: GENERAL_REQUESTS_PER_WINDOW, timeWindow: RATE_LIMIT_WINDOW_MS });
   registerRoutes(app, db);
   return app;
 }
@@ -39,7 +61,7 @@ export function buildServer(db: Kysely<Database>): FastifyInstance {
  */
 async function startServer(): Promise<void> {
   const db = await connectToDb(); // Creating database connection
-  const app = buildServer(db);
+  const app = await buildServer(db);
   try {
     await app.listen({ port: resolvePort() });
   } catch (error: unknown) {
