@@ -51,6 +51,23 @@ export async function findUserByEmail(
     .executeTakeFirst();
 }
 
+/**
+ * Find a user by id, or nothing when there is none.
+ *
+ * Used once someone is already logged in (their session points at this id),
+ * so it leaves the password hash out: nothing after login needs it.
+ */
+export async function findUserById(
+  db: Kysely<Database>,
+  id: string,
+): Promise<Omit<UserRow, "passwordHash"> | undefined> {
+  return db
+    .selectFrom("users")
+    .select(["id", "organization_id as organizationId", "email"])
+    .where("id", "=", id)
+    .executeTakeFirst();
+}
+
 /** Save a new organization and return its id. */
 export async function createOrganization(
   db: Kysely<Database>,

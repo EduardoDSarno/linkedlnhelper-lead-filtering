@@ -80,6 +80,22 @@ export interface Database {
     password_hash: string;
     created_at: Generated<Date>;
   };
+
+  sessions: {
+    id: GeneratedAlways<string>;
+    /** Points at `users.id`, so also a bigint read as a string. */
+    user_id: string;
+    /** Hash of the cookie's token; the token itself is never stored. */
+    token_hash: string;
+    created_at: Generated<Date>;
+    expires_at: Date;
+    /** Postgres `inet`, which pg reads and writes as text like "203.0.113.7". */
+    ip: string | null;
+    user_agent: string | null;
+    /** Empty until the IP → location lookup exists. */
+    country: string | null;
+    city: string | null;
+  };
 }
 
 /** The values the SQL `CHECK` on `profiles.source` allows. */
