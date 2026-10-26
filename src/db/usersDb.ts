@@ -82,6 +82,19 @@ export async function createOrganization(
   return result.id;
 }
 
+/** The id of the organization with exactly this name, or nothing when there is none. */
+export async function findOrganizationIdByName(
+  db: Kysely<Database>,
+  name: string,
+): Promise<string | undefined> {
+  const row = await db
+    .selectFrom("organizations")
+    .select("id")
+    .where("name", "=", name)
+    .executeTakeFirst();
+  return row?.id;
+}
+
 /** The form an email is stored and searched in: no outer spaces, lowercase. */
 function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();

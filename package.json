@@ -5,6 +5,7 @@
   "main": "index.js",
   "scripts": {
     "serve": "node --watch --env-file=.env --import tsx src/api/server.ts",
+    "user:create": "node --env-file=.env --import tsx src/scripts/create_user.ts",
     "test": "npm run typecheck && npm run test:unit",
     "typecheck": "tsc --noEmit --noUnusedLocals --noUnusedParameters",
     "test:unit": "node --import tsx --test 'src/**/test/*.test.ts'",
