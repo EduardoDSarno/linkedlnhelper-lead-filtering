@@ -1,5 +1,4 @@
 import { createHash, randomBytes } from "node:crypto";
-import type { UserRow } from "../db/usersDb.js";
 import {
     deleteSessionByTokenHash,
     findSessionByTokenHash,
@@ -10,30 +9,33 @@ import {
 import type { Kysely } from "kysely";
 import type { Database } from "../db/schema.js";
 
-const COOKIES_RANDOM_BYTES_SIZE = 32;
+/** Random bytes in a session token: far too many to ever be guessed. */
+const TOKEN_BYTES = 32;
 
-/** Time for cookies expiration */
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
-const SESSION_DAYS = 30;
+/** How long a login lasts before the user must log in again. */
+export const SESSION_DAYS = 30;
 
 /** This function creates and insert a session for the user
- * in the database and 
- * @returns the token to be given back to the user for it's 
+ * in the database, with where the login came from, and
+ * @returns the token to be given back to the user for it's
  * cookies
  */
 export async function createSessionFromUser(
     db: Kysely<Database>,
-    user: UserRow): Promise<string>{
+    userId: string,
+    origin: Pick<NewSession, "ip" | "userAgent">): Promise<string>{
 
-    const token = randomBytes(COOKIES_RANDOM_BYTES_SIZE).
-                  toString("base64");
+    // base64url: no "+", "/" or "=", which cookies and URLs can mangle.
+    const token = randomBytes(TOKEN_BYTES).toString("base64url");
 
     const hash = hashToken(token);
 
     const session: NewSession = {
-        userId: user.id,
+        userId,
         tokenHash: hash,
-        expiresAt: new Date(Date.now() + (SESSION_DAYS * MS_PER_DAY))
+        expiresAt: new Date(Date.now() + (SESSION_DAYS * MS_PER_DAY)),
+        ...origin,
     }
 
     await insertSession(db,session);
