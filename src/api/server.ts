@@ -1,3 +1,4 @@
+import cookie from '@fastify/cookie';
 import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
 import Fastify, { type FastifyInstance } from 'fastify';
@@ -9,6 +10,7 @@ import {
 import { registerUnipileWebhooks } from './webhooks/unipile/webhook.js';
 import { requireUnipileWorkspace } from '../linkedin/unipile/config.js';
 import { registerLinkedinAccountRoute } from './linkedinAccounts.js';
+import { registerAuthRoutes } from './auth.js';
 import { getPublicUrl, getWebhookSecret } from './config.js';
 import { connectToDb}       from '../db/client.js';
 import type { Kysely } from 'kysely';
@@ -48,6 +50,7 @@ export async function buildServer(db: Kysely<Database>): Promise<FastifyInstance
   });
   await app.register(helmet);
   await app.register(rateLimit, { max: GENERAL_REQUESTS_PER_WINDOW, timeWindow: RATE_LIMIT_WINDOW_MS });
+  await app.register(cookie);
   registerRoutes(app, db);
   return app;
 }
@@ -73,6 +76,7 @@ async function startServer(): Promise<void> {
 /** A route that only proves the server is up and answering. */
 function registerRoutes(app: FastifyInstance, db: Kysely<Database>): void {
   app.get('/api/ping', async () => ({ message: 'Pong' }));
+  registerAuthRoutes(app, db);
   const webhookSecret = getWebhookSecret();
   registerUnipileWebhooks(app, db, webhookSecret);
   registerLinkedinAccountRoute(app, requireUnipileWorkspace(),
